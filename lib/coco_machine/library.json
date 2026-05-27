@@ -1,0 +1,14 @@
+{
+  "name": "coco_machine",
+  "version": "0.1.0",
+  "description": "Thin machine glue tying the vendored XRoar parts into a runnable CoCo 1/2.",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "xroar_core": "*",
+    "psramlib": "*"
+  },
+  "build": {
+    "srcDir": "src",
+    "srcFilter": ["+<*.cpp>"]
+  }
+}

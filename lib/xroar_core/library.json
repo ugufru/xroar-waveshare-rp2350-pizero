@@ -1,0 +1,34 @@
+{
+  "name": "xroar_core",
+  "version": "0.1.0",
+  "description": "Vendored XRoar CPU/SAM/VDG/PIA modules + portalib. See PROVENANCE.md for upstream details.",
+  "license": "GPL-3.0-or-later",
+  "build": {
+    "srcDir": ".",
+    "srcFilter": [
+      "+<src/*.c>",
+      "-<src/serialise.c>",
+      "+<src/mc6809/mc6809.c>",
+      "+<src/mc6847/*.c>",
+      "-<src/mc6847/font-6847.c>",
+      "+<portalib/*.c>",
+      "-<portalib/sdsx.c>",
+      "-<portalib/sds.c>",
+      "-<portalib/c-ctype.c>",
+      "-<portalib/c-strcasecmp.c>",
+      "-<portalib/c-strncasecmp.c>",
+      "-<portalib/intfuncs.c>",
+      "-<portalib/strnlen.c>",
+      "-<portalib/strsep.c>",
+      "-<src/mc680x/>"
+    ],
+    "includeDir": "src",
+    "flags": [
+      "-Iinclude",
+      "-Isrc",
+      "-Isrc/mc6809",
+      "-Isrc/mc6847",
+      "-Iportalib"
+    ]
+  }
+}
