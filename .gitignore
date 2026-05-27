@@ -1,0 +1,8 @@
+.pio/
+.vscode/
+build/
+*.o
+*.elf
+*.bin
+*.uf2
+.DS_Store
