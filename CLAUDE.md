@@ -1,57 +1,36 @@
-# CLAUDE.md — Project Guide
+# CLAUDE.md — agent working notes
 
-XRoar (Tandy CoCo / Dragon emulator) on the **Waveshare RP2350-PiZero** (mini-HDMI output).
-See `README.md` for the high-level goal and `issues.jsonl` (via `/issues`) for the work tracker.
+XRoar (Tandy CoCo) on the **Waveshare RP2350-PiZero** (mini-HDMI + USB host).
 
-## Source projects (read-only references)
+**All project documentation lives in `README.md` and `docs/`** — hardware specs, the confirmed pinout,
+the `libdvi`/HSTX rationale, the display geometry, and the clock-conflict risk are written up there, not
+here. Don't duplicate them. This file is just pointers and conventions for working in the repo.
 
-- `~/github/coco-rp2350-waveshare-touch-amoled-18` — **working** XRoar port (AMOLED-1.8 board, boots
-  Color BASIC to "OK"). Source of `lib/xroar_core`, `lib/coco_machine`, `src/coco_boot.cpp`,
-  `src/main.cpp`, `AUTORUN.md`, `deploy.sh`. Display/QSPI/HAL code here is board-specific — do NOT copy.
-- `~/github/waveshare-rp2350-usb-a` — PIO-USB host pattern (Pico-PIO-USB + TinyUSB) for the keyboard work.
-- pico-examples `dvi_out_hstx_encoder` / Adafruit PicoDVI library — reference for the HSTX DVI driver.
+## Local references (not committed)
 
-## Target hardware (RP2350-PiZero)
+- `.ref/` (gitignored) — downloaded Waveshare vendor material:
+  - `.ref/RP2350-PiZero-schematic.pdf` (also committed to `docs/`)
+  - `.ref/demo/RP2350-PiZero/` — extracted official demo. **Authoritative source for pins and the
+    proven driver stack.** Key files:
+    - `Arduino/01-DVI/hello_dvi/` — libdvi + `common_dvi_pin_configs.h` (`pico_sock_cfg`), 320×240→640×480.
+    - `Arduino/02-USB/device_info/device_info.ino` — Pico-PIO-USB host: `HOST_PIN_DP=28`, CPU must be 120/240 MHz.
+    - `Arduino/03-MicroSD/hw_config.c` — SD SPI pins (SCK30/MOSI31/MISO40/CS43/CD22).
+    - `C/boards/waveshare_rp2350_pizero.h` — board defines (RP2350B, 16 MB flash, I2C0 6/7).
 
-- **MCU**: RP2350**B** (48 GPIO), 520 KB SRAM, **16 MB** flash. PSRAM footprint on board (likely unpopulated).
-- **Display**: mini-HDMI → DVI via the **HSTX** peripheral.
-- **Input**: PIO-USB host on USB-C port "3" (port "2" = power/programming).
-- **Storage**: microSD slot (interface/pins to be confirmed — `PIZERO-01`).
+## Source repos to adapt (read-only)
 
-| GPIO | Function | Notes |
-|------|----------|-------|
-| 12 | HSTX TMDS D2 | mini-HDMI |
-| 14 | HSTX TMDS CK | mini-HDMI clock |
-| 16 | HSTX TMDS D1 | mini-HDMI |
-| 18 | HSTX TMDS D0 | mini-HDMI |
-| 12–19 | HSTX block | DVI output (exact lane/pin pairing per board schematic — verify in `PIZERO-01`) |
-| TBD | USB host D+/D− | USB-C port "3" (PIO-USB) |
-| TBD | microSD | SCK/MOSI/MISO/CS or SDIO — confirm in `PIZERO-01` |
+- `~/github/coco-rp2350-waveshare-touch-amoled-18` — working XRoar port. Reuse `lib/xroar_core`,
+  `lib/coco_machine`, `src/coco_boot.cpp`, `src/main.cpp`, `AUTORUN.md`, `deploy.sh`.
+  Its `lib/sh8601`, `lib/qspi_pio`, `lib/hal`, `src/hw_config.c` are AMOLED-specific — do NOT copy.
+- `~/github/waveshare-rp2350-usb-a` — PIO-USB host reference.
 
-> ⚠ The HSTX pin pairing and SD pins above are from the RP2350 datasheet / general HSTX docs, **not yet
-> verified against the PiZero schematic**. `PIZERO-01` must confirm before SD / display bring-up.
+## Build gotchas to remember
 
-## Display plan
-
-**On-screen target:** the CoCo's native 256×192 doubled to **512×384**, centered in a 640×480 DVI frame
-with blank borders (64 px L/R, 48 px T/B). CoCo pixels render as crisp 2×2 blocks.
-
-**Mechanism (memory-aware):** a literal 640×480 RGB565 framebuffer is 614 KB and **does not fit** in
-520 KB SRAM (we also need 64 KB CoCo RAM + ROMs). Instead, keep the framebuffer at **320×240 RGB565
-(~154 KB)** and let the **HSTX/DVI scan-out double every pixel/line to 640×480 in hardware** — free, no
-CPU, no extra RAM. Inside the 320×240 buffer the CoCo's 256×192 is centered with 32 px/24 px borders;
-after the hardware 2× it lands as exactly 512×384 with blank edges. The blitter writes 320×240 with
-**no rotation** (landscape native) — simpler than the AMOLED portrait math.
-
-## Critical build flags
-
-- `board = rpipico2`-class for **RP2350B** (`-DPICO_RP2350B=1`; pick the matching earlephilhower board id).
-- `framework = arduino` (earlephilhower core).
-- `lib_deps`: Adafruit PicoDVI (HSTX mode), Pico-PIO-USB + Adafruit TinyUSB, `carlk3/no-OS-FatFS-SD...`.
-- Keep `-O2`, `build_unflags = -Os`, `lib_ldf_mode = deep+`.
-- `#include <Arduino.h>` **before** any XRoar headers (avoids the `_Bool` type conflict).
-- `f_cpu`: PIO-USB host timing favours specific clocks (USB-A repo notes 120 MHz) vs the AMOLED port's
-  250 MHz emulation pacing — reconcile in `PIZERO-14`/`PIZERO-15`.
+- Target **RP2350B** (not the A on the AMOLED board), earlephilhower arduino-pico core.
+- `#include <Arduino.h>` **before** XRoar headers (avoids `_Bool` type conflict).
+- Keep `-O2`, `build_unflags = -Os`, deep LDF.
+- DVI uses `pio_set_gpio_base(pio, 16)` because TMDS pins are GPIO 32–39 (> 31).
+- HSTX is GPIO 12–19 only and is NOT wired to the HDMI connector here → `libdvi` is mandatory.
 
 ## Workflow rules
 
@@ -59,3 +38,4 @@ after the hardware 2× it lands as exactly 512×384 with blank edges. The blitte
 - Don't mark an issue `done` until the user confirms it works on hardware.
 - Ask before any git push.
 - Reference issue IDs (`PIZERO-NN`) in commit messages.
+- User preference: no AskUserQuestion popups — ask in plain prose.

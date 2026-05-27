@@ -6,3 +6,6 @@ build/
 *.bin
 *.uf2
 .DS_Store
+
+# local reference scratch (vendor demo zip + raw downloads; findings are documented in README.md/docs/)
+.ref/
