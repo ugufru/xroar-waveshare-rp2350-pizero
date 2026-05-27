@@ -8,8 +8,16 @@
 
 // Pull in base headers to make sure board definitions override the
 // definitions provided here. Note this file is included in asm and C.
+//
+// PIZERO build fix: when assembling tmds_encode.S these headers transitively
+// pull in a Pico board header whose pico_board_cmake_set(...) lines are not
+// valid assembler (pico.h, which no-ops those macros, isn't included first in
+// the .S path). The .S only needs the DVI_* numeric macros from this file
+// (also forced via -D build flags), so skip the SDK config headers for asm.
+#ifndef __ASSEMBLER__
 #include "hardware/platform_defs.h"
 #include "pico/config.h"
+#endif
 
 // ----------------------------------------------------------------------------
 // General DVI defines
