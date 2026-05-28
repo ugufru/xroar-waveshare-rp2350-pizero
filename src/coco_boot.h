@@ -70,6 +70,11 @@ void coco_boot_blit_vdg(uint16_t *fb);
 void coco_boot_blit_vdg_src(const uint8_t *src, uint16_t *fb);
 void coco_boot_blit_vdg_1to1(uint16_t *small_fb);
 
+// PIZERO-07: native-RGB565, no-rotation blit centering CoCo 256x192 into a
+// 320x240 framebuffer for libdvi (2x scaled to 640x480). See coco_boot.cpp.
+void coco_boot_blit_vdg_pizero(uint16_t *fb);
+void coco_boot_blit_vdg_pizero_src(const uint8_t *src, uint16_t *fb);
+
 #ifdef __cplusplus
 }
 #endif

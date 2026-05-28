@@ -171,6 +171,23 @@ void __dvi_func(dvi_scanbuf_main_16bpp)(struct dvi_inst *inst) {
 	__builtin_unreachable();
 }
 
+// PIZERO addition: static-framebuffer worker. Unlike dvi_scanbuf_main_16bpp,
+// this does NOT pop scanlines from q_colour_valid -- it reads a fixed RGB565
+// framebuffer (row stride = timing h_active/DVI_SYMBOLS_PER_WORD, i.e. 320 for
+// the 640x480 doubled mode) directly and re-encodes it forever. This decouples
+// the display (paced to the refresh by q_tmds_free) from the producer: the
+// other core can rewrite the framebuffer at any rate without ever starving the
+// encoder. A slow producer just yields tearing, never solid-red dropouts.
+void __dvi_func(dvi_static_framebuf_main_16bpp)(struct dvi_inst *inst, const uint16_t *framebuf) {
+	const uint h = inst->timing->v_active_lines / DVI_VERTICAL_REPEAT;
+	const uint stride = inst->timing->h_active_pixels / DVI_SYMBOLS_PER_WORD;
+	while (1) {
+		for (uint y = 0; y < h; ++y)
+			_dvi_prepare_scanline_16bpp(inst, (uint32_t *)(framebuf + y * stride));
+	}
+	__builtin_unreachable();
+}
+
 static void __dvi_func(dvi_dma_irq_handler)(struct dvi_inst *inst) {
 	// Every fourth interrupt marks the start of the horizontal active region. We
 	// now have until the end of this region to generate DMA blocklist for next

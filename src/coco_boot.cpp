@@ -472,3 +472,42 @@ extern "C" void HOT_FUNC(coco_boot_blit_vdg_1to1_src)(const uint8_t *src, uint16
 extern "C" void coco_boot_blit_vdg_1to1(uint16_t *small_fb) {
     coco_boot_blit_vdg_1to1_src(coco_machine_get_vdg_buffer(), small_fb);
 }
+
+// PIZERO-07: blit into a 320x240 RGB565 framebuffer for libdvi (which scales
+// it 2x to 640x480). Unlike the AMOLED path this is NATIVE RGB565 byte order
+// (libdvi consumes it straight, no wire byte-swap) and NO rotation. The CoCo's
+// 256x192 is centered at offset (32, 24), leaving a black border that the 2x
+// doubling renders as the README's 512x384-in-640x480 image.
+#define PIZERO_FB_W 320
+#define PIZERO_FB_H 240
+#define PIZERO_X0   ((PIZERO_FB_W - COCO_VDG_W) / 2)  // 32
+#define PIZERO_Y0   ((PIZERO_FB_H - COCO_VDG_H) / 2)  // 24
+
+// Native (non-byte-swapped) twin of g_vdg_rgb565.
+static const uint16_t g_vdg_rgb565_native[16] = {
+    0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
+    0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
+};
+
+extern "C" void HOT_FUNC(coco_boot_blit_vdg_pizero_src)(const uint8_t *src, uint16_t *fb) {
+    // Top border rows (above the CoCo image): paint black once per frame.
+    for (int y = 0; y < PIZERO_Y0; y++)
+        for (int x = 0; x < PIZERO_FB_W; x++) fb[y * PIZERO_FB_W + x] = 0;
+    for (int cy = 0; cy < COCO_VDG_H; cy++) {
+        const uint8_t *srow = &src[cy * (COCO_VDG_W / 2)];
+        uint16_t *frow = &fb[(PIZERO_Y0 + cy) * PIZERO_FB_W];
+        for (int x = 0; x < PIZERO_X0; x++) frow[x] = 0;                 // left border
+        for (int cx = 0; cx < COCO_VDG_W; cx++) {
+            uint8_t byte = srow[cx >> 1];
+            int shift = (cx & 1) ? 4 : 0;
+            frow[PIZERO_X0 + cx] = g_vdg_rgb565_native[(byte >> shift) & 0x0F];
+        }
+        for (int x = PIZERO_X0 + COCO_VDG_W; x < PIZERO_FB_W; x++) frow[x] = 0; // right border
+    }
+    for (int y = PIZERO_Y0 + COCO_VDG_H; y < PIZERO_FB_H; y++)
+        for (int x = 0; x < PIZERO_FB_W; x++) fb[y * PIZERO_FB_W + x] = 0;
+}
+
+extern "C" void coco_boot_blit_vdg_pizero(uint16_t *fb) {
+    coco_boot_blit_vdg_pizero_src(coco_machine_get_vdg_buffer(), fb);
+}
