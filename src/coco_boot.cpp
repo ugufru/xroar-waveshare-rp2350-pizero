@@ -489,23 +489,19 @@ static const uint16_t g_vdg_rgb565_native[16] = {
     0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
 };
 
+// Only the active 256x192 region is written each frame. The black border is
+// painted once by the caller (memset of g_fb at init) and never changes, so
+// re-clearing it every frame would be ~27K wasted pixel writes per frame.
 extern "C" void HOT_FUNC(coco_boot_blit_vdg_pizero_src)(const uint8_t *src, uint16_t *fb) {
-    // Top border rows (above the CoCo image): paint black once per frame.
-    for (int y = 0; y < PIZERO_Y0; y++)
-        for (int x = 0; x < PIZERO_FB_W; x++) fb[y * PIZERO_FB_W + x] = 0;
     for (int cy = 0; cy < COCO_VDG_H; cy++) {
         const uint8_t *srow = &src[cy * (COCO_VDG_W / 2)];
-        uint16_t *frow = &fb[(PIZERO_Y0 + cy) * PIZERO_FB_W];
-        for (int x = 0; x < PIZERO_X0; x++) frow[x] = 0;                 // left border
-        for (int cx = 0; cx < COCO_VDG_W; cx++) {
-            uint8_t byte = srow[cx >> 1];
-            int shift = (cx & 1) ? 4 : 0;
-            frow[PIZERO_X0 + cx] = g_vdg_rgb565_native[(byte >> shift) & 0x0F];
+        uint16_t *frow = &fb[(PIZERO_Y0 + cy) * PIZERO_FB_W + PIZERO_X0];
+        for (int cx = 0; cx < COCO_VDG_W; cx += 2) {
+            uint8_t byte = srow[cx >> 1];           // two pixels packed per byte
+            frow[cx]     = g_vdg_rgb565_native[byte & 0x0F];        // even = low nibble
+            frow[cx + 1] = g_vdg_rgb565_native[(byte >> 4) & 0x0F]; // odd  = high nibble
         }
-        for (int x = PIZERO_X0 + COCO_VDG_W; x < PIZERO_FB_W; x++) frow[x] = 0; // right border
     }
-    for (int y = PIZERO_Y0 + COCO_VDG_H; y < PIZERO_FB_H; y++)
-        for (int x = 0; x < PIZERO_FB_W; x++) fb[y * PIZERO_FB_W + x] = 0;
 }
 
 extern "C" void coco_boot_blit_vdg_pizero(uint16_t *fb) {

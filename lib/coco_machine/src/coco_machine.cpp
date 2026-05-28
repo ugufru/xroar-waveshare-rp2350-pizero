@@ -721,7 +721,34 @@ static inline void put2(uint8_t *dst, int px, uint8_t color) {
     else        dst[byte_idx] = (dst[byte_idx] & 0xF0) | color;
 }
 
+// Fast path for alpha glyphs: precomputed expansion of an 8-bit font row into
+// the 4 packed vdg_buffer bytes (8 nibbles), for the two BASIC colourings.
+// nibble[N] (pixel N, MSB-first) = bit set ? ink : paper; packed little-endian
+// so one 32-bit store replaces 8 per-pixel read-modify-writes (put2).
+//   [0] = normal  green-on-black (ink=GREEN, paper=BLACK)
+//   [1] = inverse black-on-green (ink=BLACK, paper=GREEN)
+static uint32_t g_alpha_lut[2][256];
+static bool     g_alpha_lut_ready = false;
+
+static void build_alpha_lut() {
+    const uint8_t combos[2][2] = { { PAL_GREEN, PAL_BLACK }, { PAL_BLACK, PAL_GREEN } };
+    for (int c = 0; c < 2; c++) {
+        uint8_t ink = combos[c][0], paper = combos[c][1];
+        for (int g = 0; g < 256; g++) {
+            uint32_t word = 0;
+            for (int bit = 0; bit < 8; bit++) {
+                uint8_t color = (g & (0x80 >> bit)) ? ink : paper;
+                int byte = bit >> 1, shift = (bit & 1) ? 4 : 0;   // low nibble = even px
+                word |= (uint32_t)color << (byte * 8 + shift);
+            }
+            g_alpha_lut[c][g] = word;
+        }
+    }
+    g_alpha_lut_ready = true;
+}
+
 static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
+    if (!g_alpha_lut_ready) build_alpha_lut();
     // 32 chars wide × 16 text rows × 12 pixel rows = 192 lines.
     // Each glyph is 8 px wide → 32 chars × 8 = 256 px per line.
     for (int text_row = 0; text_row < 16; text_row++) {
@@ -729,34 +756,23 @@ static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
             int row = text_row * 12 + sub_row;
             if (row >= COCO_VDG_H) return;
             uint8_t *dst = &g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
+            const uint8_t *chrow = &g_m.ram[(base + text_row * 32) & 0xFFFF];
             for (int col = 0; col < 32; col++) {
-                uint8_t ch = g_m.ram[(base + text_row * 32 + col) & 0xFFFF];
-                int basepx = col * 8;
+                uint8_t ch = chrow[col];
                 if (ch & 0x80) {
                     // SG4 semigraphics: 2×2 colour block in this cell.
-                    // bits 6-4 = colour; bits 3-0 = quadrant luminance
-                    // (top uses bits 3,2; bottom uses bits 1,0).
                     uint8_t color = (ch >> 4) & 7;
                     uint8_t sg = (sub_row < 6) ? (ch >> 2) : ch;
                     uint8_t left  = (sg & 2) ? color : PAL_BLACK;
                     uint8_t right = (sg & 1) ? color : PAL_BLACK;
+                    int basepx = col * 8;
                     for (int bit = 0; bit < 8; bit++)
                         put2(dst, basepx + bit, (bit < 4) ? left : right);
                 } else {
-                    // Alpha: screen codes are 6-bit ($00='@', $01='A', …);
-                    // map into the T1 font's $40-$7F glyph range (xroar's
-                    // `vram_g_data |= 0x40` for the internal char set).
-                    // Bit 6 = inverse video. CoCo BASIC stores uppercase as
-                    // $40-$5F (inverse) and clears the screen with inverse
-                    // spaces — that's the iconic black-on-green look. Normal
-                    // (bit6=0) chars are green-on-black.
+                    // Alpha: 6-bit screen code → T1 font glyph $40-$7F.
+                    // Bit 6 = inverse (the iconic black-on-green BASIC look).
                     uint8_t glyph = font_6847t1[(((ch & 0x3F) | 0x40)) * 12 + sub_row];
-                    uint8_t ink = PAL_GREEN, paper = PAL_BLACK;
-                    if (ch & 0x40) { ink = PAL_BLACK; paper = PAL_GREEN; }
-                    for (int bit = 0; bit < 8; bit++) {
-                        uint8_t color = (glyph & (0x80 >> bit)) ? ink : paper;
-                        put2(dst, basepx + bit, color);
-                    }
+                    *(uint32_t *)(dst + col * 4) = g_alpha_lut[(ch >> 6) & 1][glyph];
                 }
             }
         }

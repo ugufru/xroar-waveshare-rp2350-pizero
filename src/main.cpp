@@ -238,8 +238,9 @@ void loop() {
     coco_machine_run_cycles(CYCLES_PER_FRAME);
     uint32_t b = micros();
     coco_machine_render_frame();                  // regenerate VDG buffer (SUPPRESS_RENDER_SCANLINE)
-    coco_boot_blit_vdg_pizero(g_fb);              // -> 320x240, core 1 displays it
     uint32_t c = micros();
+    coco_boot_blit_vdg_pizero(g_fb);              // -> 320x240, core 1 displays it
+    uint32_t d = micros();
 
     // Pace to real time; resync if we fell behind rather than spiral.
     next_us += FRAME_PERIOD_US;
@@ -251,8 +252,9 @@ void loop() {
     frames++;
     uint32_t now = millis();
     if (now - last >= 1000) {
-        Serial.printf("[run] fps=%lu cpu=%luus blit=%luus\n",
-                      (unsigned long)frames, (unsigned long)(b - a), (unsigned long)(c - b));
+        Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus\n",
+                      (unsigned long)frames, (unsigned long)(b - a),
+                      (unsigned long)(c - b), (unsigned long)(d - c));
         frames = 0; last = now;
     }
 }
