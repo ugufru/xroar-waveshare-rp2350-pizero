@@ -121,14 +121,29 @@ Work is tracked in `issues.jsonl` (use `/issues` to list). Phases:
 
 ## Build
 
-Not yet — PlatformIO setup lands in Phase 1 (`PIZERO-04`). The toolchain will be PlatformIO with the
-earlephilhower arduino-pico core targeting the RP2350B, with `libdvi`, Pico-PIO-USB + Adafruit
-TinyUSB, and `no-OS-FatFS-SD`. Build instructions will be added here when `PIZERO-04` closes.
+PlatformIO with the earlephilhower arduino-pico core, targeting the RP2350B:
+
+```
+pio run                 # build firmware.uf2
+pio run -t upload       # flash (hold BOOT for BOOTSEL if it doesn't auto-reset)
+pio device monitor      # serial @ 115200 — prints per-second [run] fps/cpu/blit
+```
+
+A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and optionally
+`/coco/extbas11.rom`), plus an optional `disk11.rom` cart, a `.dsk` image, and `autorun.txt`
+(see `AUTORUN.md`) — same card layout as the AMOLED port.
 
 ## Status
 
-**Phase 0 — planning.** Hardware verified from the schematic and Waveshare demo source; pinout, display
-path (`libdvi`, 320×240→640×480), and the key clock-conflict risk are documented above. No firmware yet.
+**Phase 2 complete — Color BASIC boots to "OK" on HDMI.** XRoar runs on core 0 (emulation + blit) with
+`libdvi` scanning out a 320×240 framebuffer to 640×480p60 on core 1. Measured **54 fps** (CoCo-frame
+emulation ~9.3 ms, `render_frame`+blit ~9.4 ms), already above the 30 fps target and ahead of the
+AMOLED port's ~15 fps. Input is currently serial/autotype.
+
+The 9.4 ms render+blit on core 0 is the bottleneck holding it below 60 fps; offloading it is the
+Phase 5 dual-core work (`PIZERO-14`). Note: 640×480 is 4:3, so 16:9 monitors stretch it unless set to
+4:3/aspect scaling. Next up: autonomous demo (`PIZERO-10`) and USB-host keyboard (`PIZERO-11`+),
+which reopens the system-clock reconciliation (`PIZERO-02b`).
 
 ## References
 
