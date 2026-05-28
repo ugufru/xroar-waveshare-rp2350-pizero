@@ -47,14 +47,18 @@ static void loadm_write_cb(uint16_t addr, const uint8_t *data, uint16_t len, voi
 #define FRAME_HEIGHT 240
 #define DVI_TIMING   dvi_timing_640x480p_60hz
 
-static uint16_t g_fb[FRAME_WIDTH * FRAME_HEIGHT] __attribute__((aligned(4)));
+// PIZERO-14: double-buffered. Core 0 renders into the back buffer, then swaps
+// g_front at a frame boundary; core 1 samples g_front once per frame -> no tearing.
+static uint16_t g_fb[2][FRAME_WIDTH * FRAME_HEIGHT] __attribute__((aligned(4)));
+static const uint16_t * volatile g_front = g_fb[0];
+static int g_back = 1;
 static struct dvi_inst dvi0;
 
 static void core1_main() {
     dvi_register_irqs_this_core(&dvi0, DMA_IRQ_0);
     dvi_start(&dvi0);
-    // Never returns: continuously encodes g_fb (no dependency on core 0).
-    dvi_static_framebuf_main_16bpp(&dvi0, g_fb);
+    // Never returns: continuously encodes the current front buffer.
+    dvi_static_framebuf_main_16bpp(&dvi0, &g_front);
 }
 
 // ---- Keyboard (serial + autotype, same as the AMOLED port) ---------------
@@ -171,6 +175,7 @@ void setup() {
     Serial.println("\nXRoar on RP2350-PiZero (PIZERO-09)");
 
     // Bring up DVI first so we have a display even if SD/ROM fails.
+    // Clear both buffers so the (static) black border is set in each.
     memset(g_fb, 0, sizeof(g_fb));
     vreg_set_voltage(VREG_VOLTAGE_1_20);
     delay(10);
@@ -239,7 +244,9 @@ void loop() {
     uint32_t b = micros();
     coco_machine_render_frame();                  // regenerate VDG buffer (SUPPRESS_RENDER_SCANLINE)
     uint32_t c = micros();
-    coco_boot_blit_vdg_pizero(g_fb);              // -> 320x240, core 1 displays it
+    coco_boot_blit_vdg_pizero(g_fb[g_back]);      // render into the back buffer
+    g_front = g_fb[g_back];                        // publish: core 1 picks it up at its next frame
+    g_back ^= 1;
     uint32_t d = micros();
 
     // Pace to real time; resync if we fell behind rather than spiral.

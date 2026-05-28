@@ -77,7 +77,7 @@ void dvi_framebuf_main_16bpp(struct dvi_inst *inst);
 // colour queues entirely. Row stride is timing h_active/DVI_SYMBOLS_PER_WORD
 // (320 for the 320x240->640x480 doubled mode). The producer core rewrites the
 // framebuffer asynchronously; this never starves (tearing instead of dropouts).
-void dvi_static_framebuf_main_16bpp(struct dvi_inst *inst, const uint16_t *framebuf);
+void dvi_static_framebuf_main_16bpp(struct dvi_inst *inst, const uint16_t * volatile *framebuf_ptr);
 
 #ifdef __cplusplus
 }

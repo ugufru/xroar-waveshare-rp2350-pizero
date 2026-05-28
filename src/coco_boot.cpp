@@ -178,6 +178,7 @@ static bool scan_dir_for_dsk(const char *dir, char *best_name, size_t name_sz) {
     best_name[0] = '\0';
     while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
         if (fi.fattrib & AM_DIR) continue;
+        if (fi.fname[0] == '.') continue;   // skip dotfiles incl. macOS ._* AppleDouble
         const char *ext = strrchr(fi.fname, '.');
         if (!ext || (strcasecmp(ext, ".dsk") != 0)) continue;
         if (!found || strcasecmp(fi.fname, best_name) < 0) {

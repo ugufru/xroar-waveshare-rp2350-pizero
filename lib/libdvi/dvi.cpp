@@ -178,10 +178,13 @@ void __dvi_func(dvi_scanbuf_main_16bpp)(struct dvi_inst *inst) {
 // the display (paced to the refresh by q_tmds_free) from the producer: the
 // other core can rewrite the framebuffer at any rate without ever starving the
 // encoder. A slow producer just yields tearing, never solid-red dropouts.
-void __dvi_func(dvi_static_framebuf_main_16bpp)(struct dvi_inst *inst, const uint16_t *framebuf) {
+void __dvi_func(dvi_static_framebuf_main_16bpp)(struct dvi_inst *inst, const uint16_t * volatile *framebuf_ptr) {
 	const uint h = inst->timing->v_active_lines / DVI_VERTICAL_REPEAT;
 	const uint stride = inst->timing->h_active_pixels / DVI_SYMBOLS_PER_WORD;
 	while (1) {
+		// Sample the front buffer once per frame so the producer can swap it
+		// at a frame boundary -> tear-free double buffering.
+		const uint16_t *framebuf = *framebuf_ptr;
 		for (uint y = 0; y < h; ++y)
 			_dvi_prepare_scanline_16bpp(inst, (uint32_t *)(framebuf + y * stride));
 	}
