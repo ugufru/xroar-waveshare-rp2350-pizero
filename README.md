@@ -144,11 +144,15 @@ autonomous `AUTORUN.TXT` demo (`PIZERO-10`) works, dual-core double-buffered sca
 (`PIZERO-14`) is tear-free, and a **USB keyboard plugged into the PIO-USB port types directly
 into BASIC** (`PIZERO-11`/`12`).
 
-Remaining open work: **`PIZERO-13`** (USB joystick) and **`PIZERO-11b`** (USB devices currently
-only enumerate on a cold boot — hot-unplug/replug doesn't re-attach). USB device-compatibility
-caveat: Pico-PIO-USB is USB 1.1 only, so modern high-speed USB 2.0 peripherals (e.g. Keychron K2,
-standalone gaming mice) don't enumerate. Simple wired USB keyboards and full-speed wireless USB
-receivers are the working class.
+Remaining open work: **`PIZERO-13`** (USB joystick) and the parked **`PIZERO-11b`**
+(hot-replug works only when the board has adequate VBUS — a USB power-bank or a
+"high-output" Mac port. A standard MacBook USB-C port doesn't reliably supply the inrush
+current a freshly-attached device needs alongside the board's libdvi/emulation/USB-host
+draw, so re-plug on a dev-power setup looks broken; cold-boot once works).
+
+USB device-compatibility caveat: Pico-PIO-USB is USB 1.1 only, so modern high-speed USB 2.0
+peripherals (e.g. Keychron K2, standalone gaming mice) don't enumerate. Simple wired USB
+keyboards and full-speed wireless USB receivers are the working class.
 
 Note: 640×480 is 4:3, so 16:9 monitors stretch it unless set to 4:3/aspect scaling.
 
