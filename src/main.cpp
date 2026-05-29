@@ -15,6 +15,8 @@
 
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
+#include "hardware/gpio.h"
+#include "hardware/structs/sysinfo.h"
 #include "pico/multicore.h"
 
 extern "C" {
@@ -22,6 +24,19 @@ extern "C" {
 #include "dvi_serialiser.h"
 #include "common_dvi_pin_configs.h"
 }
+
+// PIZERO-11: Pico-PIO-USB host on the PIO-USB port (D+=28, D-=29). Wiki
+// confirms host is supported (device_info demo enumerates a 2.4G wireless
+// receiver as ID 05ac:0256). Open issue tracked by RP2350 errata E9 — pins
+// configured as pull-down input read HIGH due to leak current; Pico-PIO-USB
+// has a workaround gated on chip_version <= 2. We print the chip revision so
+// we can tell whether the workaround applies on this part.
+#include "pio_usb.h"
+#include "Adafruit_TinyUSB.h"
+#define HOST_PIN_DP  28
+static Adafruit_USBH_Host USBHost;
+static volatile uint32_t g_usb_devices = 0;
+extern "C" uint32_t pio_usb_host_get_frame_number(void);
 
 extern "C" {
 #include "ff.h"
@@ -45,7 +60,28 @@ static void loadm_write_cb(uint16_t addr, const uint8_t *data, uint16_t len, voi
 // ---- Display (libdvi) ----------------------------------------------------
 #define FRAME_WIDTH  320
 #define FRAME_HEIGHT 240
-#define DVI_TIMING   dvi_timing_640x480p_60hz
+
+// PIZERO-02b spike: drop sys clock from 252 MHz to 240 MHz so Pico-PIO-USB
+// (which asserts CPU == 120 or 240 MHz) can coexist with DVI. Same 640x480
+// H/V layout as libdvi's 60 Hz preset, but bit_clk_khz = 240000 -> 24 MHz
+// pixel clock -> ~57.14 Hz refresh. Off-spec vs CEA 640x480p60 (25.175 MHz)
+// but well within typical HDMI monitor EDID tolerance.
+static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
+    .h_sync_polarity = false,
+    .h_front_porch   = 16,
+    .h_sync_width    = 96,
+    .h_back_porch    = 48,
+    .h_active_pixels = 640,
+
+    .v_sync_polarity = false,
+    .v_front_porch   = 10,
+    .v_sync_width    = 2,
+    .v_back_porch    = 33,
+    .v_active_lines  = 480,
+
+    .bit_clk_khz     = 240000,   // 24 MHz pixel clock, ~57.14 Hz refresh
+};
+#define DVI_TIMING   dvi_timing_640x480p_57hz_240mhz
 
 // PIZERO-14: double-buffered. Core 0 renders into the back buffer, then swaps
 // g_front at a frame boundary; core 1 samples g_front once per frame -> no tearing.
@@ -159,7 +195,7 @@ static bool mount_sd() {
     for (int attempt = 0; attempt < 5; attempt++) {
         fr = f_mount(&fs, "0:", 1);
         if (fr == FR_OK) return true;
-        Serial.printf("SD mount attempt %d: %s (%d)\n", attempt + 1, FRESULT_str(fr), fr);
+        Serial.printf("SD mount attempt %d: %s (%d)\r\n", attempt + 1, FRESULT_str(fr), fr);
         delay(200);
     }
     return false;
@@ -170,30 +206,68 @@ static bool mount_sd() {
 
 void setup() {
     Serial.begin(115200);
+    // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
+    // boot banners. (loop() also repeats a recap for the first ~5 s.)
     uint32_t t0 = millis();
-    while (!Serial && (millis() - t0) < 1500) delay(10);
-    Serial.println("\nXRoar on RP2350-PiZero (PIZERO-09)");
+    while (!Serial && (millis() - t0) < 4000) delay(50);
+    delay(200);  // a little extra room after the host attaches
+    Serial.print("\r\nXRoar on RP2350-PiZero (PIZERO-09)\r\n");
+    Serial.flush();
 
     // Bring up DVI first so we have a display even if SD/ROM fails.
     // Clear both buffers so the (static) black border is set in each.
     memset(g_fb, 0, sizeof(g_fb));
     vreg_set_voltage(VREG_VOLTAGE_1_20);
     delay(10);
+    set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);        // 240 MHz (PIZERO-02b)
+
+    // Read RP2350 chip revision — relevant to errata E9 (pull-down input
+    // reads HIGH due to leak current). Pico-PIO-USB applies a workaround
+    // only when chip_version <= 2 (A0..A2). Print so we know our part.
+    uint32_t chip_id = *((volatile uint32_t *)(SYSINFO_BASE + SYSINFO_CHIP_ID_OFFSET));
+    uint32_t chip_rev = (chip_id & SYSINFO_CHIP_ID_REVISION_BITS) >>
+                        SYSINFO_CHIP_ID_REVISION_LSB;
+    Serial.printf("RP2350 chip_id=%08lx revision=%lu (E9 workaround active: %s)\r\n",
+                  (unsigned long)chip_id, (unsigned long)chip_rev,
+                  chip_rev <= 2 ? "yes" : "NO — may explain pull-down-reads-HIGH");
+    Serial.flush();
+
+    // PIZERO-11: PIO-USB host on core 0, PIO 1 (libdvi will own PIO 0).
+    // Init BEFORE multicore_launch_core1 — alarm_pool_create() needs
+    // cross-core sync that deadlocks if core 1 is already in libdvi's
+    // DMA-IRQ loop.
+    {
+        pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
+        pio_cfg.pin_dp     = HOST_PIN_DP;
+        pio_cfg.pio_tx_num = 1;
+        pio_cfg.pio_rx_num = 1;
+        USBHost.configure_pio_usb(1, &pio_cfg);
+        // Default any HID interface to boot protocol at mount — that's how the
+        // common wireless keyboard/mouse dongles want to be talked to (and
+        // simplifies the report layout: 8-byte boot keyboard, 3+1+ byte boot
+        // mouse). Has to be set BEFORE begin().
+        tuh_hid_set_default_protocol(HID_PROTOCOL_BOOT);
+        USBHost.begin(1);
+        Serial.printf("USB host up: PIO-USB D+=%d/D-=%d on pio1\r\n",
+                      HOST_PIN_DP, HOST_PIN_DP + 1);
+        Serial.flush();
+    }
+
     pio_set_gpio_base(DVI_DEFAULT_SERIAL_CONFIG.pio, 16);   // TMDS on GPIO 32-39
     dvi0.timing  = &DVI_TIMING;
     dvi0.ser_cfg = DVI_DEFAULT_SERIAL_CONFIG;
-    set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);        // ~252 MHz
     dvi_init(&dvi0, next_striped_spin_lock_num(), next_striped_spin_lock_num());
     multicore_launch_core1(core1_main);
-    Serial.printf("DVI up: %dx%d -> 640x480p60, sys=%lu kHz\n",
+    Serial.printf("DVI up: %dx%d -> 640x480 ~57Hz, sys=%lu kHz (PIZERO-02b)\r\n",
                   FRAME_WIDTH, FRAME_HEIGHT, (unsigned long)(clock_get_hz(clk_sys) / 1000));
+    Serial.flush();
 
-    if (!mount_sd()) { Serial.println("SD mount FAILED — no ROMs, idle."); return; }
+    if (!mount_sd()) { Serial.print("SD mount FAILED — no ROMs, idle.\r\n"); return; }
     if (!coco_boot_load_rom_from_sd(g_coco_rom)) {
-        Serial.println("ROM load FAILED (need /coco/bas12.rom [+extbas11.rom])"); return;
+        Serial.print("ROM load FAILED (need /coco/bas12.rom [+extbas11.rom])\r\n"); return;
     }
     if (!coco_machine_init(g_coco_rom, sizeof(g_coco_rom))) {
-        Serial.println("coco_machine_init failed"); return;
+        Serial.print("coco_machine_init failed\r\n"); return;
     }
 
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.
@@ -207,7 +281,7 @@ void setup() {
         for (int i = 0; i < 30; i++) coco_machine_run_cycles(15000);  // let PIA DDRs settle
         uint16_t entry = 0;
         if (coco_boot_parse_loadm(path, loadm_write_cb, nullptr, &entry)) {
-            Serial.printf("[autorun] DIRECT %s, jump $%04X\n", path, entry);
+            Serial.printf("[autorun] DIRECT %s, jump $%04X\r\n", path, entry);
             coco_machine_jump(entry);
         }
     } else {
@@ -221,7 +295,7 @@ void setup() {
                           && coco_boot_attach_dsk(path));
             if (dsk) {
                 coco_machine_install_disk_reader(coco_boot_disk_read_sector);
-                Serial.printf("[autorun] disk: %s\n", path);
+                Serial.printf("[autorun] disk: %s\r\n", path);
             }
             if (have_autorun && autorun.autotype[0]) {
                 g_autotype = autorun.autotype;
@@ -230,10 +304,11 @@ void setup() {
         }
     }
     g_machine_running = true;
-    Serial.println("[main] coco_machine running");
+    Serial.print("[main] coco_machine running\r\n");
 }
 
 void loop() {
+    USBHost.task();   // PIZERO-11: service USB host transfers.
     if (!g_machine_running) { delay(1000); return; }
     static uint32_t next_us = 0;
     if (next_us == 0) next_us = micros();
@@ -259,9 +334,63 @@ void loop() {
     frames++;
     uint32_t now = millis();
     if (now - last >= 1000) {
-        Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus\n",
+        // PIZERO-11 diagnostic: D+/D- (post-INOVER, as PIO-USB sees them),
+        // SOF frame counter (proves the 1 ms timer is firing), USB devices
+        // mounted. With a FS device the lib expects D+=1 D-=0 (J state);
+        // with an LS device D+=0 D-=1 (K state); empty bus = both 0.
+        int dp = gpio_get(HOST_PIN_DP);
+        int dm = gpio_get(HOST_PIN_DP + 1);
+        uint32_t sof = pio_usb_host_get_frame_number();
+        Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus "
+                      "| D+=%d D-=%d sof=%lu usb=%lu\r\n",
                       (unsigned long)frames, (unsigned long)(b - a),
-                      (unsigned long)(c - b), (unsigned long)(d - c));
+                      (unsigned long)(c - b), (unsigned long)(d - c),
+                      dp, dm, (unsigned long)sof,
+                      (unsigned long)g_usb_devices);
         frames = 0; last = now;
     }
 }
+
+// ---- USB host HID callbacks (PIZERO-11) ---------------------------------
+// TinyUSB looks up these weak symbols by C name; extern "C" prevents mangling.
+extern "C" {
+
+void tuh_mount_cb(uint8_t daddr) {
+    g_usb_devices++;
+    Serial.printf("[usb] device attached, addr=%u\r\n", daddr);
+}
+
+void tuh_umount_cb(uint8_t daddr) {
+    if (g_usb_devices) g_usb_devices--;
+    Serial.printf("[usb] device removed, addr=%u\r\n", daddr);
+}
+
+void tuh_hid_mount_cb(uint8_t daddr, uint8_t idx,
+                      uint8_t const *desc_report, uint16_t desc_len) {
+    (void)desc_report;
+    uint8_t proto = tuh_hid_interface_protocol(daddr, idx);
+    const char *kind = (proto == HID_ITF_PROTOCOL_KEYBOARD) ? "keyboard"
+                     : (proto == HID_ITF_PROTOCOL_MOUSE)    ? "mouse"
+                                                            : "generic";
+    Serial.printf("[usb] HID mount addr=%u idx=%u proto=%u (%s) desc_len=%u\r\n",
+                  daddr, idx, proto, kind, desc_len);
+    if (!tuh_hid_receive_report(daddr, idx)) {
+        Serial.printf("[usb] tuh_hid_receive_report FAILED idx=%u\r\n", idx);
+    } else {
+        Serial.printf("[usb] receive_report armed idx=%u\r\n", idx);
+    }
+}
+
+void tuh_hid_umount_cb(uint8_t daddr, uint8_t idx) {
+    Serial.printf("[usb] HID unmount addr=%u idx=%u\r\n", daddr, idx);
+}
+
+void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
+                                uint8_t const *report, uint16_t len) {
+    Serial.printf("[usb] HID report addr=%u idx=%u len=%u:", daddr, idx, len);
+    for (uint16_t i = 0; i < len && i < 16; i++) Serial.printf(" %02X", report[i]);
+    Serial.print("\r\n");
+    tuh_hid_receive_report(daddr, idx);
+}
+
+} // extern "C"
