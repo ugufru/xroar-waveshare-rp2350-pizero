@@ -152,6 +152,10 @@ static void ascii_to_dscan(char c, uint8_t *dscan_out, bool *shift_out) {
 
 static int g_kb_hold = 0;
 static int g_kb_gap  = 0;
+// Track what autotype/serial last pressed so we can release just that key
+// rather than nuking the whole matrix (which would also drop USB-held keys).
+static uint8_t g_pump_last_dscan = K_INVALID;
+static bool    g_pump_last_shift = false;
 
 static int next_keychar() {
     if (g_autotype) {
@@ -168,7 +172,13 @@ static int next_keychar() {
 static void pump_keyboard() {
     if (g_kb_hold > 0) {
         if (--g_kb_hold == 0) {
-            coco_machine_release_all_keys();
+            // Release only what this pump pressed; leave USB-held keys alone.
+            if (g_pump_last_dscan != K_INVALID) {
+                coco_machine_release_key(g_pump_last_dscan);
+            }
+            if (g_pump_last_shift) coco_machine_release_key(K_SHIFT);
+            g_pump_last_dscan = K_INVALID;
+            g_pump_last_shift = false;
             g_kb_gap = g_autotype ? 4 : 2;
         }
         return;
@@ -181,7 +191,81 @@ static void pump_keyboard() {
     if (dscan == K_INVALID) return;
     if (shift) coco_machine_press_key(K_SHIFT);
     coco_machine_press_key(dscan);
+    g_pump_last_dscan = dscan;
+    g_pump_last_shift = shift;
     g_kb_hold = g_autotype ? 5 : 3;
+}
+
+// ---- HID → DSCAN translation (PIZERO-12) ---------------------------------
+// HID usage codes (boot keyboard) -> CoCo DSCAN. Sentinel 0xFF = no mapping.
+// We can't use 0 for "unmapped" because K_0 = 0x00.
+static uint8_t g_hid_to_dscan[256];
+
+static void hid_table_init(void) {
+    memset(g_hid_to_dscan, 0xFF, sizeof(g_hid_to_dscan));
+    // 0x04..0x1D = a..z (boot keyboard usage). CoCo K_A..K_Z are contiguous.
+    for (int i = 0; i < 26; i++) g_hid_to_dscan[0x04 + i] = (uint8_t)(K_A + i);
+    // 0x1E..0x26 = 1..9, 0x27 = 0. CoCo K_0..K_9 contiguous but ordered 0..9.
+    g_hid_to_dscan[0x1E] = K_1;  g_hid_to_dscan[0x1F] = K_2;
+    g_hid_to_dscan[0x20] = K_3;  g_hid_to_dscan[0x21] = K_4;
+    g_hid_to_dscan[0x22] = K_5;  g_hid_to_dscan[0x23] = K_6;
+    g_hid_to_dscan[0x24] = K_7;  g_hid_to_dscan[0x25] = K_8;
+    g_hid_to_dscan[0x26] = K_9;  g_hid_to_dscan[0x27] = K_0;
+    // Misc.
+    g_hid_to_dscan[0x28] = K_ENTER;   // Enter
+    g_hid_to_dscan[0x29] = K_BREAK;   // Esc -> Break
+    g_hid_to_dscan[0x2A] = K_LEFT;    // Backspace -> Left (CoCo delete key)
+    g_hid_to_dscan[0x2C] = K_SPACE;   // Space
+    g_hid_to_dscan[0x2D] = K_MINUS;   // -
+    g_hid_to_dscan[0x33] = K_SEMI;    // ;
+    g_hid_to_dscan[0x36] = K_COMMA;   // ,
+    g_hid_to_dscan[0x37] = K_DOT;     // .
+    g_hid_to_dscan[0x38] = K_SLASH;   // /
+    g_hid_to_dscan[0x4F] = K_RIGHT;   // Right arrow
+    g_hid_to_dscan[0x50] = K_LEFT;    // Left arrow
+    g_hid_to_dscan[0x51] = K_DOWN;    // Down arrow
+    g_hid_to_dscan[0x52] = K_UP;      // Up arrow
+}
+
+// HID boot-keyboard report state. tuh_hid_report_received_cb fires from
+// USBHost.task() (called once per loop()), so this runs on core 0 alongside
+// the CoCo machine — no cross-core sync needed.
+static uint8_t g_hid_prev_codes[6] = {0};
+static bool    g_hid_shift_prev = false;
+
+static void hid_keyboard_apply(const uint8_t *report) {
+    uint8_t mods = report[0];
+    const uint8_t *codes = &report[2];
+    bool shift = (mods & 0x22u) != 0;  // bit 1 = L-Shift, bit 5 = R-Shift
+
+    // Modifier (shift only — CoCo has no Ctrl/Alt/Meta).
+    if (shift && !g_hid_shift_prev) coco_machine_press_key(K_SHIFT);
+    if (!shift && g_hid_shift_prev) coco_machine_release_key(K_SHIFT);
+    g_hid_shift_prev = shift;
+
+    // Releases: codes in prev but not in current.
+    for (int i = 0; i < 6; i++) {
+        uint8_t prev = g_hid_prev_codes[i];
+        if (prev == 0) continue;
+        bool still = false;
+        for (int j = 0; j < 6; j++) if (codes[j] == prev) { still = true; break; }
+        if (!still) {
+            uint8_t ds = g_hid_to_dscan[prev];
+            if (ds != 0xFF) coco_machine_release_key(ds);
+        }
+    }
+    // Presses: codes in current but not in prev.
+    for (int i = 0; i < 6; i++) {
+        uint8_t curr = codes[i];
+        if (curr == 0) continue;
+        bool was = false;
+        for (int j = 0; j < 6; j++) if (g_hid_prev_codes[j] == curr) { was = true; break; }
+        if (!was) {
+            uint8_t ds = g_hid_to_dscan[curr];
+            if (ds != 0xFF) coco_machine_press_key(ds);
+        }
+    }
+    memcpy(g_hid_prev_codes, codes, 6);
 }
 
 // ---- ROM/boot (same flow as the AMOLED port) -----------------------------
@@ -231,6 +315,8 @@ void setup() {
                   (unsigned long)chip_id, (unsigned long)chip_rev,
                   chip_rev <= 2 ? "yes" : "NO — may explain pull-down-reads-HIGH");
     Serial.flush();
+
+    hid_table_init();   // PIZERO-12: build HID-usage -> CoCo-DSCAN lookup.
 
     // PIZERO-11: PIO-USB host on core 0, PIO 1 (libdvi will own PIO 0).
     // Init BEFORE multicore_launch_core1 — alarm_pool_create() needs
@@ -387,9 +473,12 @@ void tuh_hid_umount_cb(uint8_t daddr, uint8_t idx) {
 
 void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
                                 uint8_t const *report, uint16_t len) {
-    Serial.printf("[usb] HID report addr=%u idx=%u len=%u:", daddr, idx, len);
-    for (uint16_t i = 0; i < len && i < 16; i++) Serial.printf(" %02X", report[i]);
-    Serial.print("\r\n");
+    // PIZERO-12: treat any 8-byte report as boot keyboard (our test dongle
+    // mislabels its keyboard interface as proto=2/mouse). 3-byte report is
+    // a boot mouse (no consumer yet — PIZERO-13). Other lengths: ignore.
+    if (len >= 8) {
+        hid_keyboard_apply(report);
+    }
     tuh_hid_receive_report(daddr, idx);
 }
 

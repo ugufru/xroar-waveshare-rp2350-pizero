@@ -7,8 +7,8 @@ A port of the **XRoar** Tandy Color Computer (CoCo) emulator to the
 This started as an evaluation port — could the RP2350-PiZero run XRoar at least as well as the
 existing [RP2350-Touch-AMOLED-1.8 port](../coco-rp2350-waveshare-touch-amoled-18) (which boots
 Color BASIC to "OK" at ~36% real-time)? It does, comfortably: it boots Color BASIC over HDMI at a
-**locked, tear-free 60 fps** — full real-time, ~4× the AMOLED port's frame rate. USB-host input is
-the remaining piece (see Status).
+**locked, tear-free 60 fps** — full real-time, ~4× the AMOLED port's frame rate, with a real **USB
+keyboard typing directly into BASIC**. Only joystick input remains in Phase 4.
 
 ## Goal
 
@@ -72,25 +72,16 @@ The CoCo's native 256×192 is centred inside the 320×240 buffer (32 px left/rig
 border). After the 2× hardware scale-out it appears on the monitor as **512×384 with blank borders** —
 which is the "2× resolution" target. The blitter writes 320×240 in landscape with no rotation.
 
-## Known feasibility risk: system-clock conflict (HDMI + USB host)
+## System-clock reconciliation (HDMI + USB host) — resolved
 
-The single biggest open question for this board is whether HDMI and USB host can run **at the same
-time**. The two stock Waveshare demos run at incompatible system clocks:
-
-- **DVI** (640×480p 60 Hz) drives the system clock from the TMDS bit clock → **~252 MHz**.
-- **PIO-USB** requires the CPU to be **exactly 120 MHz or 240 MHz** (it asserts this at startup).
-
-252 MHz ≠ 240 MHz, and each demo only ever ran on its own. Making them coexist — the whole point of
-this project — needs one of: running DVI from a 240 MHz-derived (slightly off-spec but
-monitor-tolerated) pixel clock, clocking PIO-USB from an independent clock source, or choosing a DVI
-timing that divides cleanly from 240 MHz. The chosen system clock also sets the CPU budget available
-for emulation, so this decision gates the achievable frame rate. 240 MHz being a valid PIO-USB clock
-is encouraging — it is close to the AMOLED port's 250 MHz emulation clock. Tracked as `PIZERO-02b`.
-
-To be clear about today's state: **HDMI-only is solved and rock-solid at 252 MHz** (see Performance
-below). This conflict only bites once the USB-host stack (Phase 4) is brought up, which hasn't
-started yet — so it doesn't undercut the current 60 fps result, but it does gate how the project
-finishes.
+DVI and PIO-USB want different system clocks: DVI's TMDS bit clock prefers ~252 MHz for
+640×480p60 (25.175 MHz pixel), while Pico-PIO-USB asserts the CPU is *exactly* 120 MHz or
+240 MHz. **Resolved (`PIZERO-02b`) by running the system clock at 240 MHz** and giving libdvi a
+custom 640×480 timing with a 24 MHz pixel clock — a ~57.14 Hz refresh, slightly off-spec vs CEA
+640×480p60 but well within typical HDMI monitor EDID tolerance and accepted by every monitor we
+tested. The emulator still hits a locked 60 fps because it's paced from `FRAME_PERIOD_US`,
+decoupled from display vsync; the monitor just samples the latest published framebuffer at
+~57 Hz. Tear-free thanks to PIZERO-14's double buffer.
 
 ## Software architecture
 
@@ -123,10 +114,13 @@ Work is tracked in `issues.jsonl` (use `/issues` to list). Phases:
 | 1 | HDMI bring-up: DVI test pattern | PIZERO-04..05 | ✅ done |
 | 2 | XRoar boots to Color BASIC "OK" on HDMI | PIZERO-06..09 | ✅ done |
 | 3 | Autonomous self-running demo | PIZERO-10 | ✅ done |
-| 4 | USB-host keyboard / joystick input | PIZERO-11..13 | ⬜ next |
+| 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13 | 🟡 keyboard done; joystick + hot-replug open |
 | 5 | Dual-core split + performance | PIZERO-14..15 | ✅ done |
 
-The DVI-vs-USB clock reconciliation (`PIZERO-02b`) is deferred and reopens with Phase 4.
+DVI-vs-USB clock reconciliation (`PIZERO-02b`) resolved at 240 MHz with a ~57 Hz monitor refresh
+(see above). USB host enumeration + keyboard input verified on hardware; remaining open work in
+Phase 4 is `PIZERO-13` (joystick) and `PIZERO-11b` (hot-replug bug — USB devices only enumerate
+on a cold boot; unplugging and re-plugging doesn't re-attach).
 
 ## Build
 
@@ -144,19 +138,25 @@ A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and opt
 
 ## Status
 
-**Phases 0–3 and 5 complete — XRoar boots Color BASIC to "OK" on HDMI at a locked, tear-free
-60 fps.** Emulation runs on core 0; core 1 runs `libdvi`, scanning out a double-buffered 320×240
-framebuffer to 640×480p60. The autonomous `AUTORUN.TXT` demo (`PIZERO-10`) works, and the dual-core
-split with double-buffering (`PIZERO-14`) gives tear-free output. Input is currently serial/autotype.
+**Phases 0–3 and 5 complete; Phase 4 keyboard done.** XRoar boots Color BASIC on HDMI at a
+locked, tear-free 60 fps emulation rate (display refreshes at ~57 Hz; emulator stays at 60). The
+autonomous `AUTORUN.TXT` demo (`PIZERO-10`) works, dual-core double-buffered scanout
+(`PIZERO-14`) is tear-free, and a **USB keyboard plugged into the PIO-USB port types directly
+into BASIC** (`PIZERO-11`/`12`).
 
-The only remaining phase is **USB-host input** (`PIZERO-11..13`) — a real keyboard and joystick —
-which reopens the DVI-vs-USB system-clock reconciliation (`PIZERO-02b`). Note: 640×480 is 4:3, so
-16:9 monitors stretch it unless set to 4:3/aspect scaling.
+Remaining open work: **`PIZERO-13`** (USB joystick) and **`PIZERO-11b`** (USB devices currently
+only enumerate on a cold boot — hot-unplug/replug doesn't re-attach). USB device-compatibility
+caveat: Pico-PIO-USB is USB 1.1 only, so modern high-speed USB 2.0 peripherals (e.g. Keychron K2,
+standalone gaming mice) don't enumerate. Simple wired USB keyboards and full-speed wireless USB
+receivers are the working class.
+
+Note: 640×480 is 4:3, so 16:9 monitors stretch it unless set to 4:3/aspect scaling.
 
 ## Performance
 
 The headline result: **Color BASIC runs at a locked, tear-free 60 fps** — full real-time — on a
-252 MHz system clock, with ~31% of the core-0 frame budget still free.
+240 MHz system clock (~57 Hz monitor refresh, decoupled from the 60 Hz emulator pacing), with
+~30% of the core-0 frame budget still free even with USB-host servicing running on core 0.
 
 Per-frame work on core 0, against the 60 Hz frame period of **16.76 ms**:
 
@@ -180,7 +180,7 @@ Performance instrumentation, clock, and vreg tuning landed in `PIZERO-15`; the s
 per-second `[run]` fps/cpu/blit stats. For comparison, the AMOLED port manages ~15 fps (~36%
 real-time), so this is roughly a **4× improvement**.
 
-Note the two distinct clocks: the host RP2350 MCU runs at **252 MHz** (set from the DVI TMDS bit
+Note the two distinct clocks: the host RP2350 MCU runs at **240 MHz** (set from the DVI TMDS bit
 clock), while the *emulated* 6809 runs at its authentic **~0.895 MHz** — independent of the host clock.
 
 ## References
