@@ -1,5 +1,9 @@
 .pio/
 .vscode/
+# Generated locally via `pio run -t compiledb` so clangd can see PIO's
+# include paths (Arduino.h, libdvi, Pico-PIO-USB, …) — not part of the repo.
+compile_commands.json
+.cache/
 build/
 *.o
 *.elf

@@ -227,6 +227,15 @@ static void hid_table_init(void) {
     g_hid_to_dscan[0x52] = K_UP;      // Up arrow
 }
 
+// PIZERO-11b: hot-replug watchdog attempt — DISABLED. The premise (read
+// D+/D- via gpio_get + look for SE1) doesn't work because Pico-PIO-USB's
+// TX state machine holds the pins in J state between transmissions, so
+// the post-INOVER reading never changes on unplug. Bypassing the SM (pad
+// OD trick) doesn't disambiguate either because RP2350 E9 leak current
+// makes "no device" still look like weak-high. See PIZERO-11b for the
+// referenced workarounds (external 8.2k pull-downs, A3/A4 silicon, or
+// transaction-failure tracking inside the lib).
+
 // HID boot-keyboard report state. tuh_hid_report_received_cb fires from
 // USBHost.task() (called once per loop()), so this runs on core 0 alongside
 // the CoCo machine — no cross-core sync needed.

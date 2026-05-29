@@ -31,6 +31,9 @@ here. Don't duplicate them. This file is just pointers and conventions for worki
 - Keep `-O2`, `build_unflags = -Os`, deep LDF.
 - DVI uses `pio_set_gpio_base(pio, 16)` because TMDS pins are GPIO 32–39 (> 31).
 - HSTX is GPIO 12–19 only and is NOT wired to the HDMI connector here → `libdvi` is mandatory.
+- `compile_commands.json` is gitignored. Regenerate with `pio run -t compiledb` after adding or
+  swapping libraries so clangd can resolve `Arduino.h`, libdvi, Pico-PIO-USB, etc. Otherwise the
+  IDE buries real diagnostics under "header not found" noise.
 
 ## Workflow rules
 
