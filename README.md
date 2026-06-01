@@ -151,11 +151,12 @@ autonomous `AUTORUN.TXT` demo (`PIZERO-10`) works, dual-core double-buffered sca
 (`PIZERO-14`) is tear-free, and a **USB keyboard plugged into the PIO-USB port types directly
 into BASIC** (`PIZERO-11`/`12`).
 
-Remaining open work: **`PIZERO-13`** (USB joystick) and the parked **`PIZERO-11b`**
-(hot-replug works only when the board has adequate VBUS — a USB power-bank or a
-"high-output" Mac port. A standard MacBook USB-C port doesn't reliably supply the inrush
-current a freshly-attached device needs alongside the board's libdvi/emulation/USB-host
-draw, so re-plug on a dev-power setup looks broken; cold-boot once works).
+Remaining open work: **`PIZERO-13`** (USB joystick) and the open, **undiagnosed**
+**`PIZERO-11b`** (USB devices enumerate only on a cold boot with the device already
+attached; hot-replug doesn't re-enumerate). There is **no confirmed root cause** — it
+has not been tested. Two unverified hypotheses stand: insufficient dev-port VBUS/inrush
+current (would be fixed by a battery/powered hub — untested), or a software miss of the
+disconnect event (RP2350-E9 leakage + the PIO-USB state machine holding the J line).
 
 Next deliverable is **`PIZERO-18`** (Phase 6): native CoCo audio output. There is no sound today;
 the plan is to add an HDMI audio path to `libdvi` (data islands) or fall back to PWM. See the
