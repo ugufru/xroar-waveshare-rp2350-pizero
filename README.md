@@ -116,11 +116,18 @@ Work is tracked in `issues.jsonl` (use `/issues` to list). Phases:
 | 3 | Autonomous self-running demo | PIZERO-10 | ✅ done |
 | 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13 | 🟡 keyboard done; joystick + hot-replug open |
 | 5 | Dual-core split + performance | PIZERO-14..15 | ✅ done |
+| 6 | Audio output (native CoCo 6-bit DAC + 1-bit sound) | PIZERO-18 (PIZERO-17 stretch) | 🔜 scoping |
 
 DVI-vs-USB clock reconciliation (`PIZERO-02b`) resolved at 240 MHz with a ~57 Hz monitor refresh
 (see above). USB host enumeration + keyboard input verified on hardware; remaining open work in
 Phase 4 is `PIZERO-13` (joystick) and `PIZERO-11b` (hot-replug bug — USB devices only enumerate
 on a cold boot; unplugging and re-plugging doesn't re-attach).
+
+The board is currently **silent**: XRoar synthesises the CoCo's 6-bit DAC + single-bit sound
+internally, but nothing drives those samples to an output yet. Phase 6 (`PIZERO-18`) adds a real
+audio path — the leading candidate is HDMI audio over the existing cable (data-island packets
+emitted by `libdvi`, which is presently DVI-only), with PWM-to-a-GPIO as the fallback. The
+synth/sound-chip experiment (`PIZERO-17`) is a stretch that depends on whichever path Phase 6 picks.
 
 ## Build
 
@@ -149,6 +156,10 @@ Remaining open work: **`PIZERO-13`** (USB joystick) and the parked **`PIZERO-11b
 "high-output" Mac port. A standard MacBook USB-C port doesn't reliably supply the inrush
 current a freshly-attached device needs alongside the board's libdvi/emulation/USB-host
 draw, so re-plug on a dev-power setup looks broken; cold-boot once works).
+
+Next deliverable is **`PIZERO-18`** (Phase 6): native CoCo audio output. There is no sound today;
+the plan is to add an HDMI audio path to `libdvi` (data islands) or fall back to PWM. See the
+issue for the output-path decision that gates the work.
 
 USB device-compatibility caveat: Pico-PIO-USB is USB 1.1 only, so modern high-speed USB 2.0
 peripherals (e.g. Keychron K2, standalone gaming mice) don't enumerate. Simple wired USB
