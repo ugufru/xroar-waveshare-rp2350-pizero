@@ -627,6 +627,82 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
 // lookup, so a single zero is fine.
 extern "C" const uint8_t font_6847[1] = { 0 };
 
+// - - - audio (PIZERO-18) -----------------------------------------
+//
+// This stripped port vendors no XRoar sound module, so we synthesise the CoCo
+// audio stream here. The 6-bit DAC sits on PIA1 port A bits 2..7 and the
+// single-bit sound on PIA1 port B bit 1. We sample the effective pin state at
+// a fixed COCO_AUDIO_RATE by slicing the CPU run into sample-sized cycle
+// chunks (below), which yields correct PITCH because emulation time advances
+// by exactly the right number of cycles between samples. Output lands in a
+// small overwrite ring drained by whatever sink is active (WAV-over-CDC today;
+// HDMI data islands later). CPU clock = EVENT_TICK_RATE/16 = 14318180/16 =
+// 894886.25 Hz; the Bresenham uses the rates x4 so the divisor is exact and
+// pitch does not drift.
+#define COCO_AUDIO_RATE      32000u
+#define COCO_AUDIO_CPUCLK_X4 3579545u                 // (14318180/16)*4, exact
+#define COCO_AUDIO_RATE_X4   (COCO_AUDIO_RATE * 4u)    // 128000
+#define AUDIO_RING_SAMPLES   2048u                     // pow2; ~64 ms @ 32 kHz, 4 KB
+
+static int16_t           g_audio_ring[AUDIO_RING_SAMPLES];
+static volatile uint32_t g_audio_w = 0;                // monotonic write index
+static volatile uint32_t g_audio_r = 0;                // monotonic read index
+static uint32_t          g_audio_err = 0;              // Bresenham accumulator
+
+static inline void audio_sample_now(void) {
+    if (!g_m.pia1) return;
+    int dac6 = (PIA_VALUE_A(g_m.pia1) >> 2) & 0x3F;    // 6-bit DAC, 0..63
+    int sb   = (PIA_VALUE_B(g_m.pia1) >> 1) & 0x01;    // single-bit sound
+    int s = (dac6 - 32) * 480;                         // ~ -15360..+14880
+    if (sb) s += 6000;
+    if (s > 32767) s = 32767; else if (s < -32768) s = -32768;
+    uint32_t w = g_audio_w;
+    g_audio_ring[w & (AUDIO_RING_SAMPLES - 1)] = (int16_t)s;
+    g_audio_w = w + 1;
+    // Overwrite-on-full: if the sink fell behind, drop the oldest samples.
+    if (g_audio_w - g_audio_r > AUDIO_RING_SAMPLES)
+        g_audio_r = g_audio_w - AUDIO_RING_SAMPLES;
+}
+
+// Drain up to `max` mono int16 samples; returns count read.
+extern "C" size_t coco_machine_audio_read(int16_t *dst, size_t max) {
+    size_t n = 0;
+    while (n < max && g_audio_r != g_audio_w) {
+        dst[n++] = g_audio_ring[g_audio_r & (AUDIO_RING_SAMPLES - 1)];
+        g_audio_r++;
+    }
+    return n;
+}
+
+extern "C" uint32_t coco_machine_audio_rate(void) { return COCO_AUDIO_RATE; }
+
+// Run the 6809 for `cycles` cycles, slicing on audio-sample boundaries so
+// audio_sample_now() fires at exactly COCO_AUDIO_RATE. Re-entering cpu->run
+// in ~28-cycle slices is safe (state lives in g_m.cpu; event timing is keyed
+// to ticks, unaffected by how we chunk the budget). PIZERO-18: watch core-0
+// frame time on hardware — if the per-slice overhead bites, switch to a
+// PIA-postwrite-timestamp reconstruction instead of slicing.
+static inline void run_cpu_with_audio(uint32_t cycles) {
+    int32_t budget = (int32_t)cycles;
+    while (budget > 0) {
+        uint32_t need = (COCO_AUDIO_CPUCLK_X4 - g_audio_err + (COCO_AUDIO_RATE_X4 - 1))
+                        / COCO_AUDIO_RATE_X4;            // ceil cycles to next sample
+        if (need == 0) need = 1;
+        uint32_t slice = (need > (uint32_t)budget) ? (uint32_t)budget : need;
+
+        g_m.cycles_remaining = (int32_t)slice * 16;
+        g_m.cpu->running = 1;
+        g_m.cpu->run(g_m.cpu);
+
+        g_audio_err += slice * COCO_AUDIO_RATE_X4;
+        budget -= (int32_t)slice;
+        while (g_audio_err >= COCO_AUDIO_CPUCLK_X4) {
+            g_audio_err -= COCO_AUDIO_CPUCLK_X4;
+            audio_sample_now();
+        }
+    }
+}
+
 extern "C" void coco_machine_run_cycles(uint32_t cycles) {
     if (!g_m.cpu) return;
 
@@ -644,11 +720,10 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
         }
     }
 
-    // 6809 cycle ~= 16 SAM ticks. SAM->mem_cycle returns ticks per
-    // memory access; we run until our tick budget is spent.
-    g_m.cycles_remaining = (int32_t)cycles * 16;
-    g_m.cpu->running = 1;
-    g_m.cpu->run(g_m.cpu);
+    // 6809 cycle ~= 16 SAM ticks. SAM->mem_cycle returns ticks per memory
+    // access; we run until our tick budget is spent. PIZERO-18: sliced so the
+    // CoCo audio output is sampled at COCO_AUDIO_RATE between chunks.
+    run_cpu_with_audio(cycles);
 
 #if PROFILE_MEM_CYCLE
     // AMOLED-52: per-second per-region breakdown.

@@ -1,8 +1,13 @@
 # Audio path — decision & feasibility (PIZERO-18)
 
-**Status:** scoped, not yet implemented. The board is currently **silent** — XRoar
-synthesises the CoCo's 6-bit DAC + single-bit sound internally, but nothing on the
-PiZero drives those samples to an output.
+**Status:** source implemented (PIZERO-18, 2026-06-02), sink not yet. The board is
+currently **silent**. NOTE (corrects an earlier premise): this stripped port vendors
+**no XRoar sound module** — desktop XRoar synthesises the audio stream, but that code
+was not vendored here, so the CoCo's 6-bit DAC + single-bit sound existed only as
+PIA1 register state and were discarded. We now **synthesise the stream ourselves** in
+`coco_machine` (tap the 6-bit DAC on PIA1 port A bits 2–7 + single-bit sound on PB1,
+resample to 32 kHz mono into a ring). What remains is the **sink** — nothing yet
+drives those samples to an output.
 
 **Decision (direction):** primary target is **HDMI audio over the existing cable**,
 carried in `libdvi` data-island packets. Fallback is **PWM out of one GPIO** into a
@@ -53,10 +58,13 @@ the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
    the mandatory HDMI packets — **AVI InfoFrame**, **Audio InfoFrame**, **Audio Clock
    Regeneration (ACR)**, **Audio Sample Packets**. InfoFrames are static (encode once);
    only audio sample packets re-encode per frame.
-4. **Audio source tap:** resample XRoar's `sound_module` DAC output to 32 kHz stereo and
-   feed the data-island queue. Do the encoding on **core 1** (where libdvi scanout
-   lives), with a clean producer/consumer handoff from core 0 — not on core 0's ~5 ms
-   frame slack.
+4. **Audio source tap:** DONE (PIZERO-18) — `coco_machine` taps the 6-bit DAC (PIA1
+   port A bits 2–7) + single-bit sound (PB1) and resamples to 32 kHz mono via
+   `coco_machine_audio_read()`. (There is no XRoar `sound_module` in this port to tap;
+   we build the stream directly.) The sink just needs to drain that ring, duplicate
+   mono→stereo, and feed the data-island queue. Do the TERC4 encoding on **core 1**
+   (where libdvi scanout lives), with a clean producer/consumer handoff from core 0 —
+   not on core 0's ~5 ms frame slack.
 
 ## Risks (in order of likelihood to bite)
 

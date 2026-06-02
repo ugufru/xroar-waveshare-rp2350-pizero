@@ -297,6 +297,84 @@ static bool mount_sd() {
 #define CYCLES_PER_FRAME 15000
 #define FRAME_PERIOD_US  16762
 
+#ifdef AUDIO_WAV_DUMP
+// ---- PIZERO-18 audio validation: WAV-over-USB-CDC --------------------------
+// Streams the emulator's PCM out the serial port as a base64-encoded WAV, framed
+// by ---WAV-BEGIN---/---WAV-END--- markers, for a fixed window after boot. No
+// hardware wiring: capture the serial log on the host, snip between the markers,
+// `base64 -D > coco.wav`. Base64 (not raw) so a cooked tty/monitor can't mangle
+// the bytes. All other debug prints are suppressed while dumping.
+static const uint32_t AUDIO_DUMP_SECONDS = 9;
+static bool     g_audio_dumping = false;
+static uint32_t g_audio_dump_start_ms = 0;
+static const char B64[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static uint8_t  g_b64_rem[3];
+static int      g_b64_remn = 0;
+static int      g_b64_col  = 0;
+
+static void b64_emit(uint8_t a, uint8_t b, uint8_t c, int n) {
+    char o[4];
+    o[0] = B64[a >> 2];
+    o[1] = B64[((a & 0x3) << 4) | (b >> 4)];
+    o[2] = (n > 1) ? B64[((b & 0xF) << 2) | (c >> 6)] : '=';
+    o[3] = (n > 2) ? B64[c & 0x3F] : '=';
+    Serial.write((const uint8_t *)o, 4);
+    if ((g_b64_col += 4) >= 76) { Serial.write((const uint8_t *)"\r\n", 2); g_b64_col = 0; }
+}
+static void b64_push(const uint8_t *p, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        g_b64_rem[g_b64_remn++] = p[i];
+        if (g_b64_remn == 3) { b64_emit(g_b64_rem[0], g_b64_rem[1], g_b64_rem[2], 3); g_b64_remn = 0; }
+    }
+}
+static void b64_flush(void) {
+    if (g_b64_remn == 1)      b64_emit(g_b64_rem[0], 0, 0, 1);
+    else if (g_b64_remn == 2) b64_emit(g_b64_rem[0], g_b64_rem[1], 0, 2);
+    g_b64_remn = 0;
+    if (g_b64_col) { Serial.write((const uint8_t *)"\r\n", 2); g_b64_col = 0; }
+}
+static void wav44(uint8_t h[44], uint32_t rate, uint32_t data_len) {
+    uint32_t riff = 36 + data_len, br = rate * 2;       // mono, 16-bit
+    memcpy(h, "RIFF", 4);
+    h[4]=riff; h[5]=riff>>8; h[6]=riff>>16; h[7]=riff>>24;
+    memcpy(h+8, "WAVEfmt ", 8);
+    h[16]=16; h[17]=0; h[18]=0; h[19]=0;                // fmt chunk size
+    h[20]=1;  h[21]=0;                                  // PCM
+    h[22]=1;  h[23]=0;                                  // channels = 1
+    h[24]=rate; h[25]=rate>>8; h[26]=rate>>16; h[27]=rate>>24;
+    h[28]=br;  h[29]=br>>8;  h[30]=br>>16;  h[31]=br>>24;
+    h[32]=2;  h[33]=0;                                  // block align
+    h[34]=16; h[35]=0;                                  // bits/sample
+    memcpy(h+36, "data", 4);
+    h[40]=data_len; h[41]=data_len>>8; h[42]=data_len>>16; h[43]=data_len>>24;
+}
+static void audio_dump_begin(void) {
+    uint32_t rate = coco_machine_audio_rate();
+    uint32_t data_len = rate * 2 * AUDIO_DUMP_SECONDS;
+    uint8_t h[44];
+    wav44(h, rate, data_len);
+    Serial.write((const uint8_t *)"\r\n---WAV-BEGIN---\r\n", 19);
+    g_b64_remn = 0; g_b64_col = 0;
+    b64_push(h, 44);
+    g_audio_dumping = true;
+    g_audio_dump_start_ms = millis();
+}
+static void audio_dump_pump(void) {
+    int16_t buf[256];
+    size_t n;
+    while ((n = coco_machine_audio_read(buf, 256)) > 0) {
+        b64_push((const uint8_t *)buf, n * 2);
+        if (n < 256) break;
+    }
+    if (millis() - g_audio_dump_start_ms >= AUDIO_DUMP_SECONDS * 1000) {
+        b64_flush();
+        Serial.write((const uint8_t *)"\r\n---WAV-END---\r\n", 17);
+        g_audio_dumping = false;
+    }
+}
+#endif // AUDIO_WAV_DUMP
+
 void setup() {
     Serial.begin(115200);
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
@@ -368,6 +446,12 @@ void setup() {
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.
     static struct coco_autorun autorun = {};
     static char path[80];
+#ifdef AUDIO_WAV_DUMP
+    // Validation build: ignore autorun and boot a clean BASIC OK prompt so the
+    // injected SOUND test program actually runs. (The SD autorun.txt otherwise
+    // DIRECT-loads a game — e.g. spacewarp.bin — and our keystrokes go nowhere.)
+    (void)autorun; (void)path;
+#else
     bool have_autorun = coco_boot_load_autorun(&autorun);
 
     bool direct = have_autorun && autorun.direct_name[0]
@@ -398,8 +482,14 @@ void setup() {
             }
         }
     }
+#endif // AUDIO_WAV_DUMP
     g_machine_running = true;
     Serial.print("[main] coco_machine running\r\n");
+#ifdef AUDIO_WAV_DUMP
+    // PIZERO-18 validation build: the capture is armed from loop() once the
+    // USB-CDC host attaches (so flashing then opening the monitor doesn't miss
+    // the window during the post-upload reset). See docs/audio-decision.md.
+#endif
 }
 
 void loop() {
@@ -419,6 +509,19 @@ void loop() {
     g_back ^= 1;
     uint32_t d = micros();
 
+#ifdef AUDIO_WAV_DUMP
+    // Arm on USB-CDC attach (DTR), then autotype a deterministic ascending-tone
+    // program (SOUND = core Color BASIC, no ECB) and stream a base64 WAV.
+    static bool dump_armed = false;
+    if (!dump_armed && Serial) {
+        dump_armed = true;
+        g_autotype = "\rFORI=1TO8:SOUNDI*28,4:NEXTI\r";
+        g_autotype_warmup = 120;   // ~2 s for the OK prompt to settle
+        audio_dump_begin();
+    }
+    if (g_audio_dumping) audio_dump_pump();
+#endif
+
     // Pace to real time; resync if we fell behind rather than spiral.
     next_us += FRAME_PERIOD_US;
     int32_t rem = (int32_t)(next_us - micros());
@@ -429,6 +532,9 @@ void loop() {
     frames++;
     uint32_t now = millis();
     if (now - last >= 1000) {
+#ifdef AUDIO_WAV_DUMP
+        if (g_audio_dumping) { frames = 0; last = now; return; }  // don't corrupt the base64 stream
+#endif
         // PIZERO-11 diagnostic: D+/D- (post-INOVER, as PIO-USB sees them),
         // SOF frame counter (proves the 1 ms timer is firing), USB devices
         // mounted. With a FS device the lib expects D+=1 D-=0 (J state);

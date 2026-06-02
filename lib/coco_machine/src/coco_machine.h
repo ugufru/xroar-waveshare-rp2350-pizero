@@ -56,6 +56,14 @@ void coco_machine_jump(uint16_t entry);
  * queue is pumped as a side-effect of CPU memory cycles. */
 void coco_machine_run_cycles(uint32_t cycles);
 
+/* Audio (PIZERO-18). As the machine runs, the CoCo 6-bit DAC + single-bit
+ * sound are sampled at coco_machine_audio_rate() Hz (mono, signed 16-bit)
+ * into an internal ring. Drain up to `max` samples into `dst`; returns the
+ * number read (0 if none pending). Samples are overwritten oldest-first if a
+ * sink falls behind, so a slow/absent consumer never blocks emulation. */
+size_t coco_machine_audio_read(int16_t *dst, size_t max);
+uint32_t coco_machine_audio_rate(void);
+
 /* Pointer to the current VDG buffer — COCO_VDG_W * COCO_VDG_H bytes,
  * one palette index per pixel. Stable for the lifetime of the
  * machine; callers should not free or modify it. */
