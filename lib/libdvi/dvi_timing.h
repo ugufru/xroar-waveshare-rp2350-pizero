@@ -112,4 +112,11 @@ void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
 		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
 		uint32_t *bp0, uint32_t *bk1, uint32_t *bk2);
 
+// PIZERO-30 (M2): rewrite one data-island period at word offset `word_off` in
+// the three per-lane buffers (preamble + guard + TERC4 island). Used by the
+// core-0 per-frame audio refill. Runs on core 0 only (NOT the DMA IRQ).
+void dvi_write_audio_island(const struct dvi_timing *t, bool vsync_asserted,
+		uint32_t *b0, uint32_t *b1, uint32_t *b2, int word_off,
+		const dvi_data_packet_t *pkt);
+
 #endif

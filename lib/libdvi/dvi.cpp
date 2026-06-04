@@ -250,6 +250,11 @@ static void __dvi_func(dvi_dma_irq_handler)(struct dvi_inst *inst) {
 			_dvi_load_dma_op(inst->dma_cfg, &inst->dma_list_vblank_sync);
 			break;
 		default:
+			// PIZERO-30: per-vblank-line hook -- repoints the data-island
+			// read_addrs before this line's DMA list is loaded. Must be cheap
+			// (a few pointer stores -- NO encoding in the IRQ; see Option A).
+			if (inst->vblank_callback)
+				inst->vblank_callback();
 			_dvi_load_dma_op(inst->dma_cfg, &inst->dma_list_vblank_nosync);
 			break;
 	}
