@@ -117,28 +117,30 @@ void dvi_di_set_gcp(dvi_data_packet_t *pkt, bool set_avmute) {
 // + B-bit position. Per HDMI, 16-bit PCM occupies bits 8..23 of the 24-bit IEC
 // word. VUCP: validity=0, user=0, channel-status bit from frame_ctr framing,
 // parity over bits. (Exact IEC bit positions confirmed on the sink in M4.)
+// Even parity of a byte (XOR-reduce of its 8 bits).
+static inline int iec_par(unsigned b) { b ^= b >> 4; b ^= b >> 2; b ^= b >> 1; return b & 1; }
+
 void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
                               int nframes, uint32_t frame_ctr) {
 	memset(pkt, 0, sizeof(*pkt));
-	pkt->header[0] = 0x02;
 	if (nframes < 1) nframes = 1;
 	if (nframes > 4) nframes = 4;
-	pkt->header[1] = (uint8_t)((1u << nframes) - 1);    // sample_present bits
-	pkt->header[2] = 0x00;
+	const unsigned B = (frame_ctr % 192u == 0) ? 1u : 0u;   // 192-frame IEC block start
+	pkt->header[0] = 0x02;                                   // Audio Sample Packet
+	pkt->header[1] = (uint8_t)((1u << nframes) - 1);         // layout=0 (2ch) | sample_present
+	pkt->header[2] = (uint8_t)(B << 4);                      // B preamble bit
+	const unsigned vuc = 1;                                  // V=1 (valid), U=0, C=0
 	for (int i = 0; i < nframes; ++i) {
 		uint16_t l = (uint16_t)lr[2 * i + 0];
 		uint16_t r = (uint16_t)lr[2 * i + 1];
-		uint8_t *sp = pkt->subpacket[i];
-		// 16-bit sample in bits 8..23 of each 24-bit channel word.
-		sp[0] = 0;                       // L bits 0..7  (unused for 16-bit)
-		sp[1] = (uint8_t)(l);            // L bits 8..15
-		sp[2] = (uint8_t)(l >> 8);       // L bits 16..23
-		sp[3] = 0;                       // R bits 0..7
-		sp[4] = (uint8_t)(r);            // R bits 8..15
-		sp[5] = (uint8_t)(r >> 8);       // R bits 16..23
-		// sp[6]: VUCP bits for both channels; channel-status 'B' bit at frame 0.
-		uint8_t b_bit = ((frame_ctr % 192) == 0) ? 1 : 0;
-		sp[6] = b_bit;                   // refined in M4
+		uint8_t *d = pkt->subpacket[i];
+		// IEC 60958 subframe: 16-bit sample in bytes [1..2] (left) / [4..5] (right).
+		d[0] = 0; d[1] = (uint8_t)l; d[2] = (uint8_t)(l >> 8);
+		d[3] = 0; d[4] = (uint8_t)r; d[5] = (uint8_t)(r >> 8);
+		// VUCP byte: [V U C P] for left (bits 0..3) and right (bits 4..7); even parity P.
+		int pl = iec_par(d[1]) ^ iec_par(d[2]) ^ iec_par(vuc);
+		int pr = iec_par(d[4]) ^ iec_par(d[5]) ^ iec_par(vuc);
+		d[6] = (uint8_t)((vuc << 0) | (pl << 3) | (vuc << 4) | (pr << 7));
 	}
 }
 

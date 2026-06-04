@@ -443,17 +443,27 @@ void setup() {
         // Convert to HDMI mode: AVI InfoFrame data island in vblank + video
         // preamble/guard band on active lines. A sink rejects bare data islands
         // unless the active video is also HDMI-framed (the M2 black-screen).
-        dvi_data_packet_t pkts[3];
+        dvi_data_packet_t pkts[6];
         dvi_di_set_avi_infoframe(&pkts[0], 0);
         dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
         dvi_di_set_acr(&pkts[2], 24000, 4096);             // 32 kHz @ 24 MHz pixel clock
-        for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&pkts[i]);
+        // M4 step 2a: STATIC test tone -- a 12-sample (~2.67 kHz @ 32 kHz) square
+        // wave in 3 audio sample packets, identical on every vblank line. The rate
+        // is only approximate (static single buffer, ~31 kHz effective) so it may
+        // drift over seconds, but it answers "does the monitor PLAY HDMI audio at
+        // all" before building the dynamic per-frame engine (step 2b).
+        static int16_t tone[12 * 2];
+        for (int i = 0; i < 12; ++i) { int16_t v = (i < 6) ? 8000 : -8000; tone[2*i] = tone[2*i+1] = v; }
+        dvi_di_set_audio_samples(&pkts[3], &tone[0],  4, 0);
+        dvi_di_set_audio_samples(&pkts[4], &tone[8],  4, 4);
+        dvi_di_set_audio_samples(&pkts[5], &tone[16], 4, 8);
+        for (int i = 0; i < 6; ++i) dvi_di_compute_parity(&pkts[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
-                                             &dvi0.dma_list_vblank_nosync, pkts, 3,
+                                             &dvi0.dma_list_vblank_nosync, pkts, 6,
                                              isl0, isl1, isl2);
         dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg,
                                       &dvi0.dma_list_active, bp0, bk1, bk2);
-        Serial.print("[hdmi] M4 step1: AVI + Audio InfoFrame + ACR in vblank\r\n");
+        Serial.print("[hdmi] M4 step2a: AVI/AudioIF/ACR + static test tone in vblank\r\n");
     }
 #endif
     multicore_launch_core1(core1_main);
