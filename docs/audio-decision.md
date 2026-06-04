@@ -105,3 +105,46 @@ is mono in origin (duplicate to both channels).
 - FRANK HDMI Sound for RP2350 (Adafruit) — https://blog.adafruit.com/2026/05/26/a-small-hdmi-video-and-audio-driver-for-the-raspberry-pi-rp2350-raspberry_pi
 - pico_hdmi (HSTX, for contrast / packet logic only) — https://github.com/fliperama86/pico_hdmi
 - 43b's PWM decision — `~/github/xroar-waveshare-rp2350-43b/docs/audio-decision.md`
+
+## Status & how to confirm next session (2026-06-04)
+
+**PROVEN ON HARDWARE:** HDMI video on this board's off-spec ~57 Hz timing, and **HDMI
+audio output** — a static test tone played through the monitor speakers. The full
+data-island path (TERC4/BCH encoder, AVI + Audio InfoFrame, ACR, audio sample packets)
+is accepted and played by the sink.
+
+**NOT WORKING:** clean *live* audio. Encoding audio packets inside the vblank DMA IRQ
+(Option A) disrupts DVI scanout → black screen, even RAM-resident with static buffers.
+Cleanly isolated (static islands = video+audio fine; live per-line IRQ encode = black).
+
+### Build flags
+- *(none)* → plain DVI video, no HDMI audio — product baseline / known-good.
+- `-DHDMI_DATA_ISLAND` → HDMI mode + audio islands.
+  - on `main`: **STATIC test tone** (audio plays, buzzy) + video — the proven build.
+  - on branch `pizero30-live-audio-wip`: the **LIVE engine — BREAKS VIDEO** (Option A).
+- `-DHDMI_DATA_ISLAND -DHDMI_AUDIO_SELFTEST` → skip autorun, boot clean BASIC, autotype an
+  ascending-tone `SOUND` program (deterministic audio test, no keyboard needed).
+- `-DAUDIO_WAV_DUMP` → stream emulator audio out USB-CDC as base64 WAV (source check).
+
+### To confirm next session
+1. **The SD MUST have ROMs in `/coco`** — otherwise the firmware bails at ROM load and the
+   screen is black. (This red herring confounded a whole debugging session.)
+2. Flash `main` with `-DHDMI_DATA_ISLAND -DHDMI_AUDIO_SELFTEST` → expect video + a buzzy
+   looping ascending-tone on the monitor speakers = HDMI audio re-confirmed.
+3. *(optional)* Flash branch `pizero30-live-audio-wip` with `-DHDMI_DATA_ISLAND` → expect
+   black = re-confirms Option A breaks video.
+
+### Reliable flash recipe (the 1200-baud auto-reset is flaky)
+- Only the PiZero connected (multiple RP boards break auto-discovery / picotool).
+- Enter BOOTSEL: 1200-baud touch on the CDC port, or manual (hold BOOTSEL + replug power)
+  until the `RP2350` drive mounts.
+- `picotool load -x firmware.uf2` — NOT `cp` to `/Volumes/RP2350` (that was unreliable).
+- A warm flash leaves the USB keyboard un-enumerated (PIZERO-11b); cold power-cycle to fix.
+
+### Next: Option B (clean live audio)
+Single-buffer the framebuffer (frees ~153 KB, costs tear-free video), pre-encode audio on
+**core 0**, and have the IRQ do **only a `read_addr` swap**. FIRST do a swap-only IRQ
+viability check — if even the pointer swap disturbs scanout, fall back to pre-built
+per-line `dma_list`s (zero IRQ work). The step-2b engine (ring SPSC, ping-pong buffers,
+RAM-resident encoders, `dvi_write_audio_island`, `audio_vblank_cb`) lives on the
+`pizero30-live-audio-wip` branch as the foundation.
