@@ -18,6 +18,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// The audio-island encode path runs inside the DMA IRQ (PIZERO-30 step 2b), so
+// on-device these functions must live in RAM (not flash/XIP) to be fast enough
+// and avoid XIP stalls. This is exactly what the SDK's __not_in_flash_func()
+// expands to (.time_critical.* is linked into RAM), but without pulling in pico
+// headers -- so the host unit-test build (no __arm__) stays a plain no-op.
+#if defined(__arm__)
+#  define DI_RAMFUNC(fn) __attribute__((section(".time_critical." #fn))) fn
+#else
+#  define DI_RAMFUNC(fn) fn
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

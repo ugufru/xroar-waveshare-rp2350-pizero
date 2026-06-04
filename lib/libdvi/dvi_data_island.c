@@ -29,14 +29,14 @@ void dvi_di_init(void) {
 	bch_ready = true;
 }
 
-static uint8_t bch(const uint8_t *p, int n) {
+static uint8_t DI_RAMFUNC(bch)(const uint8_t *p, int n) {
 	uint8_t v = 0;
 	for (int i = 0; i < n; ++i)
 		v = bch_table[p[i] ^ v];
 	return v;
 }
 
-void dvi_di_compute_parity(dvi_data_packet_t *pkt) {
+void DI_RAMFUNC(dvi_di_compute_parity)(dvi_data_packet_t *pkt) {
 	pkt->header[3] = bch(pkt->header, 3);
 	for (int i = 0; i < 4; ++i)
 		pkt->subpacket[i][7] = bch(pkt->subpacket[i], 7);
@@ -120,7 +120,7 @@ void dvi_di_set_gcp(dvi_data_packet_t *pkt, bool set_avmute) {
 // Even parity of a byte (XOR-reduce of its 8 bits).
 static inline int iec_par(unsigned b) { b ^= b >> 4; b ^= b >> 2; b ^= b >> 1; return b & 1; }
 
-void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
+void DI_RAMFUNC(dvi_di_set_audio_samples)(dvi_data_packet_t *pkt, const int16_t *lr,
                               int nframes, uint32_t frame_ctr) {
 	memset(pkt, 0, sizeof(*pkt));
 	if (nframes < 1) nframes = 1;
@@ -147,7 +147,7 @@ void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
 // ---- TERC4 island layout (ported verbatim from the reference) --------------
 
 // Lane 0: 32-bit header, 1 bit/pixel in nibble bit 2, plus the hv control bits.
-void dvi_di_encode_header(uint32_t *dst, const dvi_data_packet_t *pkt,
+void DI_RAMFUNC(dvi_di_encode_header)(uint32_t *dst, const dvi_data_packet_t *pkt,
                           int hv, bool first_packet) {
 	int hv1 = hv | 8;
 	if (!first_packet) hv = hv1;
@@ -164,7 +164,7 @@ void dvi_di_encode_header(uint32_t *dst, const dvi_data_packet_t *pkt,
 
 // Lanes 1 & 2: four subpackets, bit-permuted so each pixel's nibble spans the
 // four subpackets (reference bit-twiddle).
-void dvi_di_encode_subpacket(uint32_t *dst1, uint32_t *dst2,
+void DI_RAMFUNC(dvi_di_encode_subpacket)(uint32_t *dst1, uint32_t *dst2,
                              const dvi_data_packet_t *pkt) {
 	for (int i = 0; i < 8; ++i) {
 		uint32_t v = ((uint32_t)pkt->subpacket[0][i] << 0)  |

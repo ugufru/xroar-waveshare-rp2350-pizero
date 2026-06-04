@@ -26,6 +26,12 @@ struct dvi_inst {
 	// Called in the DMA IRQ once per scanline -- careful with the run time!
 	dvi_callback_t scanline_callback;
 
+	// PIZERO-30: called in the DMA IRQ on each vertical-blank (no-sync) line,
+	// before that line's DMA list is loaded. Refills + repoints the HDMI audio
+	// data-island buffers from the sample ring. Runs in IRQ context on a vblank
+	// line (no video DMA competing) -- still keep it short.
+	dvi_callback_t vblank_callback;
+
 	// State ---
 	struct dvi_scanline_dma_list dma_list_vblank_sync;
 	struct dvi_scanline_dma_list dma_list_vblank_nosync;

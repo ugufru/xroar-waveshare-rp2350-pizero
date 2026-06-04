@@ -236,7 +236,7 @@ void dvi_scanline_dma_list_init(struct dvi_scanline_dma_list *dma_list) {
 	*dma_list = (struct dvi_scanline_dma_list){};	
 }
 
-static const uint32_t *get_ctrl_sym(bool vsync, bool hsync) {
+static const uint32_t *__dvi_func(get_ctrl_sym)(bool vsync, bool hsync) {
 	return &dvi_ctrl_syms[!!vsync << 1 | !!hsync];
 }
 
@@ -416,5 +416,27 @@ void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
 	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[2], &dma_cfg[TMDS_SYNC_LANE], bp0, bpw, 0, true);
 	_set_data_cb(&dvi_lane_from_list(l, 1)[0], &dma_cfg[1], bk1, blw, 0, false);
 	_set_data_cb(&dvi_lane_from_list(l, 2)[0], &dma_cfg[2], bk2, blw, 0, false);
+}
+
+// PIZERO-30 (M4 step 2b): (re)write ONE data-island period at word offset
+// `word_off` in the three per-lane line buffers -- preamble (ch1/ch2) + guard +
+// TERC4 island. ch0's preamble words are left as the buffer's existing control
+// fill. Used by the per-vblank-line audio refill to update just the audio
+// sample-packet islands each line (the static AVI/InfoFrame/ACR islands stay).
+// Small + leaf-ish; safe to call from the DMA IRQ on a vblank line.
+void __dvi_func(dvi_write_audio_island)(const struct dvi_timing *t, bool vsync_asserted,
+		uint32_t *b0, uint32_t *b1, uint32_t *b2, int word_off,
+		const dvi_data_packet_t *pkt) {
+	const bool vsync = t->v_sync_polarity == vsync_asserted;
+	const bool hsync_off = !t->h_sync_polarity;
+	const int hv = (vsync ? 2 : 0) | (hsync_off ? 1 : 0);
+	const uint32_t pre = *get_ctrl_sym(false, true);          // data-island preamble (ch1/ch2)
+	const uint16_t g0s = dvi_terc4_syms[0xC | (hv & 3)];
+	const uint32_t g0  = (uint32_t)g0s | ((uint32_t)g0s << 10);
+	const uint32_t g12 = (uint32_t)DVI_DI_GUARDBAND_SYM | ((uint32_t)DVI_DI_GUARDBAND_SYM << 10);
+	for (int i = 0; i < 4; ++i) { b1[word_off + i] = pre; b2[word_off + i] = pre; }
+	b0[word_off + 4] = g0; b1[word_off + 4] = g12; b2[word_off + 4] = g12;
+	dvi_di_encode_header(&b0[word_off + 5], pkt, hv, true);
+	dvi_di_encode_subpacket(&b1[word_off + 5], &b2[word_off + 5], pkt);
 }
 

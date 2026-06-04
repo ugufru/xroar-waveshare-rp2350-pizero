@@ -250,6 +250,10 @@ static void __dvi_func(dvi_dma_irq_handler)(struct dvi_inst *inst) {
 			_dvi_load_dma_op(inst->dma_cfg, &inst->dma_list_vblank_sync);
 			break;
 		default:
+			// PIZERO-30: refill + repoint the HDMI audio islands for this line
+			// (updates dma_list_vblank_nosync read_addrs) before it's loaded.
+			if (inst->vblank_callback)
+				inst->vblank_callback();
 			_dvi_load_dma_op(inst->dma_cfg, &inst->dma_list_vblank_nosync);
 			break;
 	}

@@ -375,6 +375,41 @@ static void audio_dump_pump(void) {
 }
 #endif // AUDIO_WAV_DUMP
 
+#ifdef HDMI_DATA_ISLAND
+// PIZERO-30 (M4 step 2b): live HDMI audio engine. Two ping-pong vblank-line
+// buffers, each pre-filled with the static AVI / Audio-InfoFrame / ACR islands
+// plus 3 audio sample-packet islands (indices 3-5, word offsets 89/116/143).
+// audio_vblank_cb() runs in the DMA IRQ on each vblank (no-sync) line: drain ~12
+// mono samples from the CoCo audio ring, encode them into the OFF buffer's 3
+// audio islands, and repoint that line's DMA at it. 43 lines x 12 ~= 516
+// samples/frame (~31 kHz) of real, distinct-per-line audio.
+static uint32_t g_isl[2][3][320];          // [pingpong][lane][words] = 7.7 KB
+static volatile uint32_t g_isl_ctr = 0;
+static uint32_t g_aud_framectr = 0;
+
+// RAM-resident (runs in the DMA IRQ); static buffers keep the IRQ stack small.
+// Only ever called from the single DMA IRQ, so the statics are safe.
+static void __not_in_flash_func(audio_vblank_cb)(void) {
+    static int16_t mono[12];
+    static int16_t lr[8];
+    static dvi_data_packet_t pkt;
+    uint32_t pp = g_isl_ctr & 1u; g_isl_ctr++;
+    size_t n = coco_machine_audio_read(mono, 12);
+    for (size_t i = n; i < 12; ++i) mono[i] = 0;          // pad short reads with silence
+    for (int k = 0; k < 3; ++k) {
+        for (int f = 0; f < 4; ++f) { int16_t s = mono[k*4 + f]; lr[2*f] = lr[2*f+1] = s; }
+        dvi_di_set_audio_samples(&pkt, lr, 4, g_aud_framectr);
+        g_aud_framectr = (g_aud_framectr + 4) % 192u;
+        dvi_di_compute_parity(&pkt);
+        dvi_write_audio_island(&DVI_TIMING, false, g_isl[pp][0], g_isl[pp][1], g_isl[pp][2],
+                               89 + 27 * k, &pkt);
+    }
+    dvi0.dma_list_vblank_nosync.l0[3].read_addr = g_isl[pp][0];
+    dvi0.dma_list_vblank_nosync.l1[1].read_addr = g_isl[pp][1];
+    dvi0.dma_list_vblank_nosync.l2[1].read_addr = g_isl[pp][2];
+}
+#endif // HDMI_DATA_ISLAND
+
 void setup() {
     Serial.begin(115200);
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
@@ -437,33 +472,29 @@ void setup() {
     // rock-solid on the monitor (proves data-island injection doesn't break sync
     // on this board's wiring/timing). Must run before core 1 starts the DVI.
     {
-        static uint32_t isl0[320], isl1[320], isl2[320];   // vblank island line, h_active(640)/2 words/lane
-        static uint32_t bp0[32], bk1[96], bk2[96];          // active-line back-porch / blanking framing
+        static uint32_t bp0[32], bk1[96], bk2[96];          // active-line framing buffers
         dvi_di_init();
-        // Convert to HDMI mode: AVI InfoFrame data island in vblank + video
-        // preamble/guard band on active lines. A sink rejects bare data islands
-        // unless the active video is also HDMI-framed (the M2 black-screen).
+        // 6-island vblank layout: AVI + Audio InfoFrame + ACR (static) and 3
+        // audio sample-packet slots (silence to start). The per-line IRQ callback
+        // (audio_vblank_cb) rewrites the 3 audio islands with live CoCo audio.
         dvi_data_packet_t pkts[6];
+        int16_t silence[8] = {0,0,0,0,0,0,0,0};
         dvi_di_set_avi_infoframe(&pkts[0], 0);
         dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
         dvi_di_set_acr(&pkts[2], 24000, 4096);             // 32 kHz @ 24 MHz pixel clock
-        // M4 step 2a: STATIC test tone -- a 12-sample (~2.67 kHz @ 32 kHz) square
-        // wave in 3 audio sample packets, identical on every vblank line. The rate
-        // is only approximate (static single buffer, ~31 kHz effective) so it may
-        // drift over seconds, but it answers "does the monitor PLAY HDMI audio at
-        // all" before building the dynamic per-frame engine (step 2b).
-        static int16_t tone[12 * 2];
-        for (int i = 0; i < 12; ++i) { int16_t v = (i < 6) ? 8000 : -8000; tone[2*i] = tone[2*i+1] = v; }
-        dvi_di_set_audio_samples(&pkts[3], &tone[0],  4, 0);
-        dvi_di_set_audio_samples(&pkts[4], &tone[8],  4, 4);
-        dvi_di_set_audio_samples(&pkts[5], &tone[16], 4, 8);
+        dvi_di_set_audio_samples(&pkts[3], silence, 4, 0);
+        dvi_di_set_audio_samples(&pkts[4], silence, 4, 4);
+        dvi_di_set_audio_samples(&pkts[5], silence, 4, 8);
         for (int i = 0; i < 6; ++i) dvi_di_compute_parity(&pkts[i]);
-        dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
-                                             &dvi0.dma_list_vblank_nosync, pkts, 6,
-                                             isl0, isl1, isl2);
+        // Fill BOTH ping-pong buffers; the callback ping-pongs read_addr per line.
+        for (int b = 0; b < 2; ++b)
+            dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
+                                                 &dvi0.dma_list_vblank_nosync, pkts, 6,
+                                                 g_isl[b][0], g_isl[b][1], g_isl[b][2]);
         dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg,
                                       &dvi0.dma_list_active, bp0, bk1, bk2);
-        Serial.print("[hdmi] M4 step2a: AVI/AudioIF/ACR + static test tone in vblank\r\n");
+        dvi0.vblank_callback = audio_vblank_cb;
+        Serial.print("[hdmi] M4 step2b: live CoCo audio over HDMI (vblank engine)\r\n");
     }
 #endif
     multicore_launch_core1(core1_main);
@@ -482,7 +513,7 @@ void setup() {
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.
     static struct coco_autorun autorun = {};
     static char path[80];
-#ifdef AUDIO_WAV_DUMP
+#if defined(AUDIO_WAV_DUMP) || defined(HDMI_AUDIO_SELFTEST)
     // Validation build: ignore autorun and boot a clean BASIC OK prompt so the
     // injected SOUND test program actually runs. (The SD autorun.txt otherwise
     // DIRECT-loads a game — e.g. spacewarp.bin — and our keystrokes go nowhere.)
@@ -521,6 +552,15 @@ void setup() {
 #endif // AUDIO_WAV_DUMP
     g_machine_running = true;
     Serial.print("[main] coco_machine running\r\n");
+#ifdef HDMI_AUDIO_SELFTEST
+    // Deterministic audio self-test: autotype an ascending-tone SOUND program
+    // (internal autotype path -- works without the USB keyboard). Plays through
+    // the emulator DAC -> ring -> HDMI audio engine, so it's audible on the
+    // monitor with no keyboard or cold-boot needed.
+    g_autotype = "\r10 FORI=1TO8:SOUNDI*28,4:NEXT:GOTO10\rRUN\r";   // loop ascending tones
+    g_autotype_warmup = 180;
+    Serial.print("[hdmi] selftest: looping ascending SOUND tones\r\n");
+#endif
 #ifdef AUDIO_WAV_DUMP
     // PIZERO-18 validation build: the capture is armed from loop() once the
     // USB-CDC host attaches (so flashing then opening the monitor doesn't miss

@@ -657,15 +657,16 @@ static inline void audio_sample_now(void) {
     if (sb) s += 6000;
     if (s > 32767) s = 32767; else if (s < -32768) s = -32768;
     uint32_t w = g_audio_w;
+    // Single-producer (core 0) / single-consumer (core-1 DVI IRQ) ring: the
+    // producer only advances g_audio_w and drops on full; the consumer solely
+    // owns g_audio_r. (PIZERO-30 step 2b: the HDMI audio IRQ drains this.)
+    if (w - g_audio_r >= AUDIO_RING_SAMPLES) return;   // full -> drop newest
     g_audio_ring[w & (AUDIO_RING_SAMPLES - 1)] = (int16_t)s;
     g_audio_w = w + 1;
-    // Overwrite-on-full: if the sink fell behind, drop the oldest samples.
-    if (g_audio_w - g_audio_r > AUDIO_RING_SAMPLES)
-        g_audio_r = g_audio_w - AUDIO_RING_SAMPLES;
 }
 
 // Drain up to `max` mono int16 samples; returns count read.
-extern "C" size_t coco_machine_audio_read(int16_t *dst, size_t max) {
+extern "C" size_t HOT_FUNC(coco_machine_audio_read)(int16_t *dst, size_t max) {
     size_t n = 0;
     while (n < max && g_audio_r != g_audio_w) {
         dst[n++] = g_audio_ring[g_audio_r & (AUDIO_RING_SAMPLES - 1)];
