@@ -5,6 +5,7 @@
 #include "pico/util/queue.h"
 
 #include "dvi.h"
+#include "dvi_data_island.h"
 
 struct dvi_timing {
 	bool h_sync_polarity;
@@ -95,5 +96,20 @@ void dvi_setup_scanline_for_active(const struct dvi_timing *t, const struct dvi_
 		uint32_t *tmdsbuf, struct dvi_scanline_dma_list *l);
 
 void dvi_update_scanline_data_dma(const struct dvi_timing *t, const uint32_t *tmdsbuf, struct dvi_scanline_dma_list *l);
+
+// PIZERO-28 (M2): build a vblank scanline carrying one HDMI data island, using
+// three caller-provided per-lane buffers of (h_active / DVI_SYMBOLS_PER_WORD)
+// words each. Repoints the list's active blocks at those buffers.
+void dvi_setup_scanline_for_vblank_island(const struct dvi_timing *t,
+		const struct dvi_lane_dma_cfg dma_cfg[], bool vsync_asserted,
+		struct dvi_scanline_dma_list *l, const dvi_data_packet_t *pkt,
+		uint32_t *buf0, uint32_t *buf1, uint32_t *buf2);
+
+// PIZERO-29 (M3): add the HDMI video preamble + guard band to active lines.
+// bp0 needs h_back_porch/DVI_SYMBOLS_PER_WORD words; bk1/bk2 need
+// (h_front_porch+h_sync_width+h_back_porch)/DVI_SYMBOLS_PER_WORD words.
+void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
+		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
+		uint32_t *bp0, uint32_t *bk1, uint32_t *bk2);
 
 #endif

@@ -1,5 +1,6 @@
 #include "dvi.h"
 #include "dvi_timing.h"
+#include "dvi_data_island.h"
 #include "hardware/dma.h"
 
 // This file contains:
@@ -322,5 +323,92 @@ void __dvi_func(dvi_update_scanline_data_dma)(const struct dvi_timing *t, const 
 		else
 			dvi_lane_from_list(l, i)[1].read_addr = lane_tmdsbuf;
 	}
+}
+
+// PIZERO-28 (M2): build a vblank scanline that carries one HDMI data island.
+// Starts from the normal blank line, fills three per-lane buffers (W =
+// h_active/2 words each) with the line's control symbols, overwrites a window
+// with [control lead-in -> data-island preamble (8px) -> leading guard band
+// (2px) -> TERC4 island (32px)], then repoints the per-lane active DMA blocks at
+// those buffers (non-repeating, no extra IRQ). Injecting into VERTICAL blanking
+// (no visible video) and keeping the pixel count identical means a malformed
+// island cannot disturb the picture — the monitor either accepts the island or
+// ignores it. Assumes DVI_SYMBOLS_PER_WORD == 2 (this board's build).
+void dvi_setup_scanline_for_vblank_island(const struct dvi_timing *t,
+		const struct dvi_lane_dma_cfg dma_cfg[], bool vsync_asserted,
+		struct dvi_scanline_dma_list *l, const dvi_data_packet_t *pkt,
+		uint32_t *buf0, uint32_t *buf1, uint32_t *buf2) {
+
+	// Base the list on the normal blank line (FP / HSYNC / BP + active blocks).
+	dvi_setup_scanline_for_vblank(t, dma_cfg, vsync_asserted, l);
+
+	const bool vsync = t->v_sync_polarity == vsync_asserted;
+	const bool hsync_off = !t->h_sync_polarity;       // hsync level in the active region
+	const uint32_t c0  = *get_ctrl_sym(vsync, hsync_off);  // lane-0 control word (x2)
+	const uint32_t c12 = *get_ctrl_sym(false, false);      // lanes 1/2 control (no sync)
+	const uint32_t pre = *get_ctrl_sym(false, true);       // CTL0/CTL2=1 data-island preamble
+	const int hv = (vsync ? 2 : 0) | (hsync_off ? 1 : 0);  // matches the control symbol's sync bits
+
+	const uint16_t g0s = dvi_terc4_syms[0xC | (hv & 3)];   // lane-0 guard band = TERC4{1,1,vsync,hsync}
+	const uint32_t g0  = (uint32_t)g0s | ((uint32_t)g0s << 10);
+	const uint32_t g12 = (uint32_t)DVI_DI_GUARDBAND_SYM | ((uint32_t)DVI_DI_GUARDBAND_SYM << 10);
+
+	const int W = t->h_active_pixels / DVI_SYMBOLS_PER_WORD;   // 320 for 640 active
+	for (int i = 0; i < W; ++i) { buf0[i] = c0; buf1[i] = c12; buf2[i] = c12; }
+
+#ifndef HDMI_ISLAND_CONTROL_ONLY
+	const int p = 8;                              // >=12px control lead-in before preamble
+	for (int i = 0; i < 4; ++i) { buf1[p + i] = pre; buf2[p + i] = pre; }  // 8px preamble
+	buf0[p + 4] = g0; buf1[p + 4] = g12; buf2[p + 4] = g12;                // 2px leading guard
+	dvi_di_encode_header(&buf0[p + 5], pkt, hv, true);                     // 32px island (16 words)
+	dvi_di_encode_subpacket(&buf1[p + 5], &buf2[p + 5], pkt);
+#else
+	(void)pre; (void)g0; (void)g12;   // DIAGNOSTIC: control-only buffer, no island
+#endif
+
+	// Repoint the active region of each lane at the prepared buffer.
+	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[3], &dma_cfg[TMDS_SYNC_LANE], buf0, W, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 1)[1], &dma_cfg[1], buf1, W, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 2)[1], &dma_cfg[2], buf2, W, 0, false);
+}
+
+// PIZERO-29 (M3): add the HDMI video preamble (8px) + video guard band (2px)
+// to the tail of an ACTIVE line's blanking, immediately before active video.
+// Required once the sink is in HDMI mode (data islands present) or it rejects
+// the signal. Same proven technique: build per-lane blanking buffers and
+// repoint the existing back-porch (ch0) / blanking (ch1,ch2) blocks at them --
+// no struct/IRQ change, and the per-line video block read_addr update is
+// untouched. bp0 needs h_back_porch/2 words; bk1/bk2 need (fp+sync+bp)/2 words.
+void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
+		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
+		uint32_t *bp0, uint32_t *bk1, uint32_t *bk2) {
+
+	const bool vsync = !t->v_sync_polarity;          // active lines: vsync not asserted
+	const bool hsync_off = !t->h_sync_polarity;
+	const uint32_t c0   = *get_ctrl_sym(vsync, hsync_off);   // lane-0 control (x2)
+	const uint32_t c12  = *get_ctrl_sym(false, false);       // lanes 1/2 control (no sync)
+	const uint32_t pre1 = *get_ctrl_sym(false, true);        // ch1 video preamble (CTL0=1)
+	const uint32_t vg0 = 0x2CCu | (0x2CCu << 10);    // video guard band: ch0/ch2 = 0b1011001100
+	const uint32_t vg1 = 0x133u | (0x133u << 10);    //                    ch1   = 0b0100110011
+	const uint32_t vg2 = vg0;
+
+	const int bpw = t->h_back_porch / DVI_SYMBOLS_PER_WORD;                        // 24
+	const int blw = (t->h_front_porch + t->h_sync_width + t->h_back_porch)
+	                / DVI_SYMBOLS_PER_WORD;                                        // 80
+
+	// Lane 0 back porch: control, with the 2px video guard band at the very end.
+	for (int i = 0; i < bpw; ++i) bp0[i] = c0;
+	bp0[bpw - 1] = vg0;
+
+	// Lanes 1/2 blanking: control, with [8px preamble][2px guard] at the end.
+	for (int i = 0; i < blw; ++i) { bk1[i] = c12; bk2[i] = c12; }
+	for (int i = 0; i < 4; ++i) { bk1[blw - 5 + i] = pre1; /* ch2 preamble == control */ }
+	bk1[blw - 1] = vg1;
+	bk2[blw - 1] = vg2;
+
+	// Repoint. Lane-0 back porch keeps its IRQ-on-finish (the per-scanline IRQ).
+	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[2], &dma_cfg[TMDS_SYNC_LANE], bp0, bpw, 0, true);
+	_set_data_cb(&dvi_lane_from_list(l, 1)[0], &dma_cfg[1], bk1, blw, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 2)[0], &dma_cfg[2], bk2, blw, 0, false);
 }
 

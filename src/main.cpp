@@ -430,6 +430,30 @@ void setup() {
     dvi0.timing  = &DVI_TIMING;
     dvi0.ser_cfg = DVI_DEFAULT_SERIAL_CONFIG;
     dvi_init(&dvi0, next_striped_spin_lock_num(), next_striped_spin_lock_num());
+#ifdef HDMI_DATA_ISLAND
+    // M2 (PIZERO-28): inject one benign NULL data island into every vertical-
+    // blanking (no-sync) line. Off-screen + identical pixel count, so a
+    // malformed island cannot disturb the picture. Acceptance test: video stays
+    // rock-solid on the monitor (proves data-island injection doesn't break sync
+    // on this board's wiring/timing). Must run before core 1 starts the DVI.
+    {
+        static uint32_t isl0[320], isl1[320], isl2[320];   // vblank island line, h_active(640)/2 words/lane
+        static uint32_t bp0[32], bk1[96], bk2[96];          // active-line back-porch / blanking framing
+        dvi_di_init();
+        // Convert to HDMI mode: AVI InfoFrame data island in vblank + video
+        // preamble/guard band on active lines. A sink rejects bare data islands
+        // unless the active video is also HDMI-framed (the M2 black-screen).
+        dvi_data_packet_t pkt;
+        dvi_di_set_avi_infoframe(&pkt, 0);
+        dvi_di_compute_parity(&pkt);
+        dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
+                                             &dvi0.dma_list_vblank_nosync, &pkt,
+                                             isl0, isl1, isl2);
+        dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg,
+                                      &dvi0.dma_list_active, bp0, bk1, bk2);
+        Serial.print("[hdmi] M3: HDMI mode (AVI InfoFrame + video guard bands)\r\n");
+    }
+#endif
     multicore_launch_core1(core1_main);
     Serial.printf("DVI up: %dx%d -> 640x480 ~57Hz, sys=%lu kHz (PIZERO-02b)\r\n",
                   FRAME_WIDTH, FRAME_HEIGHT, (unsigned long)(clock_get_hz(clk_sys) / 1000));
