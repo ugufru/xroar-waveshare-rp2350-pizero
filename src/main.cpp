@@ -443,15 +443,17 @@ void setup() {
         // Convert to HDMI mode: AVI InfoFrame data island in vblank + video
         // preamble/guard band on active lines. A sink rejects bare data islands
         // unless the active video is also HDMI-framed (the M2 black-screen).
-        dvi_data_packet_t pkt;
-        dvi_di_set_avi_infoframe(&pkt, 0);
-        dvi_di_compute_parity(&pkt);
+        dvi_data_packet_t pkts[3];
+        dvi_di_set_avi_infoframe(&pkts[0], 0);
+        dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
+        dvi_di_set_acr(&pkts[2], 24000, 4096);             // 32 kHz @ 24 MHz pixel clock
+        for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&pkts[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
-                                             &dvi0.dma_list_vblank_nosync, &pkt,
+                                             &dvi0.dma_list_vblank_nosync, pkts, 3,
                                              isl0, isl1, isl2);
         dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg,
                                       &dvi0.dma_list_active, bp0, bk1, bk2);
-        Serial.print("[hdmi] M3: HDMI mode (AVI InfoFrame + video guard bands)\r\n");
+        Serial.print("[hdmi] M4 step1: AVI + Audio InfoFrame + ACR in vblank\r\n");
     }
 #endif
     multicore_launch_core1(core1_main);

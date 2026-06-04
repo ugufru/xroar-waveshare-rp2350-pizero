@@ -336,7 +336,7 @@ void __dvi_func(dvi_update_scanline_data_dma)(const struct dvi_timing *t, const 
 // ignores it. Assumes DVI_SYMBOLS_PER_WORD == 2 (this board's build).
 void dvi_setup_scanline_for_vblank_island(const struct dvi_timing *t,
 		const struct dvi_lane_dma_cfg dma_cfg[], bool vsync_asserted,
-		struct dvi_scanline_dma_list *l, const dvi_data_packet_t *pkt,
+		struct dvi_scanline_dma_list *l, const dvi_data_packet_t *pkts, int npkts,
 		uint32_t *buf0, uint32_t *buf1, uint32_t *buf2) {
 
 	// Base the list on the normal blank line (FP / HSYNC / BP + active blocks).
@@ -357,13 +357,19 @@ void dvi_setup_scanline_for_vblank_island(const struct dvi_timing *t,
 	for (int i = 0; i < W; ++i) { buf0[i] = c0; buf1[i] = c12; buf2[i] = c12; }
 
 #ifndef HDMI_ISLAND_CONTROL_ONLY
-	const int p = 8;                              // >=12px control lead-in before preamble
-	for (int i = 0; i < 4; ++i) { buf1[p + i] = pre; buf2[p + i] = pre; }  // 8px preamble
-	buf0[p + 4] = g0; buf1[p + 4] = g12; buf2[p + 4] = g12;                // 2px leading guard
-	dvi_di_encode_header(&buf0[p + 5], pkt, hv, true);                     // 32px island (16 words)
-	dvi_di_encode_subpacket(&buf1[p + 5], &buf2[p + 5], pkt);
+	// Place each packet as its own data-island period: control lead-in ->
+	// preamble (8px=4w) -> leading guard (2px=1w) -> TERC4 island (32px=16w),
+	// with a >=12px (6w) control gap between consecutive islands.
+	for (int k = 0; k < npkts; ++k) {
+		const int off = 8 + 27 * k;          // 21-word island + 6-word control gap
+		if (off + 21 > W) break;             // out of room on this line
+		for (int i = 0; i < 4; ++i) { buf1[off + i] = pre; buf2[off + i] = pre; }
+		buf0[off + 4] = g0; buf1[off + 4] = g12; buf2[off + 4] = g12;
+		dvi_di_encode_header(&buf0[off + 5], &pkts[k], hv, true);
+		dvi_di_encode_subpacket(&buf1[off + 5], &buf2[off + 5], &pkts[k]);
+	}
 #else
-	(void)pre; (void)g0; (void)g12;   // DIAGNOSTIC: control-only buffer, no island
+	(void)pre; (void)g0; (void)g12; (void)pkts; (void)npkts;   // DIAGNOSTIC: control-only
 #endif
 
 	// Repoint the active region of each lane at the prepared buffer.

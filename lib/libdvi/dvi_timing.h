@@ -102,7 +102,7 @@ void dvi_update_scanline_data_dma(const struct dvi_timing *t, const uint32_t *tm
 // words each. Repoints the list's active blocks at those buffers.
 void dvi_setup_scanline_for_vblank_island(const struct dvi_timing *t,
 		const struct dvi_lane_dma_cfg dma_cfg[], bool vsync_asserted,
-		struct dvi_scanline_dma_list *l, const dvi_data_packet_t *pkt,
+		struct dvi_scanline_dma_list *l, const dvi_data_packet_t *pkts, int npkts,
 		uint32_t *buf0, uint32_t *buf1, uint32_t *buf2);
 
 // PIZERO-29 (M3): add the HDMI video preamble + guard band to active lines.
