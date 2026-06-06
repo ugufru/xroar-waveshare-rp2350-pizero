@@ -453,6 +453,16 @@ static uint32_t g_bp0[ALINE_BP_W], g_bk1[ALINE_BP_W], g_bk2[ALINE_BP_W];  // sta
 static uint32_t g_info[3][320];                   // vblank: AVI + Audio InfoFrame + ACR
 static uint32_t g_ctrl[3][320];                   // vblank: control-only filler
 static int16_t  g_aslot[480];                     // active scanline -> audio line idx, or -1
+#ifdef HDMI_EVEN_AUDIO
+// PIZERO-34: even delivery. Spread the same N_ALINES audio lines across ALL 523
+// no-sync+active lines (active 0-479, fp 480-489, bp 490-522) instead of only the
+// 480 active ones, so audio is delivered ~every 6.8 lines INCLUDING vblank -> no
+// 1.6ms per-frame gap. g_vaslot maps a vblank line (fp 0-9, bp 10-42) to its audio
+// line; g_vbp_dflt* are the control-only back-porch buffers used on non-audio
+// vblank lines (saved from the DMA list after dvi_init).
+static int16_t      g_vaslot[43];
+static const void  *g_vbp_dflt0, *g_vbp_dflt1, *g_vbp_dflt2;
+#endif
 static volatile uint32_t g_active_bank = 0;       // core0 writes, IRQ reads
 static uint32_t g_irq_bank = 0;                   // latched once per frame (IRQ only)
 static uint32_t g_aud_framectr = 0;               // IEC 60958 frame counter (core 0 only)
@@ -477,10 +487,36 @@ static void __not_in_flash_func(audio_vblank_info_cb)(void) {
     // PIZERO-30: send AVI+AudioIF+ACR on EVERY vblank line (was just v_ctr==0 ->
     // 1/frame). ~43 ACR/frame gives the sink's audio PLL frequent clock updates;
     // once/frame let it wobble at the frame rate. (Matches the proven static build.)
-    const uint32_t (*sel)[320] = g_info;
-    dvi0.dma_list_vblank_nosync.l0[3].read_addr = sel[0];
-    dvi0.dma_list_vblank_nosync.l1[2].read_addr = sel[1];   // lane 1 active block is [2] after split
-    dvi0.dma_list_vblank_nosync.l2[2].read_addr = sel[2];
+#ifdef HDMI_EVEN_AUDIO
+    // PIZERO-34: SINGLE island per vblank line (dual islands break sink sync).
+    // Audio-scheduled vblank lines carry audio in the back porch + CONTROL in the
+    // active block; all other vblank lines carry ACR/AVI/AudioIF in the active
+    // block + control bp. (g_irq_bank latched at active v==0, before vblank.)
+    const uint vs = dvi0.timing_state.v_state, vc = dvi0.timing_state.v_ctr;
+    const int vbi = (vs == DVI_STATE_FRONT_PORCH) ? (int)vc : (10 + (int)vc);  // fp 0-9, bp 10-42
+    const int j = (vbi >= 0 && vbi < 43) ? g_vaslot[vbi] : -1;
+    if (j >= 0) {
+        // audio line: bp = audio island, active block = control (no info island)
+        dvi0.dma_list_vblank_nosync.l0[2].read_addr = g_la0[g_irq_bank][j];
+        dvi0.dma_list_vblank_nosync.l1[1].read_addr = g_la1[g_irq_bank][j];
+        dvi0.dma_list_vblank_nosync.l2[1].read_addr = g_la2[g_irq_bank][j];
+        dvi0.dma_list_vblank_nosync.l0[3].read_addr = g_ctrl[0];
+        dvi0.dma_list_vblank_nosync.l1[2].read_addr = g_ctrl[1];
+        dvi0.dma_list_vblank_nosync.l2[2].read_addr = g_ctrl[2];
+    } else {
+        // info line: ACR/AVI/AudioIF in active block, control bp
+        dvi0.dma_list_vblank_nosync.l0[2].read_addr = g_vbp_dflt0;
+        dvi0.dma_list_vblank_nosync.l1[1].read_addr = g_vbp_dflt1;
+        dvi0.dma_list_vblank_nosync.l2[1].read_addr = g_vbp_dflt2;
+        dvi0.dma_list_vblank_nosync.l0[3].read_addr = g_info[0];
+        dvi0.dma_list_vblank_nosync.l1[2].read_addr = g_info[1];
+        dvi0.dma_list_vblank_nosync.l2[2].read_addr = g_info[2];
+    }
+#else
+    dvi0.dma_list_vblank_nosync.l0[3].read_addr = g_info[0];
+    dvi0.dma_list_vblank_nosync.l1[2].read_addr = g_info[1];   // lane 1 active block is [2] after split
+    dvi0.dma_list_vblank_nosync.l2[2].read_addr = g_info[2];
+#endif
 }
 
 // Core 0 (after blit): re-encode the OFF bank's audio islands from the ring, flip.
@@ -651,17 +687,46 @@ void setup() {
         dvi_data_packet_t sil[3];
         int16_t z[8] = {0,0,0,0,0,0,0,0};
         for (int i = 0; i < 3; ++i) { dvi_di_set_audio_samples(&sil[i], z, 4, (uint32_t)(i * 4)); dvi_di_compute_parity(&sil[i]); }
+#ifdef HDMI_EVEN_AUDIO
+        // Capture the control-only back-porch buffers the base vblank setup left
+        // (dvi_init set these; the info-island setup above only touched the active
+        // block), so non-audio vblank lines can restore them in the IRQ.
+        g_vbp_dflt0 = dvi0.dma_list_vblank_nosync.l0[2].read_addr;
+        g_vbp_dflt1 = dvi0.dma_list_vblank_nosync.l1[1].read_addr;
+        g_vbp_dflt2 = dvi0.dma_list_vblank_nosync.l2[1].read_addr;
+#endif
         for (int b = 0; b < 2; ++b)
-            for (int line = 0; line < N_ALINES; ++line)
-                dvi_setup_active_audio_line(&DVI_TIMING, dvi0.dma_cfg, &dvi0.dma_list_active,
-                                            g_la0[b][line], g_la1[b][line], g_la2[b][line], sil, aline_pkts(line));
+            for (int line = 0; line < N_ALINES; ++line) {
+#ifdef HDMI_EVEN_AUDIO
+                const int gi = (int)((long)line * 523 / N_ALINES);   // global line idx
+                const bool vf = (gi < 480);                          // active -> video follows
+                struct dvi_scanline_dma_list *L = vf ? &dvi0.dma_list_active : &dvi0.dma_list_vblank_nosync;
+#else
+                const bool vf = true;
+                struct dvi_scanline_dma_list *L = &dvi0.dma_list_active;
+#endif
+                dvi_setup_active_audio_line(&DVI_TIMING, dvi0.dma_cfg, L,
+                                            g_la0[b][line], g_la1[b][line], g_la2[b][line],
+                                            sil, aline_pkts(line), vf);
+            }
         // Static framing for non-audio active lines (also = dma_list_active default).
         dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg, &dvi0.dma_list_active, g_bp0, g_bk1, g_bk2);
+#ifdef HDMI_EVEN_AUDIO
+        // Spread N_ALINES audio lines across ALL 523 lines (active 0-479, fp/bp).
+        for (int i = 0; i < 480; ++i) g_aslot[i]  = -1;
+        for (int i = 0; i < 43;  ++i) g_vaslot[i] = -1;
+        for (int j = 0; j < N_ALINES; ++j) {
+            const int gi = (int)((long)j * 523 / N_ALINES);
+            if (gi < 480) g_aslot[gi] = (int16_t)j; else g_vaslot[gi - 480] = (int16_t)j;
+        }
+        Serial.print("[hdmi] M2: EVEN audio across active+vblank (PIZERO-34)\r\n");
+#else
         // Spread N_ALINES audio lines evenly across the 480 active scanlines.
         for (int i = 0; i < 480; ++i) g_aslot[i] = -1;
         for (int j = 0; j < N_ALINES; ++j) g_aslot[(j * 480) / N_ALINES] = (int16_t)j;
+        Serial.print("[hdmi] M2: active-line audio, ~924 samp/frame @ 51.95Hz\r\n");
+#endif
         dvi0.active_line_callback = active_audio_cb;
-        Serial.print("[hdmi] M2: active-line audio, 52 lines, ~616 samp/frame @ 51.8Hz\r\n");
 #endif
     }
 #endif

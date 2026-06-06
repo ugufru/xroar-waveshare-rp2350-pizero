@@ -132,6 +132,6 @@ void dvi_write_audio_island(const struct dvi_timing *t, bool vsync_asserted,
 void dvi_setup_active_audio_line(const struct dvi_timing *t,
 		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
 		uint32_t *la0, uint32_t *la1, uint32_t *la2,
-		const dvi_data_packet_t *pkts, int npkts);
+		const dvi_data_packet_t *pkts, int npkts, bool video_follows);
 
 #endif

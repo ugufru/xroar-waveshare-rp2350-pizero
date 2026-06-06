@@ -442,7 +442,7 @@ void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
 void dvi_setup_active_audio_line(const struct dvi_timing *t,
 		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
 		uint32_t *la0, uint32_t *la1, uint32_t *la2,
-		const dvi_data_packet_t *pkts, int npkts) {
+		const dvi_data_packet_t *pkts, int npkts, bool video_follows) {
 	const bool vsync = !t->v_sync_polarity;            // active line: vsync not asserted
 	const bool hsync_off = !t->h_sync_polarity;
 	const int hv = (vsync ? 2 : 0) | (hsync_off ? 1 : 0);
@@ -472,9 +472,16 @@ void dvi_setup_active_audio_line(const struct dvi_timing *t,
 	const int isl_end = 5 + 16 * npkts;
 	la0[isl_end] = g0; la1[isl_end] = g12; la2[isl_end] = g12;    // trailing guard band
 
-	// HDMI video preamble (ch1, 4w) + guard band (1w) at the very end of the bp.
-	for (int i = 0; i < 4; ++i) la1[bpw - 5 + i] = pre;
-	la0[bpw - 1] = vg0; la1[bpw - 1] = vg1; la2[bpw - 1] = vg0;
+	// On ACTIVE lines, video follows the bp: emit the HDMI video preamble (ch1,
+	// 4w) + guard band (1w) at the very end. On VBLANK lines (video_follows=false)
+	// there's no video after the bp -- leave the tail as control so it trails into
+	// the next data island (the vblank active-block info island) cleanly.
+	if (video_follows) {
+		for (int i = 0; i < 4; ++i) la1[bpw - 5 + i] = pre;
+		la0[bpw - 1] = vg0; la1[bpw - 1] = vg1; la2[bpw - 1] = vg0;
+	} else {
+		(void)vg0; (void)vg1;
+	}
 
 	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[2], &dma_cfg[TMDS_SYNC_LANE], la0, bpw, 0, true);
 	_set_data_cb(&dvi_lane_from_list(l, 1)[1], &dma_cfg[1], la1, bpw, 0, false);
