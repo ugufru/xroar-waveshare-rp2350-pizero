@@ -418,6 +418,60 @@ void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
 	_set_data_cb(&dvi_lane_from_list(l, 2)[0], &dma_cfg[2], bk2, blw, 0, false);
 }
 
+// PIZERO-30 (M2 active-line audio): build ONE active scanline's blanking buffers
+// carrying `npkts` audio sample packets in the back porch, immediately followed
+// (after a control gap) by the HDMI video preamble + guard band. This spreads
+// audio evenly across the visible frame so the sink's audio FIFO never starves
+// (vblank-only delivery bursts a whole frame at once -> underrun -> "motorboat").
+// Reuses the proven per-line buffer repoint -- NO DMA-struct change.
+//   la0 = lane-0 back porch (h_bp/2 words); l0[2] points here.
+//   la1/la2 = lanes 1/2 FULL blanking ((fp+sync+bp)/2 words); l1[0]/l2[0] here.
+// Lane-0 layout : [preamble ctl 4w][guard 1w][npkts*16w header][guard 1w][ctl..][video guard@end]
+// Lanes1/2      : [fp+sync ctl 56w][preamble 4w][guard 1w][npkts*16w subpkt][guard 1w][ctl..][video preamble 4w(ch1)][video guard@end]
+// Core 0 rewrites only the header/subpacket data words each frame via
+// dvi_di_encode_header(&la0[5+16k]) / dvi_di_encode_subpacket(&la1[fsw+5+16k],...).
+void dvi_setup_active_audio_line(const struct dvi_timing *t,
+		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
+		uint32_t *la0, uint32_t *la1, uint32_t *la2,
+		const dvi_data_packet_t *pkts, int npkts) {
+	const bool vsync = !t->v_sync_polarity;            // active line: vsync not asserted
+	const bool hsync_off = !t->h_sync_polarity;
+	const int hv = (vsync ? 2 : 0) | (hsync_off ? 1 : 0);
+	const uint32_t c0   = *get_ctrl_sym(vsync, hsync_off);
+	const uint32_t c12  = *get_ctrl_sym(false, false);
+	const uint32_t pre  = *get_ctrl_sym(false, true);  // data-island preamble (ch1/ch2) / video preamble (ch1)
+	const uint16_t g0s  = dvi_terc4_syms[0xC | (hv & 3)];
+	const uint32_t g0   = (uint32_t)g0s | ((uint32_t)g0s << 10);
+	const uint32_t g12  = (uint32_t)DVI_DI_GUARDBAND_SYM | ((uint32_t)DVI_DI_GUARDBAND_SYM << 10);
+	const uint32_t vg0  = 0x2CCu | (0x2CCu << 10);     // video guard band ch0/ch2
+	const uint32_t vg1  = 0x133u | (0x133u << 10);     // video guard band ch1
+
+	const int bpw = t->h_back_porch / DVI_SYMBOLS_PER_WORD;
+	const int fsw = (t->h_front_porch + t->h_sync_width) / DVI_SYMBOLS_PER_WORD;
+	const int blw = fsw + bpw;
+
+	for (int i = 0; i < bpw; ++i) la0[i] = c0;
+	for (int i = 0; i < blw; ++i) { la1[i] = c12; la2[i] = c12; }
+
+	// Data-island period at the start of the back porch.
+	for (int i = 0; i < 4; ++i) { la1[fsw + i] = pre; la2[fsw + i] = pre; }
+	la0[4] = g0; la1[fsw + 4] = g12; la2[fsw + 4] = g12;
+	for (int k = 0; k < npkts; ++k) {
+		dvi_di_encode_header(&la0[5 + 16 * k], &pkts[k], hv, k == 0);
+		dvi_di_encode_subpacket(&la1[fsw + 5 + 16 * k], &la2[fsw + 5 + 16 * k], &pkts[k]);
+	}
+	const int isl_end = 5 + 16 * npkts;
+	la0[isl_end] = g0; la1[fsw + isl_end] = g12; la2[fsw + isl_end] = g12;   // trailing guard
+
+	// HDMI video preamble (ch1, 4w) + guard band (1w) at the very end of blanking.
+	for (int i = 0; i < 4; ++i) la1[blw - 5 + i] = pre;
+	la0[bpw - 1] = vg0; la1[blw - 1] = vg1; la2[blw - 1] = vg0;
+
+	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[2], &dma_cfg[TMDS_SYNC_LANE], la0, bpw, 0, true);
+	_set_data_cb(&dvi_lane_from_list(l, 1)[0], &dma_cfg[1], la1, blw, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 2)[0], &dma_cfg[2], la2, blw, 0, false);
+}
+
 // PIZERO-30 (M2, Option B): (re)write ONE data-island period at word offset
 // `word_off` in the three per-lane line buffers -- preamble (ch1/ch2) + guard +
 // TERC4 island -- matching the layout dvi_setup_scanline_for_vblank_island lays

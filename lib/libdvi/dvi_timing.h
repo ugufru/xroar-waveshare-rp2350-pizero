@@ -119,4 +119,15 @@ void dvi_write_audio_island(const struct dvi_timing *t, bool vsync_asserted,
 		uint32_t *b0, uint32_t *b1, uint32_t *b2, int word_off,
 		const dvi_data_packet_t *pkt);
 
+// PIZERO-30 (M2 active-line audio): build one active scanline's blanking buffers
+// with `npkts` audio sample packets + the HDMI video preamble/guard, and repoint
+// the active dma_list's back-porch (lane0 l0[2]) and full-blanking (lanes 1/2
+// l1[0]/l2[0]) blocks at them. la0 needs h_bp/2 words; la1/la2 need
+// (h_fp+h_sync+h_bp)/2 words. Core 0 rewrites the audio data words per frame at
+// la0[5+16*k] (header) and la1/la2[(h_fp+h_sync)/2 + 5 + 16*k] (subpackets).
+void dvi_setup_active_audio_line(const struct dvi_timing *t,
+		const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l,
+		uint32_t *la0, uint32_t *la1, uint32_t *la2,
+		const dvi_data_packet_t *pkts, int npkts);
+
 #endif

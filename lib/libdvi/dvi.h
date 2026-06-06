@@ -32,6 +32,12 @@ struct dvi_inst {
 	// (no TERC4/BCH encoding here; that disrupts scanout -- see Option A).
 	dvi_callback_t vblank_callback;
 
+	// PIZERO-30: called in the DMA IRQ on each ACTIVE scanline, BEFORE the
+	// active DMA list is loaded. Lets the engine repoint the back-porch /
+	// blanking blocks at a per-line audio-island buffer so audio is distributed
+	// across the visible frame. Pointer stores only -- no encoding in the IRQ.
+	dvi_callback_t active_line_callback;
+
 	// State ---
 	struct dvi_scanline_dma_list dma_list_vblank_sync;
 	struct dvi_scanline_dma_list dma_list_vblank_nosync;

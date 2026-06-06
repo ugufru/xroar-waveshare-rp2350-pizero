@@ -345,6 +345,10 @@ static uint64_t prof_calls        = 0;
 static uint32_t prof_last_log_ms  = 0;
 #endif
 
+// PIZERO-18 audio: event-driven resampler hooks (defined in the audio section).
+static inline void audio_update_level(void);
+static inline void audio_integrate(uint32_t ticks);
+
 extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     (void)sptr;
     g_m.total_mem_cycles++;
@@ -439,6 +443,7 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         } else if ((A & 0xFFE0) == 0xFF20) {
             mc6821_write(g_m.pia1, A, g_m.cpu->D);
             if (A & 1) g_m.pia_irq_dirty = true;
+            audio_update_level();   // DAC / single-bit may have changed -> recache
         }
         else if ((A & 0xFFE0) == 0xFF40) fdc_io_write(A, g_m.cpu->D);  // cart I/O
         else if (A < 0x8000)             g_m.ram[A] = g_m.cpu->D;
@@ -463,6 +468,10 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     } else {
         event_current_tick = new_tick;
     }
+
+    // PIZERO-18: integrate the DAC level over this access and emit 32 kHz
+    // samples on tick boundaries (band-limited resampling at the source).
+    audio_integrate((uint32_t)ncycles);
 
 #if PROFILE_MEM_CYCLE
     { uint32_t pt1 = micros(); prof_events_us += (uint32_t)(pt1 - pt0); pt0 = pt1; }
@@ -649,19 +658,69 @@ static volatile uint32_t g_audio_w = 0;                // monotonic write index
 static volatile uint32_t g_audio_r = 0;                // monotonic read index
 static uint32_t          g_audio_err = 0;              // Bresenham accumulator
 
-static inline void audio_sample_now(void) {
+// Event-driven, band-limited audio resampler (integrate-and-dump). Rather than
+// point-sampling the DAC at 32 kHz (which aliases the square wave's edges into
+// inharmonic "fuzz" -- the edges snap to the sample grid), we INTEGRATE the DAC
+// level over each 32 kHz sample period using the exact event-tick timestamps.
+// g_dac_level is updated the instant the CPU writes the DAC (PIA1 PA/PB) and
+// audio_integrate() accumulates level*ticks per memory access; at each sample
+// boundary (Bresenham on the 14.3181 MHz tick clock) we emit the time-average.
+// This captures edge timing to ~1 memory access (~16 ticks) instead of a whole
+// 447-tick sample, removing the jitter aliasing at the source. A gentle 2-pole
+// IIR then matches the OEM CoCo's TV-bandwidth sound.
+#define EVENT_TICK_HZ        14318180u                 // event ticks per second (16/CPU cycle)
+static int32_t  g_dac_level = 0;                       // current DAC+1bit level (set on PIA1 write)
+static int32_t  g_aud_acc   = 0;                       // integral of level*ticks this sample
+static uint32_t g_aud_tk    = 0;                       // ticks accumulated this sample
+static uint32_t g_aud_terr  = 0;                       // Bresenham accumulator (ticks*RATE)
+static int32_t  g_lp1 = 0, g_lp2 = 0;                  // 2-pole TV-bandwidth LPF state
+
+// Recompute the cached audio level from PIA1 (called right after a PIA1 write).
+// Output gain. The 6-bit DAC swings 64 steps; a square wave's RMS == its peak,
+// so this is loud even well below full scale. AUDIO_DAC_GAIN sets the per-step
+// amplitude (was 480 -> ~47% FS and harsh). 240 -> ~24% FS (-6 dB); lower this
+// to make it quieter, raise it for louder.
+#define AUDIO_DAC_GAIN   240
+static inline void audio_update_level(void) {
     if (!g_m.pia1) return;
     int dac6 = (PIA_VALUE_A(g_m.pia1) >> 2) & 0x3F;    // 6-bit DAC, 0..63
-    int sb   = (PIA_VALUE_B(g_m.pia1) >> 1) & 0x01;    // single-bit sound
-    int s = (dac6 - 32) * 480;                         // ~ -15360..+14880
-    if (sb) s += 6000;
+    // NB: the real CoCo single-bit sound is PIA1 CB2, not PB1 -- the old PB1 tap
+    // was bogus and only injected a constant DC offset, so it's dropped.
+    g_dac_level = (dac6 - 32) * AUDIO_DAC_GAIN;        // ~ -7680..+7440, centered
+}
+
+static inline void audio_emit(int s) {
     if (s > 32767) s = 32767; else if (s < -32768) s = -32768;
+    g_lp1 += (((int32_t)s    - g_lp1) * 14) >> 4;      // ~10 kHz 2-pole LPF (brighter; source is already band-limited)
+    g_lp2 += (((int32_t)g_lp1 - g_lp2) * 14) >> 4;
+    s = (int)g_lp2;
     uint32_t w = g_audio_w;
     g_audio_ring[w & (AUDIO_RING_SAMPLES - 1)] = (int16_t)s;
     g_audio_w = w + 1;
-    // Overwrite-on-full: if the sink fell behind, drop the oldest samples.
-    if (g_audio_w - g_audio_r > AUDIO_RING_SAMPLES)
+    if (g_audio_w - g_audio_r > AUDIO_RING_SAMPLES)    // overwrite-on-full
         g_audio_r = g_audio_w - AUDIO_RING_SAMPLES;
+}
+
+// Called per memory access with the access duration in event ticks. Integrates
+// the (piecewise-constant) DAC level and emits 32 kHz samples on tick boundaries.
+// When a sample boundary falls inside this access we split EXACTLY at it (the
+// ticks past the boundary carry to the next sample) so each emitted sample is
+// the true time-average over its period -- no edge jitter, no residual aliasing.
+static inline void audio_integrate(uint32_t ticks) {
+    g_aud_acc  += g_dac_level * (int32_t)ticks;
+    g_aud_tk   += ticks;
+    g_aud_terr += ticks * COCO_AUDIO_RATE;
+    if (g_aud_terr >= EVENT_TICK_HZ) {
+        g_aud_terr -= EVENT_TICK_HZ;
+        uint32_t over_tk  = g_aud_terr / COCO_AUDIO_RATE;     // ticks of this access past the boundary
+        int32_t  over_val = g_dac_level * (int32_t)over_tk;   // ...belong to the next sample
+        int32_t  acc = g_aud_acc - over_val;
+        uint32_t tk  = g_aud_tk  - over_tk;
+        int s = tk ? (int)(acc / (int32_t)tk) : g_dac_level;
+        audio_emit(s);
+        g_aud_acc = over_val;
+        g_aud_tk  = over_tk;
+    }
 }
 
 // Drain up to `max` mono int16 samples; returns count read.
@@ -676,31 +735,13 @@ extern "C" size_t coco_machine_audio_read(int16_t *dst, size_t max) {
 
 extern "C" uint32_t coco_machine_audio_rate(void) { return COCO_AUDIO_RATE; }
 
-// Run the 6809 for `cycles` cycles, slicing on audio-sample boundaries so
-// audio_sample_now() fires at exactly COCO_AUDIO_RATE. Re-entering cpu->run
-// in ~28-cycle slices is safe (state lives in g_m.cpu; event timing is keyed
-// to ticks, unaffected by how we chunk the budget). PIZERO-18: watch core-0
-// frame time on hardware — if the per-slice overhead bites, switch to a
-// PIA-postwrite-timestamp reconstruction instead of slicing.
+// Audio is now produced event-driven from the memory-access path (audio_integrate),
+// so we no longer slice the CPU run for sample timing -- run the whole budget in
+// one go (this also removes the ~615 cpu->run re-entries/frame the slicer cost).
 static inline void run_cpu_with_audio(uint32_t cycles) {
-    int32_t budget = (int32_t)cycles;
-    while (budget > 0) {
-        uint32_t need = (COCO_AUDIO_CPUCLK_X4 - g_audio_err + (COCO_AUDIO_RATE_X4 - 1))
-                        / COCO_AUDIO_RATE_X4;            // ceil cycles to next sample
-        if (need == 0) need = 1;
-        uint32_t slice = (need > (uint32_t)budget) ? (uint32_t)budget : need;
-
-        g_m.cycles_remaining = (int32_t)slice * 16;
-        g_m.cpu->running = 1;
-        g_m.cpu->run(g_m.cpu);
-
-        g_audio_err += slice * COCO_AUDIO_RATE_X4;
-        budget -= (int32_t)slice;
-        while (g_audio_err >= COCO_AUDIO_CPUCLK_X4) {
-            g_audio_err -= COCO_AUDIO_CPUCLK_X4;
-            audio_sample_now();
-        }
-    }
+    g_m.cycles_remaining = (int32_t)cycles * 16;
+    g_m.cpu->running = 1;
+    g_m.cpu->run(g_m.cpu);
 }
 
 extern "C" void coco_machine_run_cycles(uint32_t cycles) {

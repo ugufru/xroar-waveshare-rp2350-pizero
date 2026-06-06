@@ -120,15 +120,13 @@ void dvi_di_set_gcp(dvi_data_packet_t *pkt, bool set_avmute) {
 // Even parity of a byte (XOR-reduce of its 8 bits).
 static inline int iec_par(unsigned b) { b ^= b >> 4; b ^= b >> 2; b ^= b >> 1; return b & 1; }
 
-// IEC 60958 consumer channel-status bit for frame index f (0..191). Minimal
-// block: byte 0 = 0x00 (consumer, linear PCM, no copyright), byte 3 = 0x03
-// (sampling frequency = 32 kHz, per AES3 consumer code 3). All other bytes 0.
-// The C bit of frame f is bit f of this 192-bit block; byte 3 = bits 24..31, so
-// 0x03 means frames 24 and 25 carry a 1, everything else 0. Declaring 32 kHz
-// here keeps the channel status consistent with the ACR + Audio InfoFrame (a
-// rate conflict makes sinks resample to garbage).
-static inline int iec_cs_bit(uint32_t f) { return (f == 24u || f == 25u) ? 1 : 0; }
-
+// Audio Sample Packet (type 0x02). Matches the rh1tech/FRANK + shuichitakano
+// reference exactly: V=1 in the VUCP byte and the IEC channel status is NOT
+// emitted -- FRANK's author tested a populated channel status and found it
+// "better to ignore" (the sink uses ACR + the Audio InfoFrame for the rate; a
+// declared channel-status rate just risks a conflict). 16-bit sample bytes go in
+// [1..2] (left) / [4..5] (right); byte 6 = [V . . P] for L (bits 0..3) and R
+// (bits 4..7).
 void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
                               int nframes, uint32_t frame_ctr) {
 	memset(pkt, 0, sizeof(*pkt));
@@ -138,25 +136,16 @@ void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
 	pkt->header[0] = 0x02;                                   // Audio Sample Packet
 	pkt->header[1] = (uint8_t)((1u << nframes) - 1);         // layout=0 (2ch) | sample_present
 	pkt->header[2] = (uint8_t)(B << 4);                      // B.0 preamble bit (block start)
+	const unsigned vuc = 1;                                  // V=1, U=0, C=0 (channel status ignored)
 	for (int i = 0; i < nframes; ++i) {
 		uint16_t l = (uint16_t)lr[2 * i + 0];
 		uint16_t r = (uint16_t)lr[2 * i + 1];
 		uint8_t *d = pkt->subpacket[i];
-		// IEC 60958 subframe: 16-bit sample left-justified in the 24-bit field,
-		// little-endian bytes [0..2] (left) / [3..5] (right): d0=field[7:0]=0,
-		// d1=sample[7:0], d2=sample[15:8].
 		d[0] = 0; d[1] = (uint8_t)l; d[2] = (uint8_t)(l >> 8);
 		d[3] = 0; d[4] = (uint8_t)r; d[5] = (uint8_t)(r >> 8);
-		// V=0 (VALID -- IEC 60958: 0 = suitable for D/A), U=0, C from the channel-
-		// status block. Parity P makes subframe slots 4..31 even.
-		const unsigned V = 0, U = 0;
-		const unsigned C = (unsigned)iec_cs_bit((frame_ctr + (uint32_t)i) % 192u);
-		const unsigned vuc = V ^ U ^ C;
-		int pl = iec_par(d[0]) ^ iec_par(d[1]) ^ iec_par(d[2]) ^ (int)vuc;
-		int pr = iec_par(d[3]) ^ iec_par(d[4]) ^ iec_par(d[5]) ^ (int)vuc;
-		// Byte 6: [V U C P] for left in bits 0..3, right in bits 4..7.
-		d[6] = (uint8_t)((V << 0) | (U << 1) | (C << 2) | ((unsigned)pl << 3) |
-		                 (V << 4) | (U << 5) | (C << 6) | ((unsigned)pr << 7));
+		int pl = iec_par(d[1]) ^ iec_par(d[2]) ^ iec_par(vuc);
+		int pr = iec_par(d[4]) ^ iec_par(d[5]) ^ iec_par(vuc);
+		d[6] = (uint8_t)((vuc << 0) | ((unsigned)pl << 3) | (vuc << 4) | ((unsigned)pr << 7));
 	}
 }
 

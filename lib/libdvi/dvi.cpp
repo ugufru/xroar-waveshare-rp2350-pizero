@@ -235,6 +235,9 @@ static void __dvi_func(dvi_dma_irq_handler)(struct dvi_inst *inst) {
 
 	switch (inst->timing_state.v_state) {
 		case DVI_STATE_ACTIVE:
+			// PIZERO-30: per-line audio-island repoint (or static framing) before load.
+			if (inst->active_line_callback)
+				inst->active_line_callback();
 			if (tmdsbuf) {
 				dvi_update_scanline_data_dma(inst->timing, tmdsbuf, &inst->dma_list_active);
 				_dvi_load_dma_op(inst->dma_cfg, &inst->dma_list_active);
