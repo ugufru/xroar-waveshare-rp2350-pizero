@@ -570,7 +570,7 @@ void setup() {
         dvi_data_packet_t pkts[6];
         dvi_di_set_avi_infoframe(&pkts[0], 0);
         dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&pkts[2], 24000, 4096);   // 32 kHz @ 24 MHz pixel clock
+        dvi_di_set_acr(&pkts[2], 25176, 4096);   // TEST: CTS for assumed 25.175 MHz sink clock
         static int16_t tone[12 * 2];
         for (int i = 0; i < 12; ++i) { int16_t v = (i < 6) ? 8000 : -8000; tone[2*i] = tone[2*i+1] = v; }
         dvi_di_set_audio_samples(&pkts[3], &tone[0],  4, 0);
@@ -597,7 +597,7 @@ void setup() {
         dvi_data_packet_t ipk[3];
         dvi_di_set_avi_infoframe(&ipk[0], 0);
         dvi_di_set_audio_infoframe(&ipk[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&ipk[2], 24000, 4096);    // 32 kHz @ 24 MHz pixel clock
+        dvi_di_set_acr(&ipk[2], 25176, 4096);    // TEST: CTS for assumed 25.175 MHz sink clock
         for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&ipk[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
                                              &dvi0.dma_list_vblank_nosync, ipk, 3, g_info[0], g_info[1], g_info[2]);
