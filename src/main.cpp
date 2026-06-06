@@ -70,7 +70,11 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .h_sync_polarity = false,
     // PIZERO-30: h_fp=14, h_bp=130 -> h_total = 880, refresh = 24e6/(880*525) =
     // 51.9481 Hz == exactly 32000/616 -> 616 audio samples/frame = 154 packets.
+#ifdef HDMI_STD_TIMING
+    .h_front_porch   = 58,   // STD-TIMING TEST: h_total 880->924 so 25.2MHz pixel keeps 51.95Hz
+#else
     .h_front_porch   = 14,
+#endif
     .h_sync_width    = 96,
     .h_back_porch    = 130,
     .h_active_pixels = 640,
@@ -81,7 +85,11 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .v_back_porch    = 33,
     .v_active_lines  = 480,
 
+#ifdef HDMI_STD_TIMING
+    .bit_clk_khz     = 252000,   // STD-TIMING TEST: 25.2 MHz pixel (~standard 25.175), 252 MHz sysclk
+#else
     .bit_clk_khz     = 240000,   // 24 MHz pixel clock, ~57.14 Hz refresh
+#endif
 };
 #define DVI_TIMING   dvi_timing_640x480p_57hz_240mhz
 
@@ -466,14 +474,33 @@ static void __not_in_flash_func(active_audio_cb)(void) {
 // DMA IRQ, vblank (no-sync) line: AVI/AudioIF/ACR on the first back-porch line,
 // control elsewhere. (Audio no longer lives in vblank.)
 static void __not_in_flash_func(audio_vblank_info_cb)(void) {
-    const bool back = (dvi0.timing_state.v_state == DVI_STATE_BACK_PORCH);
-    const uint32_t (*sel)[320] = (back && dvi0.timing_state.v_ctr == 0) ? g_info : g_ctrl;
+    // PIZERO-30: send AVI+AudioIF+ACR on EVERY vblank line (was just v_ctr==0 ->
+    // 1/frame). ~43 ACR/frame gives the sink's audio PLL frequent clock updates;
+    // once/frame let it wobble at the frame rate. (Matches the proven static build.)
+    const uint32_t (*sel)[320] = g_info;
     dvi0.dma_list_vblank_nosync.l0[3].read_addr = sel[0];
     dvi0.dma_list_vblank_nosync.l1[2].read_addr = sel[1];   // lane 1 active block is [2] after split
     dvi0.dma_list_vblank_nosync.l2[2].read_addr = sel[2];
 }
 
 // Core 0 (after blit): re-encode the OFF bank's audio islands from the ring, flip.
+#ifdef HDMI_AUDIO_SYNTH
+// CONTROL EXPERIMENT (PIZERO-30): bypass the emulator entirely and feed a
+// mathematically clean 440 Hz sine straight into the HDMI audio islands. Same
+// encoder + DMA + transport as live audio. A pure sine has ~no harmonics, so any
+// roughness heard is the TRANSPORT, not the CoCo waveform / resampling.
+#include <math.h>
+static float g_synth_phase = 0.0f;
+static void synth_fill(int16_t *out, int n) {
+    const float inc = 2.0f * 3.14159265f * 440.0f / 48000.0f;   // 440 Hz @ 48 kHz
+    for (int i = 0; i < n; ++i) {
+        out[i] = (int16_t)(6000.0f * sinf(g_synth_phase));       // ~18% FS clean sine
+        g_synth_phase += inc;
+        if (g_synth_phase > 6.2831853f) g_synth_phase -= 6.2831853f;
+    }
+}
+#endif
+
 static void audio_encode_frame(void) {
     const uint32_t off = g_active_bank ^ 1u;
     const int hv = ((!DVI_TIMING.v_sync_polarity) ? 2 : 0) | ((!DVI_TIMING.h_sync_polarity) ? 1 : 0);
@@ -483,8 +510,12 @@ static void audio_encode_frame(void) {
     for (int line = 0; line < N_ALINES; ++line) {
         const int np = aline_pkts(line);
         const int want = np * 4;
+#ifdef HDMI_AUDIO_SYNTH
+        synth_fill(mono, want);                       // clean sine, no emulation
+#else
         size_t n = coco_machine_audio_read(mono, (size_t)want);
         for (size_t i = n; i < (size_t)want; ++i) mono[i] = (i ? mono[i - 1] : 0);   // hold last on underrun
+#endif
         for (int k = 0; k < np; ++k) {
             for (int f = 0; f < 4; ++f) { int16_t s = mono[k*4 + f]; lr[2*f] = lr[2*f+1] = s; }
             dvi_di_set_audio_samples(&pkt, lr, 4, g_aud_framectr);
@@ -515,9 +546,13 @@ void setup() {
     // Bring up DVI first so we have a display even if SD/ROM fails.
     // Clear both buffers so the (static) black border is set in each.
     memset(g_fb, 0, sizeof(g_fb));
+#ifdef HDMI_STD_TIMING
+    vreg_set_voltage(VREG_VOLTAGE_1_25);   // STD-TIMING TEST: extra headroom for 252 MHz
+#else
     vreg_set_voltage(VREG_VOLTAGE_1_20);
+#endif
     delay(10);
-    set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);        // 240 MHz (PIZERO-02b)
+    set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);        // 240 MHz (PIZERO-02b) / 252 MHz std-timing
 
     // Read RP2350 chip revision — relevant to errata E9 (pull-down input
     // reads HIGH due to leak current). Pico-PIO-USB applies a workaround
@@ -536,6 +571,7 @@ void setup() {
     // Init BEFORE multicore_launch_core1 — alarm_pool_create() needs
     // cross-core sync that deadlocks if core 1 is already in libdvi's
     // DMA-IRQ loop.
+#ifndef HDMI_STD_TIMING   // PIO-USB asserts CPU==120||240MHz; skip at 252 MHz std-timing test
     {
         pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
         pio_cfg.pin_dp     = HOST_PIN_DP;
@@ -552,6 +588,9 @@ void setup() {
                       HOST_PIN_DP, HOST_PIN_DP + 1);
         Serial.flush();
     }
+#else
+    Serial.print("STD-TIMING TEST: USB host SKIPPED (252 MHz)\r\n");
+#endif
 
     pio_set_gpio_base(DVI_DEFAULT_SERIAL_CONFIG.pio, 16);   // TMDS on GPIO 32-39
     dvi0.timing  = &DVI_TIMING;
@@ -597,7 +636,11 @@ void setup() {
         dvi_data_packet_t ipk[3];
         dvi_di_set_avi_infoframe(&ipk[0], 0);
         dvi_di_set_audio_infoframe(&ipk[1], 1 /*2ch*/, DVI_AUDIO_SF_48K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&ipk[2], 25176, 6144);    // TEST: CTS for assumed 25.175 MHz sink clock
+#ifdef HDMI_STD_TIMING
+        dvi_di_set_acr(&ipk[2], 25200, 6144);    // STD-TIMING TEST: CTS for actual ~25.2 MHz pixel
+#else
+        dvi_di_set_acr(&ipk[2], 25176, 6144);    // CTS for assumed 25.175 MHz sink clock
+#endif
         for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&ipk[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
                                              &dvi0.dma_list_vblank_nosync, ipk, 3, g_info[0], g_info[1], g_info[2]);
