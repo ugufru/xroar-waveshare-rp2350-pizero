@@ -678,9 +678,10 @@ static int32_t  g_lp1 = 0, g_lp2 = 0;                  // 2-pole TV-bandwidth LP
 // Recompute the cached audio level from PIA1 (called right after a PIA1 write).
 // Output gain. The 6-bit DAC swings 64 steps; a square wave's RMS == its peak,
 // so this is loud even well below full scale. AUDIO_DAC_GAIN sets the per-step
-// amplitude (was 480 -> ~47% FS and harsh). 240 -> ~24% FS (-6 dB); lower this
-// to make it quieter, raise it for louder.
-#define AUDIO_DAC_GAIN   240
+// amplitude: 480 -> ~47% FS (harsh), 240 -> ~24% FS (-6 dB), 120 -> ~12% FS
+// (-12 dB). Quieter = more sink headroom / less fatiguing harshness (does NOT
+// change the off-spec delivery distortion). Lower to soften, raise for louder.
+#define AUDIO_DAC_GAIN   120
 static inline void audio_update_level(void) {
     if (!g_m.pia1) return;
     int dac6 = (PIA_VALUE_A(g_m.pia1) >> 2) & 0x3F;    // 6-bit DAC, 0..63
