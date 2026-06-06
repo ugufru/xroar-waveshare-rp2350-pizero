@@ -742,9 +742,9 @@ extern "C" size_t coco_machine_audio_read(int16_t *dst, size_t max) {
 
 extern "C" uint32_t coco_machine_audio_rate(void) { return COCO_AUDIO_RATE; }
 
-// Audio is now produced event-driven from the memory-access path (audio_integrate),
-// so we no longer slice the CPU run for sample timing -- run the whole budget in
-// one go (this also removes the ~615 cpu->run re-entries/frame the slicer cost).
+// Audio is event-driven from the memory-access path; run the whole budget in one
+// cpu->run. (The VDG already drives field-sync at 60 Hz, so we do NOT regenerate
+// it here -- doing so double-drove PIA0 CB1.)
 static inline void run_cpu_with_audio(uint32_t cycles) {
     g_m.cycles_remaining = (int32_t)cycles * 16;
     g_m.cpu->running = 1;
@@ -768,9 +768,14 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
         }
     }
 
-    // 6809 cycle ~= 16 SAM ticks. SAM->mem_cycle returns ticks per memory
-    // access; we run until our tick budget is spent. PIZERO-18: sliced so the
-    // CoCo audio output is sampled at COCO_AUDIO_RATE between chunks.
+    // PIZERO-30: keep the 60 Hz field-sync timer IRQ alive. The VDG drives FS ->
+    // PIA0 CB1, but this port's autorun DIRECT-jumps into programs that can leave
+    // PIA0 CB1's interrupt DISABLED (CRB bit 0 = 0); nothing re-enables it, so
+    // BASIC's TIMER freezes and PLAY / cursor-blink / SOUND-duration hang forever.
+    // On real hardware the FS line is wired and BASIC keeps this on, so force the
+    // enable bit each frame. (Touches only bit 0 -- CB2/mux and edge bits intact.)
+    if (g_m.pia0) g_m.pia0->b.control_register |= 0x01;
+
     run_cpu_with_audio(cycles);
 
 #if PROFILE_MEM_CYCLE
