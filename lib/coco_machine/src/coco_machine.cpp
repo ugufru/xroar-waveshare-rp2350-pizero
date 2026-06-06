@@ -768,12 +768,14 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
         }
     }
 
-    // PIZERO-30: keep the 60 Hz field-sync timer IRQ alive. The VDG drives FS ->
-    // PIA0 CB1, but this port's autorun DIRECT-jumps into programs that can leave
-    // PIA0 CB1's interrupt DISABLED (CRB bit 0 = 0); nothing re-enables it, so
-    // BASIC's TIMER freezes and PLAY / cursor-blink / SOUND-duration hang forever.
-    // On real hardware the FS line is wired and BASIC keeps this on, so force the
-    // enable bit each frame. (Touches only bit 0 -- CB2/mux and edge bits intact.)
+    // PIZERO-31: keep the 60 Hz field-sync timer IRQ alive. The VDG drives FS ->
+    // PIA0 CB1 fine, but this port's autorun DIRECT-jumps into a program that
+    // leaves PIA0 CB1's interrupt DISABLED (CRB bit 0 = 0) and nothing re-enables
+    // it, so BASIC's TIMER freezes -> PLAY hangs on note 1, cursor doesn't blink,
+    // SOUND n,d stalls. On real hardware the FS line is wired and BASIC keeps this
+    // on, so force the enable bit. Verified clean under heavy load (12 SOUNDs +
+    // long PLAY over serial): CRB stays 35, no IRQ storm (irq=0, I=0), PC advances
+    // and returns to idle. Only bit 0 touched -- CB2/sound-mux + edge bits intact.
     if (g_m.pia0) g_m.pia0->b.control_register |= 0x01;
 
     run_cpu_with_audio(cycles);
