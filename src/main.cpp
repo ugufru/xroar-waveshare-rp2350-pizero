@@ -431,7 +431,7 @@ static void __not_in_flash_func(swaptest_vblank_cb)(void) {
 // island in the bp=130 back porch (vs 12px when 3/line) -- same refresh/rate,
 // just less crammed. The split is what makes 77 per-line buffers affordable.
 #define N_ALINES   77
-static inline int aline_pkts(int line) { (void)line; return 2; }   // 77*2 = 154 packets = 616 samples
+static inline int aline_pkts(int line) { (void)line; return 3; }   // 77*3 = 231 packets = 924 samples = 48 kHz
 
 // Per-line audio-island buffers. After the DMA split these are all BP-ONLY
 // (h_bp/2 words) on every lane -- the fp+sync control lives in the static l*[0]
@@ -569,8 +569,8 @@ void setup() {
         static uint32_t bp0[72], bk1[128], bk2[128];        // active-line framing
         dvi_data_packet_t pkts[6];
         dvi_di_set_avi_infoframe(&pkts[0], 0);
-        dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&pkts[2], 25176, 4096);   // TEST: CTS for assumed 25.175 MHz sink clock
+        dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_48K, DVI_AUDIO_SS_16);
+        dvi_di_set_acr(&pkts[2], 25176, 6144);   // TEST: CTS for assumed 25.175 MHz sink clock
         static int16_t tone[12 * 2];
         for (int i = 0; i < 12; ++i) { int16_t v = (i < 6) ? 8000 : -8000; tone[2*i] = tone[2*i+1] = v; }
         dvi_di_set_audio_samples(&pkts[3], &tone[0],  4, 0);
@@ -596,8 +596,8 @@ void setup() {
         // M2 final: vblank carries AVI/AudioIF/ACR; live audio is on ACTIVE lines.
         dvi_data_packet_t ipk[3];
         dvi_di_set_avi_infoframe(&ipk[0], 0);
-        dvi_di_set_audio_infoframe(&ipk[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&ipk[2], 25176, 4096);    // TEST: CTS for assumed 25.175 MHz sink clock
+        dvi_di_set_audio_infoframe(&ipk[1], 1 /*2ch*/, DVI_AUDIO_SF_48K, DVI_AUDIO_SS_16);
+        dvi_di_set_acr(&ipk[2], 25176, 6144);    // TEST: CTS for assumed 25.175 MHz sink clock
         for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&ipk[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
                                              &dvi0.dma_list_vblank_nosync, ipk, 3, g_info[0], g_info[1], g_info[2]);

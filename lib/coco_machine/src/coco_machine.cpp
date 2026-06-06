@@ -648,7 +648,7 @@ extern "C" const uint8_t font_6847[1] = { 0 };
 // HDMI data islands later). CPU clock = EVENT_TICK_RATE/16 = 14318180/16 =
 // 894886.25 Hz; the Bresenham uses the rates x4 so the divisor is exact and
 // pitch does not drift.
-#define COCO_AUDIO_RATE      32000u   // PIZERO-30: 32 kHz (48 kHz was higher-pitch + more distorted)
+#define COCO_AUDIO_RATE      48000u   // PIZERO-30: 48 kHz native (ACR CTS now correct)
 #define COCO_AUDIO_CPUCLK_X4 3579545u                 // (14318180/16)*4, exact
 #define COCO_AUDIO_RATE_X4   (COCO_AUDIO_RATE * 4u)    // 128000
 #define AUDIO_RING_SAMPLES   2048u                     // pow2; ~64 ms @ 32 kHz, 4 KB
@@ -691,9 +691,16 @@ static inline void audio_update_level(void) {
 
 static inline void audio_emit(int s) {
     if (s > 32767) s = 32767; else if (s < -32768) s = -32768;
-    g_lp1 += (((int32_t)s    - g_lp1) * 14) >> 4;      // ~10 kHz 2-pole LPF (brighter; source is already band-limited)
+    // PIZERO-30: output LPF BYPASSED by default -- the integrate-and-dump already
+    // band-limits the square at the source, so the extra IIR was just dulling the
+    // tone vs desktop xroar. Build with -DAUDIO_OUTPUT_LPF to re-enable it.
+#ifdef AUDIO_OUTPUT_LPF
+    g_lp1 += (((int32_t)s    - g_lp1) * 14) >> 4;
     g_lp2 += (((int32_t)g_lp1 - g_lp2) * 14) >> 4;
     s = (int)g_lp2;
+#else
+    (void)g_lp1; (void)g_lp2;
+#endif
     uint32_t w = g_audio_w;
     g_audio_ring[w & (AUDIO_RING_SAMPLES - 1)] = (int16_t)s;
     g_audio_w = w + 1;
