@@ -648,7 +648,7 @@ extern "C" const uint8_t font_6847[1] = { 0 };
 // HDMI data islands later). CPU clock = EVENT_TICK_RATE/16 = 14318180/16 =
 // 894886.25 Hz; the Bresenham uses the rates x4 so the divisor is exact and
 // pitch does not drift.
-#define COCO_AUDIO_RATE      32000u
+#define COCO_AUDIO_RATE      32000u   // PIZERO-30: 32 kHz (48 kHz was higher-pitch + more distorted)
 #define COCO_AUDIO_CPUCLK_X4 3579545u                 // (14318180/16)*4, exact
 #define COCO_AUDIO_RATE_X4   (COCO_AUDIO_RATE * 4u)    // 128000
 #define AUDIO_RING_SAMPLES   2048u                     // pow2; ~64 ms @ 32 kHz, 4 KB

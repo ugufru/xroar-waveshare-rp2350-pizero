@@ -274,8 +274,10 @@ void dvi_setup_scanline_for_vblank(const struct dvi_timing *t, const struct dvi_
 		if (i == TMDS_SYNC_LANE)
 			continue;
 		dma_cb_t *cblist = dvi_lane_from_list(l, i);
-		_set_data_cb(&cblist[0], &dma_cfg[i], sym_no_sync,(t->h_front_porch + t->h_sync_width + t->h_back_porch) / DVI_SYMBOLS_PER_WORD, 2, false);
-		_set_data_cb(&cblist[1], &dma_cfg[i], sym_no_sync, t->h_active_pixels / DVI_SYMBOLS_PER_WORD, 2, false);
+		// [0]=fp+sync, [1]=bp, [2]=active (DMA split, PIZERO-30)
+		_set_data_cb(&cblist[0], &dma_cfg[i], sym_no_sync, (t->h_front_porch + t->h_sync_width) / DVI_SYMBOLS_PER_WORD, 2, false);
+		_set_data_cb(&cblist[1], &dma_cfg[i], sym_no_sync,  t->h_back_porch    / DVI_SYMBOLS_PER_WORD, 2, false);
+		_set_data_cb(&cblist[2], &dma_cfg[i], sym_no_sync,  t->h_active_pixels / DVI_SYMBOLS_PER_WORD, 2, false);
 	}
 }
 
@@ -294,8 +296,11 @@ void dvi_setup_scanline_for_active(const struct dvi_timing *t, const struct dvi_
 	for (int i = 0; i < N_TMDS_LANES; ++i) {
 		dma_cb_t *cblist = dvi_lane_from_list(l, i);
 		if (i != TMDS_SYNC_LANE) {
+			// [0]=fp+sync, [1]=bp (DMA split, PIZERO-30); [2]=active set below.
 			_set_data_cb(&cblist[0], &dma_cfg[i], sym_no_sync,
-				(t->h_front_porch + t->h_sync_width + t->h_back_porch) / DVI_SYMBOLS_PER_WORD, 2, false);
+				(t->h_front_porch + t->h_sync_width) / DVI_SYMBOLS_PER_WORD, 2, false);
+			_set_data_cb(&cblist[1], &dma_cfg[i], sym_no_sync,
+				t->h_back_porch / DVI_SYMBOLS_PER_WORD, 2, false);
 		}
 		int target_block = i == TMDS_SYNC_LANE ? DVI_SYNC_LANE_CHUNKS - 1 :  DVI_NOSYNC_LANE_CHUNKS - 1;
 		if (tmdsbuf) {
@@ -321,7 +326,7 @@ void __dvi_func(dvi_update_scanline_data_dma)(const struct dvi_timing *t, const 
 		if (i == TMDS_SYNC_LANE)
 			dvi_lane_from_list(l, i)[3].read_addr = lane_tmdsbuf;
 		else
-			dvi_lane_from_list(l, i)[1].read_addr = lane_tmdsbuf;
+			dvi_lane_from_list(l, i)[2].read_addr = lane_tmdsbuf;   // [2]=active after DMA split
 	}
 }
 
@@ -373,9 +378,12 @@ void dvi_setup_scanline_for_vblank_island(const struct dvi_timing *t,
 #endif
 
 	// Repoint the active region of each lane at the prepared buffer.
+	// (Vblank lines carry the island across the whole active region, so these
+	// buffers stay W words; only the lane 1/2 block index changes to [2] after
+	// the DMA split.)
 	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[3], &dma_cfg[TMDS_SYNC_LANE], buf0, W, 0, false);
-	_set_data_cb(&dvi_lane_from_list(l, 1)[1], &dma_cfg[1], buf1, W, 0, false);
-	_set_data_cb(&dvi_lane_from_list(l, 2)[1], &dma_cfg[2], buf2, W, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 1)[2], &dma_cfg[1], buf1, W, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 2)[2], &dma_cfg[2], buf2, W, 0, false);
 }
 
 // PIZERO-29 (M3): add the HDMI video preamble (8px) + video guard band (2px)
@@ -398,24 +406,25 @@ void dvi_setup_active_hdmi_framing(const struct dvi_timing *t,
 	const uint32_t vg1 = 0x133u | (0x133u << 10);    //                    ch1   = 0b0100110011
 	const uint32_t vg2 = vg0;
 
-	const int bpw = t->h_back_porch / DVI_SYMBOLS_PER_WORD;                        // 24
-	const int blw = (t->h_front_porch + t->h_sync_width + t->h_back_porch)
-	                / DVI_SYMBOLS_PER_WORD;                                        // 80
+	const int bpw = t->h_back_porch / DVI_SYMBOLS_PER_WORD;
 
+	// After the DMA split, the back porch is its own block on every lane, so the
+	// video preamble/guard live in BP-ONLY buffers (bpw words). bp0/bk1/bk2 each
+	// need only h_bp/2 words now (lane 0 = l0[2]; lanes 1/2 = l*[1]).
 	// Lane 0 back porch: control, with the 2px video guard band at the very end.
 	for (int i = 0; i < bpw; ++i) bp0[i] = c0;
 	bp0[bpw - 1] = vg0;
 
-	// Lanes 1/2 blanking: control, with [8px preamble][2px guard] at the end.
-	for (int i = 0; i < blw; ++i) { bk1[i] = c12; bk2[i] = c12; }
-	for (int i = 0; i < 4; ++i) { bk1[blw - 5 + i] = pre1; /* ch2 preamble == control */ }
-	bk1[blw - 1] = vg1;
-	bk2[blw - 1] = vg2;
+	// Lanes 1/2 back porch: control, with [8px preamble][2px guard] at the end.
+	for (int i = 0; i < bpw; ++i) { bk1[i] = c12; bk2[i] = c12; }
+	for (int i = 0; i < 4; ++i) { bk1[bpw - 5 + i] = pre1; /* ch2 preamble == control */ }
+	bk1[bpw - 1] = vg1;
+	bk2[bpw - 1] = vg2;
 
 	// Repoint. Lane-0 back porch keeps its IRQ-on-finish (the per-scanline IRQ).
 	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[2], &dma_cfg[TMDS_SYNC_LANE], bp0, bpw, 0, true);
-	_set_data_cb(&dvi_lane_from_list(l, 1)[0], &dma_cfg[1], bk1, blw, 0, false);
-	_set_data_cb(&dvi_lane_from_list(l, 2)[0], &dma_cfg[2], bk2, blw, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 1)[1], &dma_cfg[1], bk1, bpw, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 2)[1], &dma_cfg[2], bk2, bpw, 0, false);
 }
 
 // PIZERO-30 (M2 active-line audio): build ONE active scanline's blanking buffers
@@ -447,29 +456,29 @@ void dvi_setup_active_audio_line(const struct dvi_timing *t,
 	const uint32_t vg1  = 0x133u | (0x133u << 10);     // video guard band ch1
 
 	const int bpw = t->h_back_porch / DVI_SYMBOLS_PER_WORD;
-	const int fsw = (t->h_front_porch + t->h_sync_width) / DVI_SYMBOLS_PER_WORD;
-	const int blw = fsw + bpw;
 
-	for (int i = 0; i < bpw; ++i) la0[i] = c0;
-	for (int i = 0; i < blw; ++i) { la1[i] = c12; la2[i] = c12; }
+	// After the DMA split all three lane buffers are BP-ONLY (bpw words): the
+	// fp+sync control lives in the static l*[0] block. The data island sits at the
+	// START of the back porch on every lane (offset 0), the video preamble/guard
+	// at the end. Lanes 1/2 repoint l*[1] (the new bp block), lane 0 repoints l0[2].
+	for (int i = 0; i < bpw; ++i) { la0[i] = c0; la1[i] = c12; la2[i] = c12; }
 
-	// Data-island period at the start of the back porch.
-	for (int i = 0; i < 4; ++i) { la1[fsw + i] = pre; la2[fsw + i] = pre; }
-	la0[4] = g0; la1[fsw + 4] = g12; la2[fsw + 4] = g12;
+	for (int i = 0; i < 4; ++i) { la1[i] = pre; la2[i] = pre; }   // data-island preamble (ch1/ch2)
+	la0[4] = g0; la1[4] = g12; la2[4] = g12;                      // leading guard band
 	for (int k = 0; k < npkts; ++k) {
 		dvi_di_encode_header(&la0[5 + 16 * k], &pkts[k], hv, k == 0);
-		dvi_di_encode_subpacket(&la1[fsw + 5 + 16 * k], &la2[fsw + 5 + 16 * k], &pkts[k]);
+		dvi_di_encode_subpacket(&la1[5 + 16 * k], &la2[5 + 16 * k], &pkts[k]);
 	}
 	const int isl_end = 5 + 16 * npkts;
-	la0[isl_end] = g0; la1[fsw + isl_end] = g12; la2[fsw + isl_end] = g12;   // trailing guard
+	la0[isl_end] = g0; la1[isl_end] = g12; la2[isl_end] = g12;    // trailing guard band
 
-	// HDMI video preamble (ch1, 4w) + guard band (1w) at the very end of blanking.
-	for (int i = 0; i < 4; ++i) la1[blw - 5 + i] = pre;
-	la0[bpw - 1] = vg0; la1[blw - 1] = vg1; la2[blw - 1] = vg0;
+	// HDMI video preamble (ch1, 4w) + guard band (1w) at the very end of the bp.
+	for (int i = 0; i < 4; ++i) la1[bpw - 5 + i] = pre;
+	la0[bpw - 1] = vg0; la1[bpw - 1] = vg1; la2[bpw - 1] = vg0;
 
 	_set_data_cb(&dvi_lane_from_list(l, TMDS_SYNC_LANE)[2], &dma_cfg[TMDS_SYNC_LANE], la0, bpw, 0, true);
-	_set_data_cb(&dvi_lane_from_list(l, 1)[0], &dma_cfg[1], la1, blw, 0, false);
-	_set_data_cb(&dvi_lane_from_list(l, 2)[0], &dma_cfg[2], la2, blw, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 1)[1], &dma_cfg[1], la1, bpw, 0, false);
+	_set_data_cb(&dvi_lane_from_list(l, 2)[1], &dma_cfg[2], la2, bpw, 0, false);
 }
 
 // PIZERO-30 (M2, Option B): (re)write ONE data-island period at word offset

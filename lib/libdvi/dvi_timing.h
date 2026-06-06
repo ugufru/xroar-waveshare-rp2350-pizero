@@ -50,7 +50,11 @@ static_assert(sizeof(dma_cb_t) == 4 * sizeof(uint32_t), "bad dma layout");
 static_assert(__builtin_offsetof(dma_cb_t, c.ctrl) == __builtin_offsetof(dma_channel_hw_t, ctrl_trig), "bad dma layout");
 
 #define DVI_SYNC_LANE_CHUNKS DVI_STATE_COUNT
-#define DVI_NOSYNC_LANE_CHUNKS 2
+// PIZERO-30: lanes 1/2 split their blanking into [fp+sync][bp][active] (was
+// [fp+sync+bp][active]) so the back porch can be repointed per-line at a small
+// bp-only audio-island buffer -- frees the RAM that per-line full-blanking
+// buffers ate. l*[0]=fp+sync, l*[1]=bp, l*[2]=active data.
+#define DVI_NOSYNC_LANE_CHUNKS 3
 
 struct dvi_scanline_dma_list {
 	dma_cb_t l0[DVI_SYNC_LANE_CHUNKS];

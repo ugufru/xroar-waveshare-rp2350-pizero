@@ -426,18 +426,22 @@ static void __not_in_flash_func(swaptest_vblank_cb)(void) {
 // pointer stores only -- NO encoding (encoding in the IRQ broke video, Option A).
 //
 // Vblank carries just AVI + Audio InfoFrame + ACR (g_info, one line) + control.
-#define N_ALINES   52
-static inline int aline_pkts(int line) { return line < 51 ? 3 : 1; }   // 51*3 + 1 = 154 packets = 616 samples
+// 32 kHz, LOOSE packing test: 616 samples/frame = 154 packets = 77 lines x 2.
+// Spreading 154 packets over 77 lines (2/line) leaves ~44px control margin per
+// island in the bp=130 back porch (vs 12px when 3/line) -- same refresh/rate,
+// just less crammed. The split is what makes 77 per-line buffers affordable.
+#define N_ALINES   77
+static inline int aline_pkts(int line) { (void)line; return 2; }   // 77*2 = 154 packets = 616 samples
 
-// Per-line active-blanking buffers (full fp+sync+bp). lane0 = h_bp/2 words,
-// lanes 1/2 = (h_fp+h_sync+h_bp)/2 words. Sized generously for h_bp=130.
+// Per-line audio-island buffers. After the DMA split these are all BP-ONLY
+// (h_bp/2 words) on every lane -- the fp+sync control lives in the static l*[0]
+// block, so per-line buffers no longer store it. ~halves the per-line RAM vs the
+// old full-blanking buffers, which is what frees room for margin / 48 kHz.
 #define ALINE_BP_W   72     // >= h_bp/2 (65 at h_bp=130)
-#define ALINE_BL_W   128    // >= (h_fp+h_sync+h_bp)/2 (120 at h_bp=130)
-#define ALINE_FSW    55     // (h_fp+h_sync)/2 = (14+96)/2 -- bp starts here in lanes 1/2
 static uint32_t g_la0[2][N_ALINES][ALINE_BP_W];   // lane 0 back porch
-static uint32_t g_la1[2][N_ALINES][ALINE_BL_W];   // lane 1 full blanking
-static uint32_t g_la2[2][N_ALINES][ALINE_BL_W];   // lane 2 full blanking
-static uint32_t g_bp0[ALINE_BP_W], g_bk1[ALINE_BL_W], g_bk2[ALINE_BL_W];  // static (non-audio) framing
+static uint32_t g_la1[2][N_ALINES][ALINE_BP_W];   // lane 1 back porch
+static uint32_t g_la2[2][N_ALINES][ALINE_BP_W];   // lane 2 back porch
+static uint32_t g_bp0[ALINE_BP_W], g_bk1[ALINE_BP_W], g_bk2[ALINE_BP_W];  // static (non-audio) framing
 static uint32_t g_info[3][320];                   // vblank: AVI + Audio InfoFrame + ACR
 static uint32_t g_ctrl[3][320];                   // vblank: control-only filler
 static int16_t  g_aslot[480];                     // active scanline -> audio line idx, or -1
@@ -454,9 +458,9 @@ static void __not_in_flash_func(active_audio_cb)(void) {
     const uint32_t *a0, *a1, *a2;
     if (j >= 0) { a0 = g_la0[g_irq_bank][j]; a1 = g_la1[g_irq_bank][j]; a2 = g_la2[g_irq_bank][j]; }
     else        { a0 = g_bp0;               a1 = g_bk1;               a2 = g_bk2; }
-    dvi0.dma_list_active.l0[2].read_addr = a0;
-    dvi0.dma_list_active.l1[0].read_addr = a1;
-    dvi0.dma_list_active.l2[0].read_addr = a2;
+    dvi0.dma_list_active.l0[2].read_addr = a0;   // lane 0 back porch
+    dvi0.dma_list_active.l1[1].read_addr = a1;   // lane 1 bp (split block [1])
+    dvi0.dma_list_active.l2[1].read_addr = a2;   // lane 2 bp
 }
 
 // DMA IRQ, vblank (no-sync) line: AVI/AudioIF/ACR on the first back-porch line,
@@ -465,8 +469,8 @@ static void __not_in_flash_func(audio_vblank_info_cb)(void) {
     const bool back = (dvi0.timing_state.v_state == DVI_STATE_BACK_PORCH);
     const uint32_t (*sel)[320] = (back && dvi0.timing_state.v_ctr == 0) ? g_info : g_ctrl;
     dvi0.dma_list_vblank_nosync.l0[3].read_addr = sel[0];
-    dvi0.dma_list_vblank_nosync.l1[1].read_addr = sel[1];
-    dvi0.dma_list_vblank_nosync.l2[1].read_addr = sel[2];
+    dvi0.dma_list_vblank_nosync.l1[2].read_addr = sel[1];   // lane 1 active block is [2] after split
+    dvi0.dma_list_vblank_nosync.l2[2].read_addr = sel[2];
 }
 
 // Core 0 (after blit): re-encode the OFF bank's audio islands from the ring, flip.
@@ -487,9 +491,10 @@ static void audio_encode_frame(void) {
             g_aud_framectr = (g_aud_framectr + 4) % 192u;
             dvi_di_compute_parity(&pkt);
             // Rewrite only the data words (preamble/guards/framing are static).
+            // bp-only buffers after the split -> island at offset 0 on all lanes.
             dvi_di_encode_header(&g_la0[off][line][5 + 16 * k], &pkt, hv, k == 0);
-            dvi_di_encode_subpacket(&g_la1[off][line][ALINE_FSW + 5 + 16 * k],
-                                    &g_la2[off][line][ALINE_FSW + 5 + 16 * k], &pkt);
+            dvi_di_encode_subpacket(&g_la1[off][line][5 + 16 * k],
+                                    &g_la2[off][line][5 + 16 * k], &pkt);
         }
     }
     __dmb();
@@ -565,7 +570,7 @@ void setup() {
         dvi_data_packet_t pkts[6];
         dvi_di_set_avi_infoframe(&pkts[0], 0);
         dvi_di_set_audio_infoframe(&pkts[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&pkts[2], 24000, 4096);
+        dvi_di_set_acr(&pkts[2], 24000, 4096);   // 32 kHz @ 24 MHz pixel clock
         static int16_t tone[12 * 2];
         for (int i = 0; i < 12; ++i) { int16_t v = (i < 6) ? 8000 : -8000; tone[2*i] = tone[2*i+1] = v; }
         dvi_di_set_audio_samples(&pkts[3], &tone[0],  4, 0);
@@ -592,7 +597,7 @@ void setup() {
         dvi_data_packet_t ipk[3];
         dvi_di_set_avi_infoframe(&ipk[0], 0);
         dvi_di_set_audio_infoframe(&ipk[1], 1 /*2ch*/, DVI_AUDIO_SF_32K, DVI_AUDIO_SS_16);
-        dvi_di_set_acr(&ipk[2], 24000, 4096);
+        dvi_di_set_acr(&ipk[2], 24000, 4096);    // 32 kHz @ 24 MHz pixel clock
         for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&ipk[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
                                              &dvi0.dma_list_vblank_nosync, ipk, 3, g_info[0], g_info[1], g_info[2]);
