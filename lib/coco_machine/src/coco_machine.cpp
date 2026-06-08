@@ -702,11 +702,15 @@ static inline void audio_emit(int s) {
 #else
     (void)g_lp1; (void)g_lp2;
 #endif
+    // PIZERO-39: single-producer/single-consumer. The writer (core 0) owns ONLY
+    // g_audio_w; the reader (which may be the core-1 DMA IRQ in the streaming
+    // build) owns g_audio_r and handles overflow on its side. The __dmb publishes
+    // the sample BEFORE the index so a cross-core reader never sees w advance past
+    // a slot that hasn't been written yet.
     uint32_t w = g_audio_w;
     g_audio_ring[w & (AUDIO_RING_SAMPLES - 1)] = (int16_t)s;
+    __dmb();
     g_audio_w = w + 1;
-    if (g_audio_w - g_audio_r > AUDIO_RING_SAMPLES)    // overwrite-on-full
-        g_audio_r = g_audio_w - AUDIO_RING_SAMPLES;
 }
 
 // Called per memory access with the access duration in event ticks. Integrates
@@ -731,13 +735,29 @@ static inline void audio_integrate(uint32_t ticks) {
     }
 }
 
-// Drain up to `max` mono int16 samples; returns count read.
-extern "C" size_t coco_machine_audio_read(int16_t *dst, size_t max) {
+// Drain up to `max` mono int16 samples; returns count read. PIZERO-39: this is
+// the SPSC consumer and may run in the core-1 DMA IRQ (streaming build), so it
+// (a) owns g_audio_r exclusively, (b) catches up reader-side if the producer has
+// lapped it (>RING behind), (c) pairs the writer's publish __dmb, and (d) lives
+// in RAM (.time_critical) so an IRQ call never stalls on XIP flash. PICO_NO_HARDWARE
+// (=0, set by the arduino-pico core) makes __not_in_flash_func a no-op here, so we
+// apply the section attribute explicitly (see docs/BUILD.md §4a, dvi_data_island.c).
+#ifdef DVI_DI_HOST_TEST
+#define COCO_RAMFUNC
+#else
+#define COCO_RAMFUNC __attribute__((section(".time_critical.coco_audio")))
+#endif
+extern "C" size_t COCO_RAMFUNC coco_machine_audio_read(int16_t *dst, size_t max) {
+    uint32_t w = g_audio_w;
+    __dmb();                                           // read index before data
+    uint32_t r = g_audio_r;
+    if (w - r > AUDIO_RING_SAMPLES) r = w - AUDIO_RING_SAMPLES;   // producer lapped us
     size_t n = 0;
-    while (n < max && g_audio_r != g_audio_w) {
-        dst[n++] = g_audio_ring[g_audio_r & (AUDIO_RING_SAMPLES - 1)];
-        g_audio_r++;
+    while (n < max && r != w) {
+        dst[n++] = g_audio_ring[r & (AUDIO_RING_SAMPLES - 1)];
+        r++;
     }
+    g_audio_r = r;
     return n;
 }
 
