@@ -116,18 +116,35 @@ Work is tracked in `issues.jsonl` (use `/issues` to list). Phases:
 | 3 | Autonomous self-running demo | PIZERO-10 | ✅ done |
 | 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13 | 🟡 keyboard done; joystick + hot-replug open |
 | 5 | Dual-core split + performance | PIZERO-14..15 | ✅ done |
-| 6 | Audio output (native CoCo 6-bit DAC + 1-bit sound) | PIZERO-18 (PIZERO-17 stretch) | 🔜 scoping |
+| 6 | HDMI audio over the existing cable (CoCo 6-bit DAC + 1-bit sound) | PIZERO-18, 26–35 | 🟡 working & pitch-matched, residual warble; clean path = PWM sidecar or delivery re-arch (PIZERO-35) |
+| 7 | Clean audio + stability | PIZERO-33 (watchdog), PIZERO-35 (delivery re-arch), PWM sidecar | 🔜 next |
 
 DVI-vs-USB clock reconciliation (`PIZERO-02b`) resolved at 240 MHz with a ~57 Hz monitor refresh
 (see above). USB host enumeration + keyboard input verified on hardware; remaining open work in
 Phase 4 is `PIZERO-13` (joystick) and `PIZERO-11b` (hot-replug bug — USB devices only enumerate
 on a cold boot; unplugging and re-plugging doesn't re-attach).
 
-The board is currently **silent**: XRoar synthesises the CoCo's 6-bit DAC + single-bit sound
-internally, but nothing drives those samples to an output yet. Phase 6 (`PIZERO-18`) adds a real
-audio path — the leading candidate is HDMI audio over the existing cable (data-island packets
-emitted by `libdvi`, which is presently DVI-only), with PWM-to-a-GPIO as the fallback. The
-synth/sound-chip experiment (`PIZERO-17`) is a stretch that depends on whichever path Phase 6 picks.
+**Phase 6 — HDMI audio (working, with a known ceiling).** XRoar's 6-bit DAC + single-bit sound are
+now encoded as HDMI **data-island audio-sample packets** by an extended `libdvi` and played over the
+existing cable. CoCo `SOUND`/`PLAY`/game audio is recognizable and **pitch-matched to desktop
+XRoar** — the key fix (`PIZERO-30`/`32`) was setting the audio Clock-Regeneration **CTS for the
+sink's *assumed* 25.175 MHz pixel clock**, since our actual clock is an off-spec 24 MHz. A residual
+frame-rate **warble** remains: the pre-encoded per-line buffer scheme only affords audio on ~77 of
+480 active lines, so delivery is bursty, and this sink **rejects** data islands in the vblank back
+porch, so the per-frame gap can't be filled that way (see closed `PIZERO-34`). The HDMI-audio build
+runs at ~52 Hz refresh / ~52 fps emulation (off-spec 24 MHz pixel clock chosen so 48 kHz divides
+into an integer 924 samples/frame) and **single-buffers** the framebuffer (mild tearing) to free RAM
+for the audio-island buffers; the no-audio baseline stays 60 fps double-buffered. Build flag:
+`-DHDMI_DATA_ISLAND`; diagnostic flags `-DHDMI_AUDIO_SYNTH` (clean on-chip 440 Hz sine) and
+`-DAUDIO_WAV_DUMP` (stream source samples out USB-CDC) live behind ifdefs.
+
+**Phase 7 — the path to *clean* audio** is either a **PWM sidecar** (`PIZERO-18` lineage: a GPIO +
+RC filter + small Class-D amp, bypassing HDMI delivery entirely) or **re-architecting the HDMI
+delivery** to stream audio onto every active line per Shuichi Takano's reference (`PIZERO-35`; our
+packet *encoder* is already ported from his `pico_lib`, but not his per-scanline delivery). The
+`PIZERO-33` core-1 watchdog (to root-cause recurring USB-host freezes) and `PIZERO-32` (ACR value is
+sink-clock-assumption-dependent — a V1.0 multi-monitor risk) are the other near-term items. The
+synth/sound-chip experiment (`PIZERO-17`) remains a stretch.
 
 ## Build
 
@@ -145,8 +162,10 @@ A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and opt
 
 ## Status
 
-**Phases 0–3 and 5 complete; Phase 4 keyboard done.** XRoar boots Color BASIC on HDMI at a
-locked, tear-free 60 fps emulation rate (display refreshes at ~57 Hz; emulator stays at 60). The
+**Phases 0–3 and 5 complete; Phase 4 keyboard done; Phase 6 (HDMI audio) working with a known
+warble.** XRoar boots Color BASIC on HDMI at a locked, tear-free 60 fps emulation rate (display
+refreshes at ~57 Hz; emulator stays at 60) in the no-audio baseline; the HDMI-audio build trades to
+~52 fps single-buffered (see Roadmap). The
 autonomous `AUTORUN.TXT` demo (`PIZERO-10`) works, dual-core double-buffered scanout
 (`PIZERO-14`) is tear-free, and a **USB keyboard plugged into the PIO-USB port types directly
 into BASIC** (`PIZERO-11`/`12`).
@@ -158,9 +177,17 @@ has not been tested. Two unverified hypotheses stand: insufficient dev-port VBUS
 current (would be fixed by a battery/powered hub — untested), or a software miss of the
 disconnect event (RP2350-E9 leakage + the PIO-USB state machine holding the J line).
 
-Next deliverable is **`PIZERO-18`** (Phase 6): native CoCo audio output. There is no sound today;
-the plan is to add an HDMI audio path to `libdvi` (data islands) or fall back to PWM. See the
-issue for the output-path decision that gates the work.
+**Phase 6 — HDMI audio — works** (`PIZERO-30`): CoCo `SOUND`/`PLAY`/game sound plays over the HDMI
+cable via `libdvi` data-island packets, pitch-matched to desktop XRoar. It is **not perfectly
+clean** — a frame-rate warble remains from bursty per-line delivery that this sink's vblank
+handling won't let us smooth (`PIZERO-34` closed as not-viable). Also fixed this phase:
+**`PIZERO-31`** — the CoCo's 60 Hz field-sync timer IRQ was never being enabled in this port, so
+`PLAY`, the cursor blink, and `SOUND n,d` all hung forever; now they work.
+
+Next deliverables are **clean audio** — either a **PWM sidecar** (`PIZERO-18` lineage) or
+**re-architecting HDMI delivery** per Takano's reference (`PIZERO-35`) — plus the **`PIZERO-33`**
+core-1 watchdog to root-cause recurring USB-host freezes, and **`PIZERO-32`** (the ACR clock value
+is sink-dependent — a multi-monitor risk for V1.0).
 
 USB device-compatibility caveat: Pico-PIO-USB is USB 1.1 only, so modern high-speed USB 2.0
 peripherals (e.g. Keychron K2, standalone gaming mice) don't enumerate. Simple wired USB
