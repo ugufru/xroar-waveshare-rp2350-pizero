@@ -145,16 +145,21 @@ that would violate "transparent to the CoCo emulation" and couple the UI to a RO
   game *without a reboot*. Today the firmware loads once at boot; this is the one
   genuinely new piece of plumbing. Bounded but real.
 
-### 3.5 Audio — **required for V1.0**
+### 3.5 Audio — **required for V1.0** — *HDMI audio working, not yet clean*
 The product promises "playing vintage games"; silence is a deal-breaker, so audio is
-a V1.0 requirement, not a stretch. See `docs/audio-decision.md` for the full scoping.
-- **Primary:** HDMI audio over the existing cable via `libdvi` data-island packets —
-  no extra hardware, preserves the "one cable" story. Our 24 MHz pixel clock yields
-  clean ACR integers (32 kHz → N=4096, CTS=24000).
-- **Fallback:** PWM out of one GPIO → RC filter → small Class-D amp.
-- **Highest-risk V1.0 item.** De-risk *before* committing the marketing claim: bench a
-  reference HDMI-audio firmware on the actual target monitor to confirm the sink
-  accepts HDMI audio over this board's wiring and off-spec timing.
+a V1.0 requirement. See `docs/audio-decision.md` for the full scoping. **De-risked on
+hardware (2026-06):** HDMI audio *plays* and is pitch-matched to desktop XRoar.
+- **Primary (working):** HDMI audio over the existing cable via `libdvi` data-island
+  packets — no extra hardware, preserves the "one cable" story. Now at 48 kHz; the
+  load-bearing fix was the ACR **CTS for the sink's *assumed* 25.175 MHz clock**
+  (`PIZERO-30/32`), not our actual 24 MHz. **Open quality gap:** a residual frame-rate
+  *warble* from bursty per-line delivery the sink won't let us smooth (`PIZERO-34`
+  closed not-viable). A delivery re-architecture per Takano's reference (`PIZERO-35`)
+  is the in-cable path to clean. **Risk:** the working ACR value is sink-clock-
+  assumption-dependent — confirm across target monitors (`PIZERO-32`).
+- **Fallback (clean, +1 part):** PWM out of one GPIO → RC filter → small Class-D amp;
+  bypasses HDMI delivery entirely, so guaranteed clean. Strongest path if "crystal-
+  clear" is a hard V1.0 bar and the HDMI re-arch doesn't land.
 
 ### 3.6 Joystick — **V1.0, USB-first; header as expansion**
 - **USB HID gamepad/joystick** mapped to the CoCo joystick axes/buttons (PIZERO-13).
@@ -258,12 +263,12 @@ angle cheaply with a printed **BASIC quick-reference / type-in listing** — on-
 |---|---|---|
 | **ROM licensing** | 🟢 resolved | Open model (§4): we ship **no** copyrighted ROMs; the customer supplies their own. Removes the legal blocker. |
 | **Original BASIC ROM scope** | 🟢 optional | Demoted from a gate to a nice-to-have (§4). Out-of-box experience uses our own self-contained games instead. |
-| **Audio unproven** | 🔴 | Required for V1.0 (§3.5). Bench a reference on the real monitor before claiming it. |
+| **Audio not yet *clean*** | 🟠 | HDMI audio **works & is pitch-matched** on hardware (was 🔴 "unproven"). Residual frame-rate warble (`PIZERO-34` closed not-viable). Path to clean: HDMI delivery re-arch (`PIZERO-35`) or PWM sidecar. Also `PIZERO-32`: working ACR value is sink-clock-dependent → verify across monitors. |
 | **Original game content** | 🟠 | The creative product (§1). We must author at least one polished, self-booting homebrew title for the out-of-box experience. |
 | **HDMI TV compatibility** | 🟠 | The ~57 Hz off-spec timing is fine on tested monitors but a consumer-QA exposure when we promise "your favorite TV." Build a compatibility matrix; consider a more-standard-timing fallback. |
 | **GPL (XRoar is GPLv3)** | 🟠 | Selling derived firmware is fine, but we **must distribute corresponding source** + license notices. Conveniently aligns with the "open & hackable" story. |
 | **Game copyright** | 🟠 | Ship only freely-redistributable / homebrew / licensed titles on the SD. |
-| **Hot-replug (PIZERO-11b)** | 🟡 | Promote from "parked" to a V1.0 reliability item; the battery/USB-C power config likely mitigates it — test, then fix or document. |
+| **USB-host stability (PIZERO-11b)** | 🟠 | Beyond hot-replug: user reports **recurring system freezes** (cursor freezes; tracks the USB keyboard being live). Promote to a V1.0 reliability item. `PIZERO-33` adds a core-1 watchdog to auto-capture the next freeze and root-cause it. |
 | **FCC/CE + trademark** | 🟡 | Retail HDMI products technically need emissions compliance (often handled via a maker/kit framing at low volume). Market as "runs CoCo software / compatible with," never implying official Tandy/RadioShack endorsement. |
 
 ---
