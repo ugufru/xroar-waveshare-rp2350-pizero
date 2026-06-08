@@ -5,8 +5,25 @@
 #include "dvi_data_island.h"
 #include <string.h>
 
+// PIZERO-37: the per-scanline audio encode (dvi_di_encode_*, set_audio_samples,
+// compute_parity) and its TERC4 table must run from RAM, not XIP flash, so they
+// can be called in the core-1 DMA IRQ without an XIP stall (the suspected cause
+// of the original "Option A" screen blackout). We place them in `.time_critical`
+// (the same RAM section pico-sdk's __not_in_flash uses, and which libdvi's other
+// hot functions already land in) via an explicit attribute -- not relying on a
+// pico header, so this C file still builds standalone for the host test. On a
+// host build (DVI_DI_HOST_TEST) the attribute is a no-op.
+#ifdef DVI_DI_HOST_TEST
+#define DVI_DI_RAMFUNC
+#define DVI_DI_RAMDATA
+#else
+#define DVI_DI_RAMFUNC __attribute__((section(".time_critical.dvi_di")))
+#define DVI_DI_RAMDATA __attribute__((section(".time_critical.dvi_di_rodata")))
+#endif
+
 // TERC4: 4-bit -> 10-bit symbols (HDMI 1.4 spec / reference, verbatim).
-const uint16_t dvi_terc4_syms[16] = {
+// RAM-resident (PIZERO-37): read by dvi_di_terc4x2() inside the IRQ-side encode.
+const uint16_t DVI_DI_RAMDATA dvi_terc4_syms[16] = {
 	0x29c, 0x263, 0x2e4, 0x2e2,   // 0b1010011100 0b1001100011 0b1011100100 0b1011100010
 	0x171, 0x11e, 0x18e, 0x13c,   // 0b0101110001 0b0100011110 0b0110001110 0b0100111100
 	0x2cc, 0x139, 0x19c, 0x2c6,   // 0b1011001100 0b0100111001 0b0110011100 0b1011000110
@@ -29,14 +46,14 @@ void dvi_di_init(void) {
 	bch_ready = true;
 }
 
-static uint8_t bch(const uint8_t *p, int n) {
+static uint8_t DVI_DI_RAMFUNC bch(const uint8_t *p, int n) {
 	uint8_t v = 0;
 	for (int i = 0; i < n; ++i)
 		v = bch_table[p[i] ^ v];
 	return v;
 }
 
-void dvi_di_compute_parity(dvi_data_packet_t *pkt) {
+void DVI_DI_RAMFUNC dvi_di_compute_parity(dvi_data_packet_t *pkt) {
 	pkt->header[3] = bch(pkt->header, 3);
 	for (int i = 0; i < 4; ++i)
 		pkt->subpacket[i][7] = bch(pkt->subpacket[i], 7);
@@ -127,7 +144,7 @@ static inline int iec_par(unsigned b) { b ^= b >> 4; b ^= b >> 2; b ^= b >> 1; r
 // declared channel-status rate just risks a conflict). 16-bit sample bytes go in
 // [1..2] (left) / [4..5] (right); byte 6 = [V . . P] for L (bits 0..3) and R
 // (bits 4..7).
-void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
+void DVI_DI_RAMFUNC dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
                               int nframes, uint32_t frame_ctr) {
 	memset(pkt, 0, sizeof(*pkt));
 	if (nframes < 1) nframes = 1;
@@ -152,7 +169,7 @@ void dvi_di_set_audio_samples(dvi_data_packet_t *pkt, const int16_t *lr,
 // ---- TERC4 island layout (ported verbatim from the reference) --------------
 
 // Lane 0: 32-bit header, 1 bit/pixel in nibble bit 2, plus the hv control bits.
-void dvi_di_encode_header(uint32_t *dst, const dvi_data_packet_t *pkt,
+void DVI_DI_RAMFUNC dvi_di_encode_header(uint32_t *dst, const dvi_data_packet_t *pkt,
                           int hv, bool first_packet) {
 	int hv1 = hv | 8;
 	if (!first_packet) hv = hv1;
@@ -169,7 +186,7 @@ void dvi_di_encode_header(uint32_t *dst, const dvi_data_packet_t *pkt,
 
 // Lanes 1 & 2: four subpackets, bit-permuted so each pixel's nibble spans the
 // four subpackets (reference bit-twiddle).
-void dvi_di_encode_subpacket(uint32_t *dst1, uint32_t *dst2,
+void DVI_DI_RAMFUNC dvi_di_encode_subpacket(uint32_t *dst1, uint32_t *dst2,
                              const dvi_data_packet_t *pkt) {
 	for (int i = 0; i < 8; ++i) {
 		uint32_t v = ((uint32_t)pkt->subpacket[0][i] << 0)  |

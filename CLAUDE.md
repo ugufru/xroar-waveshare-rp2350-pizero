@@ -24,6 +24,18 @@ here. Don't duplicate them. This file is just pointers and conventions for worki
   Its `lib/sh8601`, `lib/qspi_pio`, `lib/hal`, `src/hw_config.c` are AMOLED-specific — do NOT copy.
 - `~/github/waveshare-rp2350-usb-a` — PIO-USB host reference.
 
+## Building
+
+**`docs/BUILD.md` is the source of truth for how to build/flash this firmware** —
+the PlatformIO envs, the full HDMI/audio build-flag matrix, serial monitoring, and
+the toolchain gotchas. Read it before building; keep it in sync when you add/change
+a build flag.
+
+- **You build it (the agent), not the user.** The working **HDMI-audio** firmware is
+  `pio run -e pizero_audio` — a bare `pio run -e pizero` is the SILENT baseline
+  (`HDMI_DATA_ISLAND` off). Use a real env, never one-off `PLATFORMIO_BUILD_FLAGS`
+  (it links stale objects — see BUILD.md §4b).
+
 ## Build gotchas to remember
 
 - Target **RP2350B** (not the A on the AMOLED board), earlephilhower arduino-pico core.

@@ -148,13 +148,19 @@ synth/sound-chip experiment (`PIZERO-17`) remains a stretch.
 
 ## Build
 
-PlatformIO with the earlephilhower arduino-pico core, targeting the RP2350B:
+PlatformIO with the earlephilhower arduino-pico core, targeting the RP2350B.
+**See [`docs/BUILD.md`](docs/BUILD.md)** for the full env + build-flag matrix and
+toolchain gotchas — in short:
 
 ```
-pio run                 # build firmware.uf2
-pio run -t upload       # flash (hold BOOT for BOOTSEL if it doesn't auto-reset)
-pio device monitor      # serial @ 115200 — prints per-second [run] fps/cpu/blit
+pio run -e pizero         -t upload   # SILENT baseline (double-buffered, 60 fps)
+pio run -e pizero_audio   -t upload   # WORKING HDMI-audio build (what you usually want)
+pio device monitor                    # serial @ 115200 — prints per-second [run] fps/cpu/blit
 ```
+
+A bare `pio run` builds the silent `pizero` env (the committed default); audio is
+the separate `pizero_audio` env (`-DHDMI_DATA_ISLAND`). Don't enable flags via the
+`PLATFORMIO_BUILD_FLAGS` env var — it links stale objects (see BUILD.md §4b).
 
 A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and optionally
 `/coco/extbas11.rom`), plus an optional `disk11.rom` cart, a `.dsk` image, and `autorun.txt`

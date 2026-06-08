@@ -640,6 +640,38 @@ void setup() {
     // on this board's wiring/timing). Must run before core 1 starts the DVI.
     {
         dvi_di_init();
+#ifdef HDMI_ENCODE_BENCH
+        // PIZERO-36 (Stage 0): measure the cost of ONE per-active-line audio
+        // encode now that the encoder is RAM-resident (PIZERO-37). This is the
+        // go/no-go number for encoding inside the core-1 DMA IRQ. The back-porch
+        // window at h_bp=130px / 24 MHz pixel is ~5.42 us; the full line ~33 us.
+        {
+            static uint32_t b0[24], b1[24], b2[24];   // one island = 16 words + slack
+            dvi_data_packet_t bpk;
+            int16_t blr[8] = {1000,1000,-1000,-1000,2000,2000,-2000,-2000};
+            volatile uint32_t sink = 0;
+            // Call through volatile fn-pointers so the compiler can't inline the
+            // encoder back into this (flash) bench -- forces the standalone
+            // RAM-resident copies (PIZERO-37), which is what the IRQ will use.
+            void (*volatile f_samp)(dvi_data_packet_t*, const int16_t*, int, uint32_t) = dvi_di_set_audio_samples;
+            void (*volatile f_par)(dvi_data_packet_t*) = dvi_di_compute_parity;
+            void (*volatile f_hdr)(uint32_t*, const dvi_data_packet_t*, int, bool) = dvi_di_encode_header;
+            void (*volatile f_sub)(uint32_t*, uint32_t*, const dvi_data_packet_t*) = dvi_di_encode_subpacket;
+            const int ITERS = 20000;
+            uint32_t t0 = time_us_32();
+            for (int i = 0; i < ITERS; ++i) {
+                f_samp(&bpk, blr, 2, (uint32_t)(i & 0xff));
+                f_par(&bpk);
+                f_hdr(&b0[5], &bpk, 0, true);
+                f_sub(&b1[5], &b2[5], &bpk);
+                sink += b0[5] ^ b1[6] ^ b2[7];
+            }
+            uint32_t dt = time_us_32() - t0;
+            Serial.printf("[bench] 1-packet encode: %u iters in %u us -> %u ns/encode (sink=%lu)\r\n",
+                          (unsigned)ITERS, (unsigned)dt, (unsigned)((uint64_t)dt * 1000u / ITERS), (unsigned long)sink);
+            Serial.printf("[bench] budget: back-porch ~5420 ns, full-line ~33333 ns\r\n");
+        }
+#endif
 #if defined(HDMI_AUDIO_SWAPTEST) || defined(HDMI_AUDIO_STATIC)
         static uint32_t bp0[72], bk1[128], bk2[128];        // active-line framing
         dvi_data_packet_t pkts[6];
