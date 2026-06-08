@@ -438,20 +438,48 @@ static void __not_in_flash_func(swaptest_vblank_cb)(void) {
 // Spreading 154 packets over 77 lines (2/line) leaves ~44px control margin per
 // island in the bp=130 back porch (vs 12px when 3/line) -- same refresh/rate,
 // just less crammed. The split is what makes 77 per-line buffers affordable.
-#define N_ALINES   77
-static inline int aline_pkts(int line) { (void)line; return 3; }   // 77*3 = 231 packets = 924 samples = 48 kHz
+// Shared (both delivery schemes): the bp-island buffer width, the no-island
+// active framing (used on lines with no audio packet), the vblank info/ACR + a
+// control-only filler, and the IEC frame counter.
+#define ALINE_BP_W   72     // bp-island buffer width; >= h_bp/2 (65 at h_bp=130)
+static uint32_t g_bp0[ALINE_BP_W], g_bk1[ALINE_BP_W], g_bk2[ALINE_BP_W];  // no-island active framing
+static uint32_t g_info[3][320];                   // vblank: AVI + Audio InfoFrame + ACR
+static uint32_t g_ctrl[3][320];                   // vblank: control-only filler
+static uint32_t g_aud_framectr = 0;               // IEC 60958 frame counter
 
-// Per-line audio-island buffers. After the DMA split these are all BP-ONLY
-// (h_bp/2 words) on every lane -- the fp+sync control lives in the static l*[0]
-// block, so per-line buffers no longer store it. ~halves the per-line RAM vs the
-// old full-blanking buffers, which is what frees room for margin / 48 kHz.
-#define ALINE_BP_W   72     // >= h_bp/2 (65 at h_bp=130)
+#ifdef HDMI_STREAM_AUDIO
+// PIZERO-38: STREAMING per-active-line delivery (Takano model). Instead of 77
+// pre-encoded per-line banks, a tiny ROTATING POOL of bp-island buffers is
+// encoded ONE LINE AHEAD in the active-line IRQ -- which already fires during
+// the PREVIOUS line's scanout (dvi.cpp:239), giving the full ~33 us line budget
+// for the ~4.8 us encode (PIZERO-36; it does NOT fit the 5.4 us back-porch
+// window, so same-line encoding is exactly the old Option A blackout). A 16.16
+// sample meter emits 0..4 samples on (nearly) every active line -> near-constant
+// feed, killing the frame-rate warble of the bursty 77-line scheme. Pool RAM:
+// 3 * APOOL * 72 * 4 ~= 5 KB (vs ~130 KB of banks). Encoding runs on core 1.
+#define APOOL 6                                    // rotating slots (>=2 in flight + margin)
+static uint32_t g_pool0[APOOL][ALINE_BP_W];
+static uint32_t g_pool1[APOOL][ALINE_BP_W];
+static uint32_t g_pool2[APOOL][ALINE_BP_W];
+static int      g_pool_w     = 0;                  // next pool slot (IRQ-only)
+static int32_t  g_meter_acc  = 0;                  // 16.16 sample accumulator (IRQ-only)
+static int32_t  g_meter_step = 0;                  // 16.16 samples per active line (set at init)
+#define AUDIO_SAMPLES_PER_FRAME 924                // 48000 Hz / ~51.95 Hz refresh
+static int16_t  g_stream_last = 0;                 // hold-last on ring underrun (IRQ-only)
+#ifdef HDMI_AUDIO_SYNTH
+#define SYNTH_TBL 512
+static int16_t  g_sine[SYNTH_TBL];                 // one 440 Hz period, filled on core 0
+static uint32_t g_synth_ph   = 0;                  // 32-bit phase accumulator (IRQ-only)
+static uint32_t g_synth_inc  = 0;                  // per-sample phase step (set at init)
+#endif
+#else
+#define N_ALINES   77
+static inline int aline_pkts(int line) { (void)line; return 3; }   // 77*3 = 231 pkts = 924 samp = 48 kHz
+// Per-line audio-island banks. After the DMA split these are BP-ONLY (h_bp/2
+// words) on every lane; double-buffered, core 0 fills the OFF bank per frame.
 static uint32_t g_la0[2][N_ALINES][ALINE_BP_W];   // lane 0 back porch
 static uint32_t g_la1[2][N_ALINES][ALINE_BP_W];   // lane 1 back porch
 static uint32_t g_la2[2][N_ALINES][ALINE_BP_W];   // lane 2 back porch
-static uint32_t g_bp0[ALINE_BP_W], g_bk1[ALINE_BP_W], g_bk2[ALINE_BP_W];  // static (non-audio) framing
-static uint32_t g_info[3][320];                   // vblank: AVI + Audio InfoFrame + ACR
-static uint32_t g_ctrl[3][320];                   // vblank: control-only filler
 static int16_t  g_aslot[480];                     // active scanline -> audio line idx, or -1
 #ifdef HDMI_EVEN_AUDIO
 // PIZERO-34: even delivery. Spread the same N_ALINES audio lines across ALL 523
@@ -465,8 +493,58 @@ static const void  *g_vbp_dflt0, *g_vbp_dflt1, *g_vbp_dflt2;
 #endif
 static volatile uint32_t g_active_bank = 0;       // core0 writes, IRQ reads
 static uint32_t g_irq_bank = 0;                   // latched once per frame (IRQ only)
-static uint32_t g_aud_framectr = 0;               // IEC 60958 frame counter (core 0 only)
+#endif // HDMI_STREAM_AUDIO
 
+#ifdef HDMI_STREAM_AUDIO
+// One mono sample for the streaming meter. Synth = a 440 Hz wavetable (no sinf in
+// the IRQ); live = the CoCo ring (hold-last on underrun). Both run on core 1.
+static inline int16_t __not_in_flash_func(stream_next_sample)(void) {
+#ifdef HDMI_AUDIO_SYNTH
+    int16_t s = g_sine[g_synth_ph >> 23];          // top 9 bits index the 512-entry table
+    g_synth_ph += g_synth_inc;
+    return s;
+#else
+    int16_t s;
+    if (coco_machine_audio_read(&s, 1) < 1) s = g_stream_last;   // PIZERO-39: ring from IRQ
+    g_stream_last = s;
+    return s;
+#endif
+}
+
+// DMA IRQ, ACTIVE scanline (fires during the PREVIOUS line's scanout): meter this
+// line's sample count, encode one audio island into the next rotating-pool slot,
+// and point the back-porch DMA blocks at it -- or at the no-island framing when
+// the meter yields 0 samples. The full-line budget (~33 us) covers the ~4.8 us
+// encode (PIZERO-36); same-line back-porch encoding would not (Option A).
+static void __not_in_flash_func(stream_audio_cb)(void) {
+    const uint v = dvi0.timing_state.v_ctr;        // active line being prepared (0..479)
+    if (v == 0) g_meter_acc = 0;                   // pin AUDIO_SAMPLES_PER_FRAME/frame, kill drift
+    g_meter_acc += g_meter_step;
+    int n = g_meter_acc >> 16;
+    if (n > 4) n = 4;
+    if (n <= 0) {                                  // no island this line: plain framing
+        dvi0.dma_list_active.l0[2].read_addr = g_bp0;
+        dvi0.dma_list_active.l1[1].read_addr = g_bk1;
+        dvi0.dma_list_active.l2[1].read_addr = g_bk2;
+        return;
+    }
+    g_meter_acc -= (int32_t)n << 16;
+    int16_t lr[8];
+    for (int f = 0; f < n; ++f) { int16_t s = stream_next_sample(); lr[2*f] = lr[2*f+1] = s; }
+    dvi_data_packet_t pkt;
+    dvi_di_set_audio_samples(&pkt, lr, n, g_aud_framectr);
+    g_aud_framectr = (g_aud_framectr + (uint32_t)n) % 192u;
+    dvi_di_compute_parity(&pkt);
+    const int w = g_pool_w;
+    g_pool_w = (w + 1) % APOOL;
+    const int hv = ((!DVI_TIMING.v_sync_polarity) ? 2 : 0) | ((!DVI_TIMING.h_sync_polarity) ? 1 : 0);
+    dvi_di_encode_header(&g_pool0[w][5], &pkt, hv, true);          // island at offset 5 (after preamble+guard)
+    dvi_di_encode_subpacket(&g_pool1[w][5], &g_pool2[w][5], &pkt);
+    dvi0.dma_list_active.l0[2].read_addr = g_pool0[w];
+    dvi0.dma_list_active.l1[1].read_addr = g_pool1[w];
+    dvi0.dma_list_active.l2[1].read_addr = g_pool2[w];
+}
+#else
 // DMA IRQ, ACTIVE scanline: repoint the back-porch/blanking blocks at this line's
 // audio buffer (or static framing). Latch the bank at the first active line.
 static void __not_in_flash_func(active_audio_cb)(void) {
@@ -480,6 +558,7 @@ static void __not_in_flash_func(active_audio_cb)(void) {
     dvi0.dma_list_active.l1[1].read_addr = a1;   // lane 1 bp (split block [1])
     dvi0.dma_list_active.l2[1].read_addr = a2;   // lane 2 bp
 }
+#endif // HDMI_STREAM_AUDIO
 
 // DMA IRQ, vblank (no-sync) line: AVI/AudioIF/ACR on the first back-porch line,
 // control elsewhere. (Audio no longer lives in vblank.)
@@ -520,7 +599,9 @@ static void __not_in_flash_func(audio_vblank_info_cb)(void) {
 }
 
 // Core 0 (after blit): re-encode the OFF bank's audio islands from the ring, flip.
-#ifdef HDMI_AUDIO_SYNTH
+// (Streaming delivery (PIZERO-38) encodes per-line in the IRQ instead -- see
+// stream_audio_cb; the bank refill + its synth_fill helper are bank-path only.)
+#if defined(HDMI_AUDIO_SYNTH) && !defined(HDMI_STREAM_AUDIO)
 // CONTROL EXPERIMENT (PIZERO-30): bypass the emulator entirely and feed a
 // mathematically clean 440 Hz sine straight into the HDMI audio islands. Same
 // encoder + DMA + transport as live audio. A pure sine has ~no harmonics, so any
@@ -537,6 +618,7 @@ static void synth_fill(int16_t *out, int n) {
 }
 #endif
 
+#ifndef HDMI_STREAM_AUDIO
 static void audio_encode_frame(void) {
     const uint32_t off = g_active_bank ^ 1u;
     const int hv = ((!DVI_TIMING.v_sync_polarity) ? 2 : 0) | ((!DVI_TIMING.h_sync_polarity) ? 1 : 0);
@@ -567,6 +649,7 @@ static void audio_encode_frame(void) {
     __dmb();
     g_active_bank = off;
 }
+#endif // !HDMI_STREAM_AUDIO
 #endif // HDMI_DATA_ISLAND && !SWAPTEST && !STATIC
 
 void setup() {
@@ -715,10 +798,32 @@ void setup() {
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
                                              &dvi0.dma_list_vblank_nosync, ipk, 0, g_ctrl[0], g_ctrl[1], g_ctrl[2]);
         dvi0.vblank_callback = audio_vblank_info_cb;
-        // Active-line audio buffers: both banks, silence to start (core 0 fills them).
+        // Silence island, used to lay the static framing (preamble/guards/video
+        // preamble) into the per-line buffers; the data words get rewritten later.
         dvi_data_packet_t sil[3];
         int16_t z[8] = {0,0,0,0,0,0,0,0};
         for (int i = 0; i < 3; ++i) { dvi_di_set_audio_samples(&sil[i], z, 4, (uint32_t)(i * 4)); dvi_di_compute_parity(&sil[i]); }
+#ifdef HDMI_STREAM_AUDIO
+        // PIZERO-38: lay framing + a silence island into each rotating-pool slot
+        // (the per-line IRQ rewrites only the island words). Pool-init repoints
+        // dma_list transiently; framing last leaves the no-island default until
+        // stream_audio_cb takes over on the first active line.
+        for (int w = 0; w < APOOL; ++w)
+            dvi_setup_active_audio_line(&DVI_TIMING, dvi0.dma_cfg, &dvi0.dma_list_active,
+                                        g_pool0[w], g_pool1[w], g_pool2[w], sil, 1, true);
+        dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg, &dvi0.dma_list_active, g_bp0, g_bk1, g_bk2);
+        // 16.16 samples per active line so AUDIO_SAMPLES_PER_FRAME spreads over 480.
+        g_meter_step = (int32_t)(((int64_t)AUDIO_SAMPLES_PER_FRAME << 16) / 480);
+#ifdef HDMI_AUDIO_SYNTH
+        for (int i = 0; i < SYNTH_TBL; ++i)
+            g_sine[i] = (int16_t)(6000.0f * sinf((float)i * (2.0f * 3.14159265f / SYNTH_TBL)));   // ~18% FS
+        g_synth_inc = (uint32_t)((double)440.0 / 48000.0 * 4294967296.0);   // 440 Hz @ 48 kHz, 32-bit phase
+        Serial.print("[hdmi] M2 STREAM: 440 Hz synth, per-line IRQ encode (PIZERO-38)\r\n");
+#else
+        Serial.print("[hdmi] M2 STREAM: live per-line IRQ encode (PIZERO-38)\r\n");
+#endif
+        dvi0.active_line_callback = stream_audio_cb;
+#else
 #ifdef HDMI_EVEN_AUDIO
         // Capture the control-only back-porch buffers the base vblank setup left
         // (dvi_init set these; the info-island setup above only touched the active
@@ -759,6 +864,7 @@ void setup() {
         Serial.print("[hdmi] M2: active-line audio, ~924 samp/frame @ 51.95Hz\r\n");
 #endif
         dvi0.active_line_callback = active_audio_cb;
+#endif // HDMI_STREAM_AUDIO
 #endif
     }
 #endif
@@ -844,8 +950,9 @@ void loop() {
     g_back ^= 1;
 #endif
     uint32_t d = micros();
-#if defined(HDMI_DATA_ISLAND) && !defined(HDMI_AUDIO_SWAPTEST) && !defined(HDMI_AUDIO_STATIC)
-    audio_encode_frame();                          // M2: refill all 43 vblank lines' audio islands
+#if defined(HDMI_DATA_ISLAND) && !defined(HDMI_AUDIO_SWAPTEST) && !defined(HDMI_AUDIO_STATIC) && !defined(HDMI_STREAM_AUDIO)
+    audio_encode_frame();                          // M2 (bank path): refill the OFF bank's audio islands
+    // (HDMI_STREAM_AUDIO encodes per-line in the IRQ instead -- nothing to do here.)
 #endif
     uint32_t e = micros();
     (void)e;
