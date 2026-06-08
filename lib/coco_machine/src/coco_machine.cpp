@@ -651,11 +651,17 @@ extern "C" const uint8_t font_6847[1] = { 0 };
 #define COCO_AUDIO_RATE      48000u   // PIZERO-30: 48 kHz native (ACR CTS now correct)
 #define COCO_AUDIO_CPUCLK_X4 3579545u                 // (14318180/16)*4, exact
 #define COCO_AUDIO_RATE_X4   (COCO_AUDIO_RATE * 4u)    // 128000
-#define AUDIO_RING_SAMPLES   2048u                     // pow2; ~64 ms @ 32 kHz, 4 KB
+// PIZERO-39/38: deepened to absorb the bursty producer (a whole emulated frame
+// of ~924 samples is pushed during coco_machine_run_cycles, then drained steadily
+// by the core-1 IRQ). 8192 samples = ~170 ms = 16 KB (cheap now the streaming
+// build freed ~126 KB). Too-shallow caused overflow-skips -> pitch up + distortion.
+#define AUDIO_RING_SAMPLES   8192u                     // pow2
 
 static int16_t           g_audio_ring[AUDIO_RING_SAMPLES];
 static volatile uint32_t g_audio_w = 0;                // monotonic write index
 static volatile uint32_t g_audio_r = 0;                // monotonic read index
+static bool              g_audio_primed = false;       // reader: wait for ~half-full before draining
+static volatile uint32_t g_audio_skips = 0;            // reader: overflow catch-ups (diagnostic)
 static uint32_t          g_audio_err = 0;              // Bresenham accumulator
 
 // Event-driven, band-limited audio resampler (integrate-and-dump). Rather than
@@ -751,7 +757,18 @@ extern "C" size_t COCO_RAMFUNC coco_machine_audio_read(int16_t *dst, size_t max)
     uint32_t w = g_audio_w;
     __dmb();                                           // read index before data
     uint32_t r = g_audio_r;
-    if (w - r > AUDIO_RING_SAMPLES) r = w - AUDIO_RING_SAMPLES;   // producer lapped us
+    uint32_t avail = w - r;
+    if (avail > AUDIO_RING_SAMPLES) {                  // producer lapped us: skip ahead
+        r = w - AUDIO_RING_SAMPLES;
+        avail = AUDIO_RING_SAMPLES;
+        g_audio_skips++;
+    }
+    // Prime: don't start draining until ~half full, so the bursty producer and
+    // steady consumer settle around mid-ring instead of chattering the limits.
+    if (!g_audio_primed) {
+        if (avail < AUDIO_RING_SAMPLES / 2) return 0;  // caller holds last (silence) meanwhile
+        g_audio_primed = true;
+    }
     size_t n = 0;
     while (n < max && r != w) {
         dst[n++] = g_audio_ring[r & (AUDIO_RING_SAMPLES - 1)];
@@ -762,6 +779,12 @@ extern "C" size_t COCO_RAMFUNC coco_machine_audio_read(int16_t *dst, size_t max)
 }
 
 extern "C" uint32_t coco_machine_audio_rate(void) { return COCO_AUDIO_RATE; }
+
+// Diagnostic: current ring fill (samples) and cumulative overflow-skip count.
+extern "C" void coco_machine_audio_stats(uint32_t *fill, uint32_t *skips) {
+    if (fill)  *fill  = g_audio_w - g_audio_r;
+    if (skips) *skips = g_audio_skips;
+}
 
 // Audio is event-driven from the memory-access path; run the whole budget in one
 // cpu->run. (The VDG already drives field-sync at 60 Hz, so we do NOT regenerate

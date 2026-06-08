@@ -466,6 +466,7 @@ static int32_t  g_meter_acc  = 0;                  // 16.16 sample accumulator (
 static int32_t  g_meter_step = 0;                  // 16.16 samples per active line (set at init)
 #define AUDIO_SAMPLES_PER_FRAME 924                // 48000 Hz / ~51.95 Hz refresh
 static int16_t  g_stream_last = 0;                 // hold-last on ring underrun (IRQ-only)
+static volatile uint32_t g_stream_under = 0;       // ring-underrun (hold-last) count (diagnostic)
 #ifdef HDMI_AUDIO_SYNTH
 #define SYNTH_TBL 512
 static int16_t  g_sine[SYNTH_TBL];                 // one 440 Hz period, filled on core 0
@@ -505,7 +506,7 @@ static inline int16_t __not_in_flash_func(stream_next_sample)(void) {
     return s;
 #else
     int16_t s;
-    if (coco_machine_audio_read(&s, 1) < 1) s = g_stream_last;   // PIZERO-39: ring from IRQ
+    if (coco_machine_audio_read(&s, 1) < 1) { s = g_stream_last; g_stream_under++; }   // PIZERO-39: ring from IRQ
     g_stream_last = s;
     return s;
 #endif
@@ -517,8 +518,8 @@ static inline int16_t __not_in_flash_func(stream_next_sample)(void) {
 // the meter yields 0 samples. The full-line budget (~33 us) covers the ~4.8 us
 // encode (PIZERO-36); same-line back-porch encoding would not (Option A).
 static void __not_in_flash_func(stream_audio_cb)(void) {
-    const uint v = dvi0.timing_state.v_ctr;        // active line being prepared (0..479)
-    if (v == 0) g_meter_acc = 0;                   // pin AUDIO_SAMPLES_PER_FRAME/frame, kill drift
+    // Meter free-runs (acc stays in [0,1) sample): resetting at v==0 discarded the
+    // fractional carry -> 923 vs the producer's 924 samp/frame -> slow ring drift.
     g_meter_acc += g_meter_step;
     int n = g_meter_acc >> 16;
     if (n > 4) n = 4;
@@ -997,6 +998,14 @@ void loop() {
                       (unsigned long)(e - d),
                       dp, dm, (unsigned long)sof,
                       (unsigned long)g_usb_devices);
+#ifdef HDMI_STREAM_AUDIO
+        // PIZERO-38/39 audio-ring health: fill should hover near AUDIO_RING/2 with
+        // skips (overflow) and under (underrun) staying ~flat once primed.
+        { uint32_t fill = 0, skips = 0;
+          coco_machine_audio_stats(&fill, &skips);
+          Serial.printf("[aud] ring fill=%lu skips=%lu under=%lu\r\n",
+                        (unsigned long)fill, (unsigned long)skips, (unsigned long)g_stream_under); }
+#endif
         frames = 0; last = now;
     }
 }
