@@ -18,6 +18,8 @@
 #include "hardware/gpio.h"
 #include "hardware/structs/sysinfo.h"
 #include "pico/multicore.h"
+#include "hardware/watchdog.h"
+#include "hardware/structs/watchdog.h"
 
 extern "C" {
 #include "dvi.h"
@@ -92,6 +94,16 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
 #endif
 };
 #define DVI_TIMING   dvi_timing_640x480p_57hz_240mhz
+
+// PIZERO-32: HDMI Audio Clock Regeneration CTS. The value that nulls audio pitch
+// is MONITOR-DEPENDENT -- the sink derives the audio rate fs = pixel_clk*N/(128*CTS)
+// from ITS assumed pixel clock, which may differ from our off-spec 24 MHz. Higher
+// CTS -> lower pitch. 25176 suits the dev monitor (assumes the 25.175 MHz CEA
+// clock); sinks that run sharp need more (~26674 drops ~1 semitone). Override with
+// -DHDMI_ACR_CTS=<n>. N stays 6144.
+#ifndef HDMI_ACR_CTS
+#define HDMI_ACR_CTS 25176
+#endif
 
 // PIZERO-14: double-buffered. Core 0 renders into the back buffer, then swaps
 // g_front at a frame boundary; core 1 samples g_front once per frame -> no tearing.
@@ -653,6 +665,37 @@ static void audio_encode_frame(void) {
 #endif // !HDMI_STREAM_AUDIO
 #endif // HDMI_DATA_ISLAND && !SWAPTEST && !STATIC
 
+// ── PIZERO-33: freeze auto-recovery + root-cause ──────────────────────────
+// A hardware watchdog, petted once per loop() on core 0, auto-reboots the board
+// if core 0 wedges anywhere (the recurring everyday freeze; suspected USB-host
+// path per PIZERO-11b). Phase markers written to watchdog SCRATCH registers —
+// which SURVIVE a watchdog reset (but not power-on) — record where core 0 last
+// was, so after an auto-reboot we print exactly which operation hung. A magic in
+// scratch[0] distinguishes a real freeze record from power-on garbage.
+//   scratch[0] = WD_MAGIC, scratch[1] = phase, scratch[2] = heartbeat
+// Build with -DWATCHDOG_DISABLE to leave a freeze frozen (live debugging).
+#ifndef WATCHDOG_TIMEOUT_MS
+#define WATCHDOG_TIMEOUT_MS 3000   // >> the ~19ms frame loop; only a real hang trips it
+#endif
+#define WD_MAGIC 0x05330533u
+enum { WP_NONE = 0, WP_SETUP, WP_LOOP, WP_USB, WP_KBD, WP_EMU, WP_RENDER, WP_BLIT, WP_AUDIO, WP_PACE };
+static const char *wd_phase_name(uint32_t p) {
+    switch (p) {
+        case WP_SETUP: return "SETUP";       case WP_LOOP:   return "loop-top";
+        case WP_USB:   return "USBHost.task"; case WP_KBD:   return "keyboard";
+        case WP_EMU:   return "emulate";     case WP_RENDER: return "VDG-render";
+        case WP_BLIT:  return "blit";        case WP_AUDIO:  return "audio-encode";
+        case WP_PACE:  return "frame-pace";  default:        return "?";
+    }
+}
+#ifdef WATCHDOG_DISABLE
+static inline void wd_phase(uint32_t p)     { (void)p; }
+static inline void wd_heartbeat(uint32_t h) { (void)h; }
+#else
+static inline void wd_phase(uint32_t p)     { watchdog_hw->scratch[1] = p; }
+static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
+#endif
+
 void setup() {
     Serial.begin(115200);
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
@@ -662,6 +705,19 @@ void setup() {
     delay(200);  // a little extra room after the host attaches
     Serial.print("\r\nXRoar on RP2350-PiZero (PIZERO-09)\r\n");
     Serial.flush();
+
+#ifndef WATCHDOG_DISABLE
+    // PIZERO-33: if the previous boot was the watchdog recovering a freeze, report
+    // which core-0 phase was stuck (scratch survives a watchdog reset, not power-on).
+    if (watchdog_caused_reboot() && watchdog_hw->scratch[0] == WD_MAGIC) {
+        Serial.printf("[watchdog] *** FREEZE RECOVERED *** core 0 was stuck in '%s' (heartbeat=%lu) -> auto-rebooted\r\n",
+                      wd_phase_name(watchdog_hw->scratch[1]), (unsigned long)watchdog_hw->scratch[2]);
+        Serial.flush();
+    }
+    watchdog_hw->scratch[0] = WD_MAGIC;
+    wd_phase(WP_SETUP);
+    wd_heartbeat(0);
+#endif
 
     // Bring up DVI first so we have a display even if SD/ROM fails.
     // Clear both buffers so the (static) black border is set in each.
@@ -791,7 +847,7 @@ void setup() {
 #ifdef HDMI_STD_TIMING
         dvi_di_set_acr(&ipk[2], 25200, 6144);    // STD-TIMING TEST: CTS for actual ~25.2 MHz pixel
 #else
-        dvi_di_set_acr(&ipk[2], 25176, 6144);    // CTS for assumed 25.175 MHz sink clock
+        dvi_di_set_acr(&ipk[2], HDMI_ACR_CTS, 6144);   // PIZERO-32: monitor-tunable (default 25176)
 #endif
         for (int i = 0; i < 3; ++i) dvi_di_compute_parity(&ipk[i]);
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
@@ -932,17 +988,32 @@ void setup() {
 }
 
 void loop() {
-    USBHost.task();   // PIZERO-11: service USB host transfers.
+#ifndef WATCHDOG_DISABLE
+    // PIZERO-33: arm on the first iteration, then pet every loop. If core 0 wedges
+    // in any phase below for > WATCHDOG_TIMEOUT_MS, the watchdog reboots the board
+    // and the next boot reports the stuck phase (wd_phase markers in scratch).
+    static bool wd_armed = false;
+    if (!wd_armed) { wd_armed = true; watchdog_enable(WATCHDOG_TIMEOUT_MS, true); }
+    watchdog_update();
+    static uint32_t hb = 0; wd_heartbeat(++hb);
+#endif
+    wd_phase(WP_USB);
+    USBHost.task();   // PIZERO-11: service USB host transfers (prime freeze suspect).
+    wd_phase(WP_LOOP);
     if (!g_machine_running) { delay(1000); return; }
     static uint32_t next_us = 0;
     if (next_us == 0) next_us = micros();
 
+    wd_phase(WP_KBD);
     pump_keyboard();
     uint32_t a = micros();
+    wd_phase(WP_EMU);
     coco_machine_run_cycles(CYCLES_PER_FRAME);
     uint32_t b = micros();
+    wd_phase(WP_RENDER);
     coco_machine_render_frame();                  // regenerate VDG buffer (SUPPRESS_RENDER_SCANLINE)
     uint32_t c = micros();
+    wd_phase(WP_BLIT);
 #ifdef HDMI_DATA_ISLAND
     coco_boot_blit_vdg_pizero(g_fb);              // single buffer; g_front already points at it
 #else
@@ -951,12 +1022,14 @@ void loop() {
     g_back ^= 1;
 #endif
     uint32_t d = micros();
+    wd_phase(WP_AUDIO);
 #if defined(HDMI_DATA_ISLAND) && !defined(HDMI_AUDIO_SWAPTEST) && !defined(HDMI_AUDIO_STATIC) && !defined(HDMI_STREAM_AUDIO)
     audio_encode_frame();                          // M2 (bank path): refill the OFF bank's audio islands
     // (HDMI_STREAM_AUDIO encodes per-line in the IRQ instead -- nothing to do here.)
 #endif
     uint32_t e = micros();
     (void)e;
+    wd_phase(WP_PACE);
 
 #ifdef AUDIO_WAV_DUMP
     // Arm on USB-CDC attach (DTR), then autotype a deterministic ascending-tone
@@ -964,7 +1037,7 @@ void loop() {
     static bool dump_armed = false;
     if (!dump_armed && Serial) {
         dump_armed = true;
-        g_autotype = "\rFORI=1TO8:SOUNDI*28,4:NEXTI\r";
+        g_autotype = "\rSOUND159,255\r";   // PIZERO-32 measure: sustained ~440Hz A for freq analysis
         g_autotype_warmup = 120;   // ~2 s for the OK prompt to settle
         audio_dump_begin();
     }
