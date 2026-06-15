@@ -996,6 +996,15 @@ void loop() {
     if (!wd_armed) { wd_armed = true; watchdog_enable(WATCHDOG_TIMEOUT_MS, true); }
     watchdog_update();
     static uint32_t hb = 0; wd_heartbeat(++hb);
+#ifdef WATCHDOG_SELFTEST
+    // PIZERO-33 validation: after ~10s, deliberately wedge core 0 in a known phase.
+    // Expect: ~3s later the watchdog reboots and the banner reports stuck in 'emulate'.
+    if (hb == 520) { wd_phase(WP_EMU);
+        Serial.print("[selftest] forcing a core-0 hang in phase 'emulate' (watchdog should reboot in ~3s)...\r\n");
+        Serial.flush();
+        for (;;) tight_loop_contents();
+    }
+#endif
 #endif
     wd_phase(WP_USB);
     USBHost.task();   // PIZERO-11: service USB host transfers (prime freeze suspect).
