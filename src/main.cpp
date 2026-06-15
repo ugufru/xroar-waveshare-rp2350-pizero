@@ -671,14 +671,21 @@ static void audio_encode_frame(void) {
 // path per PIZERO-11b). Phase markers written to watchdog SCRATCH registers —
 // which SURVIVE a watchdog reset (but not power-on) — record where core 0 last
 // was, so after an auto-reboot we print exactly which operation hung. A magic in
-// scratch[0] distinguishes a real freeze record from power-on garbage.
-//   scratch[0] = WD_MAGIC, scratch[1] = phase, scratch[2] = heartbeat
+// scratch[0] distinguishes a real freeze record from power-on garbage. PIZERO-33
+// persistent log: scratch[3] packs a running freeze COUNT + the LAST stuck phase,
+// so the tally survives across auto-reboots and is shown in the [run] telemetry —
+// you can connect a monitor any time (while still powered) and see how many times
+// and where it froze, without catching the recovery boot live.
+//   scratch[0]=WD_MAGIC  scratch[1]=phase  scratch[2]=heartbeat
+//   scratch[3]=[31:8]=freeze count  [7:0]=last-freeze phase
 // Build with -DWATCHDOG_DISABLE to leave a freeze frozen (live debugging).
 #ifndef WATCHDOG_TIMEOUT_MS
 #define WATCHDOG_TIMEOUT_MS 3000   // >> the ~19ms frame loop; only a real hang trips it
 #endif
-#define WD_MAGIC 0x05330533u
+#define WD_MAGIC 0x05330534u   // bumped for scratch[3] freeze-log layout (invalidates stale scratch)
 enum { WP_NONE = 0, WP_SETUP, WP_LOOP, WP_USB, WP_KBD, WP_EMU, WP_RENDER, WP_BLIT, WP_AUDIO, WP_PACE };
+static uint32_t g_freeze_count = 0;        // persistent across reboots (from scratch[3])
+static uint32_t g_last_freeze_phase = WP_NONE;
 static const char *wd_phase_name(uint32_t p) {
     switch (p) {
         case WP_SETUP: return "SETUP";       case WP_LOOP:   return "loop-top";
@@ -707,14 +714,31 @@ void setup() {
     Serial.flush();
 
 #ifndef WATCHDOG_DISABLE
-    // PIZERO-33: if the previous boot was the watchdog recovering a freeze, report
-    // which core-0 phase was stuck (scratch survives a watchdog reset, not power-on).
-    if (watchdog_caused_reboot() && watchdog_hw->scratch[0] == WD_MAGIC) {
-        Serial.printf("[watchdog] *** FREEZE RECOVERED *** core 0 was stuck in '%s' (heartbeat=%lu) -> auto-rebooted\r\n",
-                      wd_phase_name(watchdog_hw->scratch[1]), (unsigned long)watchdog_hw->scratch[2]);
+    // PIZERO-33: carry the freeze tally across reboots (scratch survives a watchdog
+    // reset, not power-on; WD_MAGIC guards validity).
+    // A real freeze = a genuine watchdog TIMER timeout (loop() stopped petting).
+    // A FORCEd reboot (power-on / manual reset / picotool / flash) is NOT TIMER, so
+    // it starts a FRESH session (count back to 0) -- the tally means "freezes since
+    // I last started it", and this also auto-clears the self-test's count on deploy.
+    bool freeze_reboot = (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
+                         && watchdog_hw->scratch[0] == WD_MAGIC;
+    if (freeze_reboot) {
+        g_freeze_count = watchdog_hw->scratch[3] >> 8;
+        if (g_freeze_count > 1000000u) g_freeze_count = 0;      // garbage guard
+        g_last_freeze_phase = watchdog_hw->scratch[1];
+        g_freeze_count++;
+        Serial.printf("[watchdog] *** FREEZE RECOVERED *** core 0 was stuck in '%s' after ~%lu frames (~%lus); freeze #%lu this session -> auto-rebooted\r\n",
+                      wd_phase_name(g_last_freeze_phase),
+                      (unsigned long)watchdog_hw->scratch[2],
+                      (unsigned long)(watchdog_hw->scratch[2] / 52u),
+                      (unsigned long)g_freeze_count);
         Serial.flush();
+    } else {
+        g_freeze_count = 0;
+        g_last_freeze_phase = WP_NONE;
     }
     watchdog_hw->scratch[0] = WD_MAGIC;
+    watchdog_hw->scratch[3] = (g_freeze_count << 8) | (g_last_freeze_phase & 0xFF);
     wd_phase(WP_SETUP);
     wd_heartbeat(0);
 #endif
@@ -1074,12 +1098,14 @@ void loop() {
         int dm = gpio_get(HOST_PIN_DP + 1);
         uint32_t sof = pio_usb_host_get_frame_number();
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
-                      "| D+=%d D-=%d sof=%lu usb=%lu\r\n",
+                      "| D+=%d D-=%d sof=%lu usb=%lu | freezes=%lu last=%s\r\n",
                       (unsigned long)frames, (unsigned long)(b - a),
                       (unsigned long)(c - b), (unsigned long)(d - c),
                       (unsigned long)(e - d),
                       dp, dm, (unsigned long)sof,
-                      (unsigned long)g_usb_devices);
+                      (unsigned long)g_usb_devices,
+                      (unsigned long)g_freeze_count,
+                      g_freeze_count ? wd_phase_name(g_last_freeze_phase) : "none");
 #ifdef HDMI_STREAM_AUDIO
         // PIZERO-38/39 audio-ring health: fill should hover near AUDIO_RING/2 with
         // skips (overflow) and under (underrun) staying ~flat once primed.
