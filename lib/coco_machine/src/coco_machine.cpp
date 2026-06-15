@@ -959,8 +959,16 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
         // AMOLED-22 NTSC artifact colours: PMODE 4 (RG6, PB[7:4]=1111)
         // produces colour from adjacent bit PAIRS. CSS picks the pair.
         //   00→BLACK  01→c01  10→c10  11→WHITE
+        // PIZERO-43: the artifact red/blue PHASE is arbitrary on real hardware
+        // (power-on dependent). Default to the orientation Space Warp assumes;
+        // build -DARTIFACT_PHASE_LEGACY for the previous (opposite) phase.
+#ifdef ARTIFACT_PHASE_LEGACY
         const uint8_t c01 = g_artifact_css ? PAL_ORANGE : PAL_BLUE;
-        const uint8_t c10 = g_artifact_css ? PAL_BLUE  : PAL_ORANGE;
+        const uint8_t c10 = g_artifact_css ? PAL_BLUE   : PAL_ORANGE;
+#else
+        const uint8_t c01 = g_artifact_css ? PAL_BLUE   : PAL_ORANGE;
+        const uint8_t c10 = g_artifact_css ? PAL_ORANGE : PAL_BLUE;
+#endif
         for (int row = 0; row < COCO_VDG_H; row++) {
             const uint8_t *src = &g_m.ram[(base + row * 32) & 0xFFFF];
             uint8_t *dst = &g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
