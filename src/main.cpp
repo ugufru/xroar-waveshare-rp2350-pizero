@@ -72,13 +72,19 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .h_sync_polarity = false,
     // PIZERO-30: h_fp=14, h_bp=130 -> h_total = 880, refresh = 24e6/(880*525) =
     // 51.9481 Hz == exactly 32000/616 -> 616 audio samples/frame = 154 packets.
-#ifdef HDMI_STD_TIMING
+#if defined(HDMI_60HZ_TEST)
+    .h_front_porch   = 16,   // PIZERO-44 60Hz TEST: standard 800-total blanking
+#elif defined(HDMI_STD_TIMING)
     .h_front_porch   = 58,   // STD-TIMING TEST: h_total 880->924 so 25.2MHz pixel keeps 51.95Hz
 #else
     .h_front_porch   = 14,
 #endif
     .h_sync_width    = 96,
+#ifdef HDMI_60HZ_TEST
+    .h_back_porch    = 48,   // 60Hz TEST: standard back porch (no audio islands here)
+#else
     .h_back_porch    = 130,
+#endif
     .h_active_pixels = 640,
 
     .v_sync_polarity = false,
@@ -87,8 +93,8 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .v_back_porch    = 33,
     .v_active_lines  = 480,
 
-#ifdef HDMI_STD_TIMING
-    .bit_clk_khz     = 252000,   // STD-TIMING TEST: 25.2 MHz pixel (~standard 25.175), 252 MHz sysclk
+#if defined(HDMI_60HZ_TEST) || defined(HDMI_STD_TIMING)
+    .bit_clk_khz     = 252000,   // 25.2 MHz pixel (~standard 25.175); 60Hz TEST: 800x525 -> 60.0 Hz
 #else
     .bit_clk_khz     = 240000,   // 24 MHz pixel clock, ~57.14 Hz refresh
 #endif
@@ -746,8 +752,8 @@ void setup() {
     // Bring up DVI first so we have a display even if SD/ROM fails.
     // Clear both buffers so the (static) black border is set in each.
     memset(g_fb, 0, sizeof(g_fb));
-#ifdef HDMI_STD_TIMING
-    vreg_set_voltage(VREG_VOLTAGE_1_25);   // STD-TIMING TEST: extra headroom for 252 MHz
+#if defined(HDMI_STD_TIMING) || defined(HDMI_60HZ_TEST)
+    vreg_set_voltage(VREG_VOLTAGE_1_25);   // extra headroom for 252 MHz
 #else
     vreg_set_voltage(VREG_VOLTAGE_1_20);
 #endif
