@@ -2,7 +2,9 @@
 
 This repository as a whole is distributed under **GPL-3.0-or-later**
 (see `LICENSE`) because it incorporates XRoar. Individual third-party
-components retain their own licenses as listed below.
+components retain their own licenses as listed below. All of the permissive
+licenses below (BSD-3-Clause, MIT, Apache-2.0, LGPL-2.1) are compatible with
+GPL-3.0-or-later, so the combined work is distributable under the GPL.
 
 ---
 
@@ -37,56 +39,49 @@ convention.
 
 ---
 
-## Waveshare Electronics — Hardware Drivers
+## PicoDVI (libdvi) — PIO DVI/HDMI driver
 
-**Files:**
-- `lib/hal/` — DEV_Config (GPIO, I2C, SPI abstraction)
-- `lib/sh8601/` — SH8601 AMOLED display driver
-- `lib/qspi_pio/` — QSPI PIO transport layer
-- (touch, IMU, audio codec drivers pending import: ft3168, qmi8658, es8311)
+**Files:** `lib/libdvi/` (see `lib/libdvi/PROVENANCE.md`)
 
-**Source:** [Waveshare RP2350-Touch-AMOLED-1.8 Wiki](https://www.waveshare.com/wiki/RP2350-Touch-AMOLED-1.8)
+**License:** BSD 3-Clause (full text: `lib/libdvi/LICENSE`)
 
-Ported from the official Waveshare Arduino demo code, distributed freely
-for use with Waveshare hardware. No explicit license header is present
-in these files. Used here as reference driver code for the
-RP2350-Touch-AMOLED-1.8 development board. A request for explicit license
-clarification has been sent to Waveshare; this section will be updated
-when a response is received.
+**Copyright:** © 2021 Luke Wren (Wren6991)
+
+**Upstream:** https://github.com/Wren6991/PicoDVI
+
+`libdvi` bit-bangs DVI/HDMI over PIO + DMA — mandatory on this board because
+the HDMI connector is wired to GPIO 32–39 and HSTX cannot reach it. The
+vendored copy came from Waveshare's official RP2350-PiZero Arduino demo
+(`01-DVI/hello_dvi`), which bundles PicoDVI. It has been extended in this
+project for full HDMI mode and streaming audio (changes documented by
+`PIZERO-NN` references in the source); those changes remain BSD-3-Clause.
+
+### HDMI data-island encoder — pico_lib
+
+**Files:** `lib/libdvi/dvi_data_island.c`, `lib/libdvi/dvi_data_island.h`
+
+**License:** MIT (full text included in `lib/libdvi/LICENSE`)
+
+**Copyright:** © Shuichi Takano (shuichitakano)
+
+**Upstream:** https://github.com/shuichitakano/pico_lib (`dvi/data_packet.cpp`)
+
+The HDMI data-island / audio-sample packet encoder is ported from pico_lib,
+the same library lineage as PicoDVI.
 
 ---
 
-## STMicroelectronics — Font Data
+## Build-time dependencies (PlatformIO `lib_deps`)
 
-**Files (if/when GUI_Paint is imported):**
-- `lib/gui_paint/fonts.h`
-- `lib/gui_paint/font*.cpp`
+These are fetched at build time (not vendored in this repository) and linked
+into the firmware. They are listed here because the distributed binary
+incorporates them.
 
-**License:** BSD 3-Clause
-**Copyright:** © 2014 STMicroelectronics
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-3. Neither the name of STMicroelectronics nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+| Library | Author | License | Used for |
+|---------|--------|---------|----------|
+| [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) | sekigon-gonnoc | MIT | USB host bit-banging on GPIO 28/29 |
+| [Adafruit TinyUSB Library](https://github.com/adafruit/Adafruit_TinyUSB_Arduino) | Ha Thach / Adafruit | MIT | USB host stack (HID keyboard/mouse) |
+| [no-OS-FatFS-SD](https://github.com/carlk3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico) | carlk3 (FatFs © ChaN) | Apache-2.0 (FatFs: BSD-style) | microSD FAT filesystem over SPI |
 
 ---
 
@@ -95,6 +90,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Build framework, via PlatformIO. LGPL-2.1 (core) with permissive licenses
 on the bundled libraries (TinyUSB, FatFs, etc.). See the framework's
 `LICENSE.md` in your PlatformIO installation.
+
+---
+
+## Waveshare Electronics — board demo & hardware docs
+
+**Files:**
+- `demo/device_info_demo.cpp` — USB-host triage demo, ported `.ino` → `.cpp`
+  from Waveshare's official RP2350-PiZero Arduino demo
+  (`02-USB/device_info`). The demo itself is an **Adafruit TinyUSB example**
+  and carries its original **MIT license header** (© 2019 Ha Thach for
+  Adafruit Industries), which is preserved verbatim at the top of the file.
+- `docs/RP2350-PiZero-schematic.pdf` — Waveshare's published board schematic,
+  included for hardware reference / interoperability.
+
+**Source:** https://www.waveshare.com/wiki/RP2350-PiZero
+
+Waveshare distributes the demo code and schematic freely for use with their
+hardware. The full board wiki is **not** re-hosted here — see the link above.
 
 ---
 
@@ -113,8 +126,7 @@ obtaining ROMs from third-party sources.
 
 ## Bundled demo content
 
-Any `.bas`, `.bin`, `.cas`, or `.dsk` demo content shipped in this
-repository is either (a) authored by this project, or (b) included with
-explicit permission from the original author, or (c) widely understood
-to be in the public domain. Each demo file's provenance will be
-documented before the first public release (tracked in `AMOLED-47`).
+The only demo content shipped in this repository is `sample-sd/coco/autorun.txt`
+— a short BASIC program (semigraphics scatter loop) authored by this project as
+a display test. It contains no third-party code. See `AUTORUN.md` for the
+autorun format.

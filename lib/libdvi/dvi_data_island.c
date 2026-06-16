@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: MIT
 // HDMI data-island packet encoder — see dvi_data_island.h.
-// Ported from shuichitakano/pico_lib dvi/data_packet.cpp (same library lineage
-// as our vendored libdvi). BCH table generated from the HDMI ECC polynomial.
+// Ported from shuichitakano/pico_lib dvi/data_packet.cpp (MIT, © Shuichi Takano;
+// same library lineage as our vendored libdvi). See LICENSE / PROVENANCE.md in
+// this directory. BCH table generated from the HDMI ECC polynomial.
 
 #include "dvi_data_island.h"
 #include <string.h>

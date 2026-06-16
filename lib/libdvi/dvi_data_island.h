@@ -1,4 +1,7 @@
+// SPDX-License-Identifier: MIT
 // HDMI data-island packet encoder (PIZERO-30 / PIZERO-27 M1).
+// Ported from shuichitakano/pico_lib (MIT, © Shuichi Takano); see LICENSE /
+// PROVENANCE.md in this directory.
 //
 // Pure data transformation — no Pico SDK / hardware dependencies — so it builds
 // and is unit-tested on the host (see test/di_test.c) before it touches the
