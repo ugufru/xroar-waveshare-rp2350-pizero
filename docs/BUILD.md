@@ -39,12 +39,24 @@ trap in §4. Add a new `extends = env:pizero` env instead.
 | Env | Extends | Adds | Framebuffer | Audio | RAM |
 |-----|---------|------|-------------|-------|-----|
 | **`pizero`** | — | (base) | double-buffered, tear-free | **off (silent)** | ~94.4% |
-| **`pizero_audio`** | `pizero` | `-DHDMI_DATA_ISLAND` | single-buffered | **live HDMI audio** | ~92.5% |
-| **`pizero_bench`** | `pizero_audio` | `-DHDMI_ENCODE_BENCH` | single-buffered | live + boot benchmark | ~92.6% |
+| **`pizero_audio`** | `pizero` | `-DHDMI_DATA_ISLAND` | single-buffered | bank audio (legacy 77-line) | ~92.5% |
+| **`pizero_stream`** | `pizero_audio` | `-DHDMI_STREAM_AUDIO` | single-buffered | **streaming audio (current; warble-fixed)** | ~70% |
+| `pizero_stream_synth` | `pizero_stream` | `-DHDMI_AUDIO_SYNTH` | single-buffered | 440 Hz test tone (transport test) | ~70% |
+| **`pizero_60hz`** | `pizero` | `-DHDMI_60HZ_TEST` | double-buffered | none (test) | ~96.8% |
+| `pizero_bench` / `pizero_wdtest` / `pizero_wavmeas` / `pizero_stream_std` / `pizero_stream_lpf` | various | (diagnostics) | — | — | — |
 | `waveshare_demo` | — | (stock USB demo) | — | — | — |
 
-`pizero` is the committed `default_envs`, so a bare `pio run` builds the **silent**
-baseline. **For anything audio-related, use `pizero_audio`.**
+`pizero` is the committed `default_envs` (silent). **The current audio product
+build is `pizero_stream`** (streaming HDMI audio, warble fixed — see
+[`hdmi-audio-notes.md`](hdmi-audio-notes.md)). `pizero_60hz` is the PIZERO-44
+experiment that proved **60 Hz + USB work together at 252 MHz**; the 60 Hz product
+build (with audio re-fitted) is PIZERO-45. The other envs are one-off diagnostics —
+see the comments by each `[env:…]` in `platformio.ini`.
+
+> **Audio engineering knowledge — the wins, gotchas, and tricks — lives in
+> [`hdmi-audio-notes.md`](hdmi-audio-notes.md).** Read it before touching the
+> audio path (especially the `__not_in_flash_func`/`PICO_NO_HARDWARE` trap and the
+> "verify RAM placement with `nm`" rule).
 
 ### Why audio uses *less* RAM than the silent build
 `HDMI_DATA_ISLAND` switches the 320×240 framebuffer from double-buffered
@@ -72,8 +84,18 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 | `HDMI_AUDIO_SWAPTEST` | M0 diagnostic: per-line `read_addr` ping-pong of the vblank island buffers (bypasses the live-audio path). |
 | `HDMI_AUDIO_STATIC` | Static test tone planted in the vblank islands (M4 step). |
 | `HDMI_ENCODE_BENCH` | **(PIZERO-36)** One-shot micro-benchmark at boot: times one RAM-resident per-line audio-island encode and prints `[bench] … ns/encode` + the IRQ-window budget. Go/no-go for in-IRQ encoding. Set by `pizero_bench`. |
-| `HDMI_STREAM_AUDIO` | **(PIZERO-38, planned)** New streaming per-active-line delivery (rotating pool + 16.16 sample meter). Fallback to the 77-line path when unset. *Not yet implemented.* |
+| `HDMI_STREAM_AUDIO` | **(PIZERO-38, CURRENT)** Streaming per-active-line delivery — one metered island/line in the core-1 IRQ (rotating pool + 16.16 sample meter). **This is the warble fix**; it's the recommended audio path (`pizero_stream`). Unset = the legacy bursty 77-line bank path. |
 | `HDMI_EVEN_AUDIO` | **Abandoned (PIZERO-34).** Even delivery via vblank back-porch islands — **breaks video sync on the dev sink**. Kept off behind the flag; do not enable. |
+| `HDMI_ACR_CTS=<n>` | ACR CTS value (default 25176). **Monitor-dependent** (PIZERO-32); inert on sinks that ignore ACR (like the dev monitor). See hdmi-audio-notes.md. |
+| `AUDIO_WAV_DUMP` / `AUDIO_OUTPUT_LPF` | Stream the source ring as base64 WAV over USB-CDC (source measurement, no HDMI) / re-enable the 2-pole TV-bandwidth output LPF. Diagnostics for PIZERO-41. |
+
+### Display & stability
+| Flag | Effect |
+|------|--------|
+| `HDMI_60HZ_TEST` | **(PIZERO-44)** 252 MHz sysclk → 25.2 MHz pixel, standard 800×525 = **60 Hz**, USB enabled, no audio. Proved 60 Hz + USB coexist. The 60 Hz *product* build (audio re-fitted) is PIZERO-45. |
+| `HDMI_STD_TIMING` | Diagnostic: 252 MHz / 25.2 MHz pixel but **keeps ~52 Hz** (widened h_fp) and **disables USB**. Used to prove the residual pitch/buzz is *not* the pixel clock (PIZERO-41). |
+| `ARTIFACT_PHASE_LEGACY` | Revert the PMODE4/RG6 NTSC artifact red/blue phase to the pre-PIZERO-43 orientation (default now matches Space Warp). |
+| `WATCHDOG_DISABLE` | Turn off the PIZERO-33 hardware watchdog (default ON: auto-reboots a wedged board in ~3 s + logs the stuck phase in `[run]` as `freezes=N last=<phase>`). Disable only for live freeze debugging. `WATCHDOG_TIMEOUT_MS` overrides the 3000 ms timeout. |
 
 ### Timing
 | Flag | Effect |

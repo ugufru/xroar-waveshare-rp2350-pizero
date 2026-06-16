@@ -1,6 +1,12 @@
 # Audio path — decision & feasibility (PIZERO-18)
 
-**Status:** source implemented (PIZERO-18, 2026-06-02), sink not yet. The board is
+> **This is the original scoping/decision record (June 2026), now historical.**
+> HDMI audio shipped and the frame-rate warble was fixed via a streaming
+> re-architecture. For the as-built design, the wins, and the hard-won gotchas,
+> see **[`hdmi-audio-notes.md`](hdmi-audio-notes.md)** — that is the live audio
+> reference. This file is kept for the decision history.
+
+**Status (historical):** source implemented (PIZERO-18, 2026-06-02), sink not yet. The board is
 currently **silent**. NOTE (corrects an earlier premise): this stripped port vendors
 **no XRoar sound module** — desktop XRoar synthesises the audio stream, but that code
 was not vendored here, so the CoCo's 6-bit DAC + single-bit sound existed only as
