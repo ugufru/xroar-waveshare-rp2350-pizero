@@ -5,7 +5,8 @@ When the device boots, it mounts the microSD card and looks for files in
 the system ROMs load: which disk to mount, which cart to install, and
 what gets typed into Disk BASIC (or whether to bypass BASIC entirely).
 
-This document is the proposed spec. Implementation tracked in AMOLED-58.
+This is the implemented behavior — the parser lives in `src/coco_boot.cpp`
+(`coco_boot_load_autorun`). A few future directives are noted as such below.
 
 ---
 
@@ -86,7 +87,7 @@ disk operations).
 
 ### `@DIRECT filename.bin`
 **Bypass Disk BASIC entirely.** Load this DECB-format `.bin` file
-directly into emulator RAM (the AMOLED-26 code path used for 64K
+directly into emulator RAM (the direct-load code path used for 64K
 demos that conflict with Disk BASIC's reserved memory). The cart and
 disk are not installed in this mode; BASIC never runs.
 
@@ -207,8 +208,8 @@ to drop into BASIC and explore?
 
 - During the ~12 s boot warmup (before autotype starts), holding any
   key over the serial console aborts the autorun and lands at OK prompt.
-- Once the touch launcher (AMOLED-43) ships: a touch anywhere on the
-  screen during warmup aborts.
+  (This board is headless/HDMI-only; the serial-console abort is the
+  supported path.)
 
 ### F. Missing required ROMs
 
@@ -224,7 +225,7 @@ SD CARD MISSING ROMS
 Please copy bas12.rom + extbas11.rom into:
   /coco/roms/  (or /coco/)
 
-See https://github.com/.../README.md for setup.
+See https://github.com/ugufru/xroar-waveshare-rp2350-pizero for setup.
 ```
 
 Modest implementation work (needs a minimal text drawer that doesn't
@@ -240,8 +241,8 @@ when the FDC is extended; for v1 just `@DISK` (= drive 0) is fine.
 
 Future directives — not in v1:
 
-- `@CAS filename.cas` — attach a cassette image (AMOLED-41)
-- `@BAS filename.bas` — auto-type a plaintext BASIC program (AMOLED-46)
+- `@CAS filename.cas` — attach a cassette image
+- `@BAS filename.bas` — auto-type a plaintext BASIC program
 
 ---
 
@@ -285,8 +286,8 @@ A "factory" SD card sold with the device (if any) would contain:
   autorun.txt.example        ← commented sample, renamed to enable
 ```
 
-No ROMs (legal), no demos shipping copyrighted content (until each
-demo's redistribution is confirmed — AMOLED-47).
+No ROMs (legal), and no demos shipping copyrighted content unless each
+demo's redistribution is confirmed.
 
 Users add their own `bas12.rom`/`extbas11.rom`/`disk11.rom`, drop in
 their content, and rename `autorun.txt.example` → `autorun.txt` to

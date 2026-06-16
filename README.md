@@ -4,17 +4,55 @@ A port of the **XRoar** Tandy Color Computer (CoCo) emulator to the
 [Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm), driving a
 **mini-HDMI display** with **USB-host keyboard/joystick** input.
 
-This started as an evaluation port — could the RP2350-PiZero run XRoar at least as well as the
-existing [RP2350-Touch-AMOLED-1.8 port](../coco-rp2350-waveshare-touch-amoled-18) (which boots
-Color BASIC to "OK" at ~36% real-time)? It does, comfortably: it boots Color BASIC over HDMI at a
-**locked, tear-free 60 fps** — full real-time, ~4× the AMOLED port's frame rate, with a real **USB
-keyboard typing directly into BASIC**. Only joystick input remains in Phase 4.
+This started as an evaluation port — could the RP2350-PiZero run XRoar at least as well as an earlier
+RP2350-Touch-AMOLED-1.8 port (which boots Color BASIC to "OK" at ~36% real-time)? It does,
+comfortably: it boots Color BASIC over HDMI at a **locked 60 fps** (standard **640×480p60**), full
+real-time, with a real **USB keyboard typing directly into BASIC** and **CoCo audio played over the
+same HDMI cable**. Only joystick input remains open.
 
 ## Goal
 
 - Output to HDMI at 2× the CoCo's native resolution, at 30 fps or better.
 - USB host for a real keyboard and joystick.
 - CoCo emulation on core 0; video, keyboard, and SD-card access on core 1.
+
+## What you need
+
+- **Waveshare RP2350-PiZero** board ([product page](https://www.waveshare.com/rp2350-pizero.htm)).
+- **A mini-HDMI display connection** — a mini-HDMI→HDMI cable, or a mini-HDMI→HDMI
+  adapter plus a standard HDMI cable, into any HDMI monitor/TV. (The board's HDMI
+  port is the *mini* size.) The signal is standard 640×480p60 (4:3).
+- **A USB keyboard** plus whatever adapter reaches the board's **USB-host** port
+  (the PIO-USB Type-C; the *other* Type-C is power/programming). Note: the host is
+  **USB 1.1 only** — simple wired keyboards and full-speed wireless USB receivers
+  work; high-speed USB 2.0 peripherals do not enumerate (see Status).
+- **A microSD card** (FAT32) holding the CoCo ROMs you supply (see below) — required.
+- **USB-C power** to the power/programming port.
+- For building/flashing: a host PC with **[PlatformIO](https://platformio.org/install)**
+  (Core CLI or the VS Code extension).
+
+> **ROMs are not included.** Color/Extended/Disk BASIC are © Microsoft/Tandy and
+> are not redistributable. You must supply your own dumps (from hardware you own).
+> Only `bas12.rom` is strictly required; see [`AUTORUN.md`](AUTORUN.md) for the
+> full SD-card layout.
+
+## Quick start
+
+1. **Build & flash** the firmware (default env is the 60 fps + audio + USB build):
+   ```bash
+   pio run -t upload          # build + flash; see docs/BUILD.md for envs/flags
+   ```
+   If the upload can't reset the board, hold **BOOT** while plugging in USB-C.
+2. **Prepare a microSD** (FAT32): create `/coco/` and copy your ROMs in as
+   `/coco/bas12.rom` (and optionally `extbas11.rom`, `disk11.rom`). Add an
+   optional `/coco/autorun.txt` to auto-load disks/programs — see [`AUTORUN.md`](AUTORUN.md).
+3. **Connect & power on**: mini-HDMI → monitor, USB keyboard → host port, insert
+   the microSD, then apply USB-C power. The CoCo boots to the BASIC `OK` prompt;
+   type directly on the keyboard. `pio device monitor` (115200) shows `[run]`
+   telemetry over serial.
+
+Full build details, the env/flag matrix, and toolchain notes are in
+[`docs/BUILD.md`](docs/BUILD.md).
 
 ## Target hardware
 
@@ -76,12 +114,13 @@ which is the "2× resolution" target. The blitter writes 320×240 in landscape w
 
 DVI and PIO-USB want different system clocks: DVI's TMDS bit clock prefers ~252 MHz for
 640×480p60 (25.175 MHz pixel), while Pico-PIO-USB asserts the CPU is *exactly* 120 MHz or
-240 MHz. **Resolved (`PIZERO-02b`) by running the system clock at 240 MHz** and giving libdvi a
-custom 640×480 timing with a 24 MHz pixel clock — a ~57.14 Hz refresh, slightly off-spec vs CEA
-640×480p60 but well within typical HDMI monitor EDID tolerance and accepted by every monitor we
-tested. The emulator still hits a locked 60 fps because it's paced from `FRAME_PERIOD_US`,
-decoupled from display vsync; the monitor just samples the latest published framebuffer at
-~57 Hz. Tear-free thanks to PIZERO-14's double buffer.
+240 MHz. The original bring-up (`PIZERO-02b`) sidestepped this by running at **240 MHz** with an
+off-spec 24 MHz pixel clock (~52–57 Hz refresh). **`PIZERO-44`/`PIZERO-45` resolved it properly:
+at 252 MHz the PIO-USB clock dividers come out *exact* (252/48 = 5.25), so USB and a standard
+25.2 MHz pixel clock coexist.** The default build now runs **252 MHz → 25.2 MHz pixel, 800×525 =
+true 60.0 Hz** — standard, monitor-friendly 640×480p60 with correct game speed and USB host all at
+once. The emulator is paced from `FRAME_PERIOD_US` (16.67 ms) to match. (The old 240 MHz/~52 Hz
+timing is kept only as a fallback env — see [`docs/BUILD.md`](docs/BUILD.md).)
 
 ## Software architecture
 
@@ -116,35 +155,29 @@ Work is tracked in `issues.jsonl` (use `/issues` to list). Phases:
 | 3 | Autonomous self-running demo | PIZERO-10 | ✅ done |
 | 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13 | 🟡 keyboard done; joystick + hot-replug open |
 | 5 | Dual-core split + performance | PIZERO-14..15 | ✅ done |
-| 6 | HDMI audio over the existing cable (CoCo 6-bit DAC + 1-bit sound) | PIZERO-18, 26–35 | 🟡 working & pitch-matched, residual warble; clean path = PWM sidecar or delivery re-arch (PIZERO-35) |
-| 7 | Clean audio + stability | PIZERO-33 (watchdog), PIZERO-35 (delivery re-arch), PWM sidecar | 🔜 next |
+| 6 | HDMI audio over the existing cable (CoCo 6-bit DAC + 1-bit sound) | PIZERO-18, 26–35, 38/39 | ✅ done — streaming per-active-line delivery (warble fixed) |
+| 7 | Clean audio + stability | PIZERO-33 (watchdog), PIZERO-35/38 (delivery re-arch) | ✅ done |
+| 8 | True in-spec 640×480p60 + audio + USB at 252 MHz | PIZERO-44/45 | ✅ done — now the default build |
 
-DVI-vs-USB clock reconciliation (`PIZERO-02b`) resolved at 240 MHz with a ~57 Hz monitor refresh
-(see above). USB host enumeration + keyboard input verified on hardware; remaining open work in
-Phase 4 is `PIZERO-13` (joystick) and `PIZERO-11b` (hot-replug bug — USB devices only enumerate
-on a cold boot; unplugging and re-plugging doesn't re-attach).
+USB host enumeration + keyboard input verified on hardware; remaining open work in Phase 4 is
+`PIZERO-13` (joystick) and `PIZERO-11b` (hot-replug bug — USB devices only enumerate on a cold
+boot; unplugging and re-plugging doesn't re-attach).
 
-**Phase 6 — HDMI audio (working, with a known ceiling).** XRoar's 6-bit DAC + single-bit sound are
-now encoded as HDMI **data-island audio-sample packets** by an extended `libdvi` and played over the
-existing cable. CoCo `SOUND`/`PLAY`/game audio is recognizable and **pitch-matched to desktop
-XRoar** — the key fix (`PIZERO-30`/`32`) was setting the audio Clock-Regeneration **CTS for the
-sink's *assumed* 25.175 MHz pixel clock**, since our actual clock is an off-spec 24 MHz. A residual
-frame-rate **warble** remains: the pre-encoded per-line buffer scheme only affords audio on ~77 of
-480 active lines, so delivery is bursty, and this sink **rejects** data islands in the vblank back
-porch, so the per-frame gap can't be filled that way (see closed `PIZERO-34`). The HDMI-audio build
-runs at ~52 Hz refresh / ~52 fps emulation (off-spec 24 MHz pixel clock chosen so 48 kHz divides
-into an integer 924 samples/frame) and **single-buffers** the framebuffer (mild tearing) to free RAM
-for the audio-island buffers; the no-audio baseline stays 60 fps double-buffered. Build flag:
-`-DHDMI_DATA_ISLAND`; diagnostic flags `-DHDMI_AUDIO_SYNTH` (clean on-chip 440 Hz sine) and
-`-DAUDIO_WAV_DUMP` (stream source samples out USB-CDC) live behind ifdefs.
+**Phase 6/7 — HDMI audio (working).** XRoar's 6-bit DAC + single-bit sound are encoded as HDMI
+**data-island audio-sample packets** by an extended `libdvi` and played over the existing cable.
+CoCo `SOUND`/`PLAY`/game audio is recognizable and **pitch-matched to desktop XRoar**. The original
+bursty per-line scheme warbled; `PIZERO-38` re-architected delivery to **stream one metered audio
+island onto every active line** (encoded a line ahead in the core-1 DMA IRQ, per Shuichi Takano's
+reference — our packet encoder is ported from his `pico_lib`), which fixed the warble. `PIZERO-33`
+added a core-1 watchdog that auto-recovers a wedged board. A small residual fidelity gap vs desktop
+XRoar remains and is **source-side** (the resampler, tracked in `PIZERO-41`), not delivery.
 
-**Phase 7 — the path to *clean* audio** is either a **PWM sidecar** (`PIZERO-18` lineage: a GPIO +
-RC filter + small Class-D amp, bypassing HDMI delivery entirely) or **re-architecting the HDMI
-delivery** to stream audio onto every active line per Shuichi Takano's reference (`PIZERO-35`; our
-packet *encoder* is already ported from his `pico_lib`, but not his per-scanline delivery). The
-`PIZERO-33` core-1 watchdog (to root-cause recurring USB-host freezes) and `PIZERO-32` (ACR value is
-sink-clock-assumption-dependent — a V1.0 multi-monitor risk) are the other near-term items. The
-synth/sound-chip experiment (`PIZERO-17`) remains a stretch.
+**Phase 8 — true 60 Hz (`PIZERO-44`/`PIZERO-45`).** Running at 252 MHz makes the PIO-USB dividers
+exact, so standard **640×480p60** video, a correct 60 Hz game speed, USB host, and streaming audio
+all coexist. This is now the **default build**. The off-spec 240 MHz/~52 Hz timing is retained only
+as a fallback env. Remaining audio polish: `PIZERO-41` (source-side fidelity) and `PIZERO-32`
+(ACR CTS value is sink-dependent — a multi-monitor robustness item). The synth/sound-chip
+experiment (`PIZERO-17`) remains a stretch.
 
 ## Build
 
@@ -153,47 +186,40 @@ PlatformIO with the earlephilhower arduino-pico core, targeting the RP2350B.
 toolchain gotchas — in short:
 
 ```
-pio run -e pizero         -t upload   # SILENT baseline (double-buffered, 60 fps)
-pio run -e pizero_audio   -t upload   # WORKING HDMI-audio build (what you usually want)
-pio device monitor                    # serial @ 115200 — prints per-second [run] fps/cpu/blit
+pio run                 -t upload   # DEFAULT: true 640x480p60 + HDMI audio + USB
+pio run -e pizero       -t upload   # fallback: silent, double-buffered, tear-free
+pio device monitor                  # serial @ 115200 — prints per-second [run] fps/cpu/blit
 ```
 
-A bare `pio run` builds the silent `pizero` env (the committed default); audio is
-the separate `pizero_audio` env (`-DHDMI_DATA_ISLAND`). Don't enable flags via the
-`PLATFORMIO_BUILD_FLAGS` env var — it links stale objects (see BUILD.md §4b).
+A bare `pio run` builds the default `pizero_stream_60` env (60 Hz, streaming HDMI
+audio, USB host). The silent `pizero` baseline and the off-spec 52 Hz envs are kept
+as fallbacks. Don't enable flags via the `PLATFORMIO_BUILD_FLAGS` env var — it links
+stale objects (see BUILD.md §4b).
 
 A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and optionally
 `/coco/extbas11.rom`), plus an optional `disk11.rom` cart, a `.dsk` image, and `autorun.txt`
-(see `AUTORUN.md`) — same card layout as the AMOLED port.
+(see [`AUTORUN.md`](AUTORUN.md)).
 
 ## Status
 
-**Phases 0–3 and 5 complete; Phase 4 keyboard done; Phase 6 (HDMI audio) working with a known
-warble.** XRoar boots Color BASIC on HDMI at a locked, tear-free 60 fps emulation rate (display
-refreshes at ~57 Hz; emulator stays at 60) in the no-audio baseline; the HDMI-audio build trades to
-~52 fps single-buffered (see Roadmap). The
-autonomous `AUTORUN.TXT` demo (`PIZERO-10`) works, dual-core double-buffered scanout
-(`PIZERO-14`) is tear-free, and a **USB keyboard plugged into the PIO-USB port types directly
-into BASIC** (`PIZERO-11`/`12`).
+**Phases 0–8 complete except for two open Phase-4 input items.** The default build boots Color
+BASIC over HDMI at **standard 640×480p60**, a locked 60 fps with correct game speed, a **USB
+keyboard typing directly into BASIC** (`PIZERO-11`/`12`), and **CoCo audio over the HDMI cable**.
+The autonomous `autorun.txt` loader (`PIZERO-10`, see [`AUTORUN.md`](AUTORUN.md)) works. The silent
+fallback env is double-buffered and fully tear-free (`PIZERO-14`); the default audio build is
+single-buffered (RAM is spent on audio-island buffers), so it can show mild tearing.
 
-Remaining open work: **`PIZERO-13`** (USB joystick) and the open, **undiagnosed**
-**`PIZERO-11b`** (USB devices enumerate only on a cold boot with the device already
-attached; hot-replug doesn't re-enumerate). There is **no confirmed root cause** — it
-has not been tested. Two unverified hypotheses stand: insufficient dev-port VBUS/inrush
-current (would be fixed by a battery/powered hub — untested), or a software miss of the
-disconnect event (RP2350-E9 leakage + the PIO-USB state machine holding the J line).
+**HDMI audio works** (`PIZERO-30`/`38`): CoCo `SOUND`/`PLAY`/game sound plays over the HDMI cable
+via `libdvi` data-island packets, **pitch-matched to desktop XRoar**. The early bursty delivery
+warbled; `PIZERO-38` switched to streaming one metered island per active line, which fixed it. A
+small residual fidelity gap vs desktop remains and is **source-side** (the resampler, `PIZERO-41`).
+Also fixed along the way: **`PIZERO-31`** — the CoCo's 60 Hz field-sync timer IRQ was never enabled
+in this port, so `PLAY`, the cursor blink, and `SOUND n,d` hung forever; now they work.
 
-**Phase 6 — HDMI audio — works** (`PIZERO-30`): CoCo `SOUND`/`PLAY`/game sound plays over the HDMI
-cable via `libdvi` data-island packets, pitch-matched to desktop XRoar. It is **not perfectly
-clean** — a frame-rate warble remains from bursty per-line delivery that this sink's vblank
-handling won't let us smooth (`PIZERO-34` closed as not-viable). Also fixed this phase:
-**`PIZERO-31`** — the CoCo's 60 Hz field-sync timer IRQ was never being enabled in this port, so
-`PLAY`, the cursor blink, and `SOUND n,d` all hung forever; now they work.
-
-Next deliverables are **clean audio** — either a **PWM sidecar** (`PIZERO-18` lineage) or
-**re-architecting HDMI delivery** per Takano's reference (`PIZERO-35`) — plus the **`PIZERO-33`**
-core-1 watchdog to root-cause recurring USB-host freezes, and **`PIZERO-32`** (the ACR clock value
-is sink-dependent — a multi-monitor risk for V1.0).
+Remaining open work: **`PIZERO-13`** (USB joystick) and the **undiagnosed** **`PIZERO-11b`** (USB
+devices enumerate only on a cold boot with the device already attached; hot-replug doesn't
+re-enumerate — no confirmed root cause). Audio polish: **`PIZERO-41`** (source-side fidelity) and
+**`PIZERO-32`** (ACR CTS value is sink-dependent — a multi-monitor robustness item).
 
 USB device-compatibility caveat: Pico-PIO-USB is USB 1.1 only, so modern high-speed USB 2.0
 peripherals (e.g. Keychron K2, standalone gaming mice) don't enumerate. Simple wired USB
@@ -203,15 +229,16 @@ Note: 640×480 is 4:3, so 16:9 monitors stretch it unless set to 4:3/aspect scal
 
 ## Performance
 
-The headline result: **Color BASIC runs at a locked, tear-free 60 fps** — full real-time — on a
-240 MHz system clock (~57 Hz monitor refresh, decoupled from the 60 Hz emulator pacing), with
-~30% of the core-0 frame budget still free even with USB-host servicing running on core 0.
+The headline result: **Color BASIC runs at a locked 60 fps** — full real-time — on a 252 MHz system
+clock driving standard 640×480p60, with ~30% of the core-0 frame budget still free even with
+USB-host servicing running on core 0. (The silent fallback build is also fully tear-free via double
+buffering; the default audio build single-buffers to free RAM for audio.)
 
-Per-frame work on core 0, against the 60 Hz frame period of **16.76 ms**:
+Per-frame work on core 0, against the 60 Hz frame period of **16.67 ms**:
 
 | Work | Time | Notes |
 |---|---|---|
-| CoCo emulation | ~9.4 ms | 15,000 6809 cycles/frame at the emulated ~0.895 MHz |
+| CoCo emulation | ~9.4 ms | ~14,900 6809 cycles/frame at the emulated ~0.895 MHz |
 | `render_frame` (alpha/text) | ~0.56 ms | precomputed glyph-row → packed-word LUT |
 | Blit to framebuffer | ~1.5 ms | 320×240 RGB565, landscape, no rotation |
 | **Total** | **~11.5 ms** | ~5.3 ms (31%) headroom per frame |
@@ -229,7 +256,7 @@ Performance instrumentation, clock, and vreg tuning landed in `PIZERO-15`; the s
 per-second `[run]` fps/cpu/blit stats. For comparison, the AMOLED port manages ~15 fps (~36%
 real-time), so this is roughly a **4× improvement**.
 
-Note the two distinct clocks: the host RP2350 MCU runs at **240 MHz** (set from the DVI TMDS bit
+Note the two distinct clocks: the host RP2350 MCU runs at **252 MHz** (set from the DVI TMDS bit
 clock), while the *emulated* 6809 runs at its authentic **~0.895 MHz** — independent of the host clock.
 
 ## References
