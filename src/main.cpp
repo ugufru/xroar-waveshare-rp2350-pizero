@@ -72,7 +72,9 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .h_sync_polarity = false,
     // PIZERO-30: h_fp=14, h_bp=130 -> h_total = 880, refresh = 24e6/(880*525) =
     // 51.9481 Hz == exactly 32000/616 -> 616 audio samples/frame = 154 packets.
-#if defined(HDMI_60HZ_TEST)
+#if defined(HDMI_60HZ)
+    .h_front_porch   = 8,    // PIZERO-45: 800-total split (8/96/56/640) so the 56px back porch fits ONE audio island
+#elif defined(HDMI_60HZ_TEST)
     .h_front_porch   = 16,   // PIZERO-44 60Hz TEST: standard 800-total blanking
 #elif defined(HDMI_STD_TIMING)
     .h_front_porch   = 58,   // STD-TIMING TEST: h_total 880->924 so 25.2MHz pixel keeps 51.95Hz
@@ -80,7 +82,9 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .h_front_porch   = 14,
 #endif
     .h_sync_width    = 96,
-#ifdef HDMI_60HZ_TEST
+#if defined(HDMI_60HZ)
+    .h_back_porch    = 56,   // PIZERO-45: 28 words -- just fits one streaming island; h_total=800 -> 60.0 Hz
+#elif defined(HDMI_60HZ_TEST)
     .h_back_porch    = 48,   // 60Hz TEST: standard back porch (no audio islands here)
 #else
     .h_back_porch    = 130,
@@ -93,8 +97,8 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .v_back_porch    = 33,
     .v_active_lines  = 480,
 
-#if defined(HDMI_60HZ_TEST) || defined(HDMI_STD_TIMING)
-    .bit_clk_khz     = 252000,   // 25.2 MHz pixel (~standard 25.175); 60Hz TEST: 800x525 -> 60.0 Hz
+#if defined(HDMI_60HZ) || defined(HDMI_60HZ_TEST) || defined(HDMI_STD_TIMING)
+    .bit_clk_khz     = 252000,   // 25.2 MHz pixel (~standard 25.175); 60Hz: 800x525 -> 60.0 Hz
 #else
     .bit_clk_khz     = 240000,   // 24 MHz pixel clock, ~57.14 Hz refresh
 #endif
@@ -333,14 +337,24 @@ static bool mount_sd() {
 }
 
 #ifdef HDMI_DATA_ISLAND
+#ifdef HDMI_60HZ
+// PIZERO-45: TRUE 640x480p60. 252 MHz sysclk -> 25.2 MHz pixel, h_total(800) x
+// v_total(525) = 420000 px -> 25.2e6/420000 = 60.0 Hz exactly, period = 16667 us.
+// At the CoCo's 0.894886 MHz that's 14915 cyc/frame, and 48000/60 = exactly 800
+// audio samples/frame (AUDIO_SAMPLES_PER_FRAME) -- producer, encoder and sink all
+// on one drift-free cadence. In-spec timing also fixes the ~13% slow game speed.
+#define CYCLES_PER_FRAME 14915
+#define FRAME_PERIOD_US  16667
+#else
 // PIZERO-30: pace emulation to the TRUE HDMI refresh. Pixel clock 24 MHz, frame
 // is h_total(880) x v_total(525) = 462000 px, so refresh = 24e6/462000 =
 // 51.9481 Hz, period = 19250 us. Matching the loop keeps the audio producer, the
 // per-frame encoder, and the sink's consumption on one cadence. CYCLES_PER_FRAME
 // (17226 / 894886.25 Hz = 19250 us) makes the emulator produce EXACTLY
-// 32000/51.9481 = 616 audio samples/frame == the 154 packets we emit (no drift).
+// 48000/51.9481 = 924 audio samples/frame == AUDIO_SAMPLES_PER_FRAME (no drift).
 #define CYCLES_PER_FRAME 17226
 #define FRAME_PERIOD_US  19250
+#endif
 #else
 #define CYCLES_PER_FRAME 15000
 #define FRAME_PERIOD_US  16762
@@ -482,7 +496,11 @@ static uint32_t g_pool2[APOOL][ALINE_BP_W];
 static int      g_pool_w     = 0;                  // next pool slot (IRQ-only)
 static int32_t  g_meter_acc  = 0;                  // 16.16 sample accumulator (IRQ-only)
 static int32_t  g_meter_step = 0;                  // 16.16 samples per active line (set at init)
+#ifdef HDMI_60HZ
+#define AUDIO_SAMPLES_PER_FRAME 800                // 48000 Hz / 60 Hz refresh (PIZERO-45)
+#else
 #define AUDIO_SAMPLES_PER_FRAME 924                // 48000 Hz / ~51.95 Hz refresh
+#endif
 static int16_t  g_stream_last = 0;                 // hold-last on ring underrun (IRQ-only)
 static volatile uint32_t g_stream_under = 0;       // ring-underrun (hold-last) count (diagnostic)
 #ifdef HDMI_AUDIO_SYNTH
@@ -752,7 +770,7 @@ void setup() {
     // Bring up DVI first so we have a display even if SD/ROM fails.
     // Clear both buffers so the (static) black border is set in each.
     memset(g_fb, 0, sizeof(g_fb));
-#if defined(HDMI_STD_TIMING) || defined(HDMI_60HZ_TEST)
+#if defined(HDMI_60HZ) || defined(HDMI_STD_TIMING) || defined(HDMI_60HZ_TEST)
     vreg_set_voltage(VREG_VOLTAGE_1_25);   // extra headroom for 252 MHz
 #else
     vreg_set_voltage(VREG_VOLTAGE_1_20);
@@ -874,8 +892,8 @@ void setup() {
         dvi_data_packet_t ipk[3];
         dvi_di_set_avi_infoframe(&ipk[0], 0);
         dvi_di_set_audio_infoframe(&ipk[1], 1 /*2ch*/, DVI_AUDIO_SF_48K, DVI_AUDIO_SS_16);
-#ifdef HDMI_STD_TIMING
-        dvi_di_set_acr(&ipk[2], 25200, 6144);    // STD-TIMING TEST: CTS for actual ~25.2 MHz pixel
+#if defined(HDMI_STD_TIMING) || defined(HDMI_60HZ)
+        dvi_di_set_acr(&ipk[2], 25200, 6144);    // in-spec 25.2 MHz pixel -> CTS=25200 (STD-TIMING / PIZERO-45 60Hz)
 #else
         dvi_di_set_acr(&ipk[2], HDMI_ACR_CTS, 6144);   // PIZERO-32: monitor-tunable (default 25176)
 #endif

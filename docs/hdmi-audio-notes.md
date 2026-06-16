@@ -157,6 +157,17 @@ gives a 28-word back porch — just enough for one streaming island — and
 Open question worth checking: at a **standard** 60 Hz clock the sink timebase is
 in-spec, which may also reduce the PIZERO-41 residual.
 
+**Implemented (PIZERO-45):** flag `HDMI_60HZ`, env `pizero_stream_60` (= streaming
+audio + this timing + USB). It sets the timing above, vreg 1.25, ACR CTS=25200
+(in-spec pixel), `AUDIO_SAMPLES_PER_FRAME=800`, and 60 fps pacing
+(`CYCLES_PER_FRAME=14915 / FRAME_PERIOD_US=16667` at the CoCo's 0.894886 MHz).
+The 28-word back porch is exactly one island + the video preamble/guard, so
+`ALINE_BP_W=72` is unchanged (only `h_bp/2=28` words are used). The streaming
+pool/meter/IRQ-encode path is untouched. Awaiting HW confirmation; on success it
+becomes the default and the 24 MHz/52 Hz envs retire (PIZERO-40/42). RISK: `h_bp=56`
+(28 words vs ~27 needed) and `h_fp=8` are tight — if a monitor balks, fall back to
+~277/288 MHz for a wider back porch.
+
 ---
 
 ## Pointers

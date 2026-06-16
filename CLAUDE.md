@@ -31,10 +31,11 @@ the PlatformIO envs, the full HDMI/audio build-flag matrix, serial monitoring, a
 the toolchain gotchas. Read it before building; keep it in sync when you add/change
 a build flag.
 
-- **You build it (the agent), not the user.** The working **HDMI-audio** firmware is
-  `pio run -e pizero_audio` — a bare `pio run -e pizero` is the SILENT baseline
-  (`HDMI_DATA_ISLAND` off). Use a real env, never one-off `PLATFORMIO_BUILD_FLAGS`
-  (it links stale objects — see BUILD.md §4b).
+- **You build it (the agent), not the user.** The product firmware is the default env
+  `pizero_stream_60` (PIZERO-45: true 640×480p60 + streaming HDMI audio + USB), so a
+  bare `pio run` builds it. `pizero` (silent), `pizero_stream` (off-spec 52 Hz audio)
+  and `pizero_60hz` (video-only test) are kept as fallbacks. Use a real env, never a
+  one-off `PLATFORMIO_BUILD_FLAGS` (it links stale objects — see BUILD.md §4b).
 
 ## Build gotchas to remember
 
