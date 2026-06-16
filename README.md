@@ -235,7 +235,6 @@ clock), while the *emulated* 6809 runs at its authentic **~0.895 MHz** — indep
 ## References
 
 - Waveshare RP2350-PiZero wiki — https://www.waveshare.com/wiki/RP2350-PiZero (board schematic mirrored at `docs/RP2350-PiZero-schematic.pdf`)
-- Source port being adapted: `../coco-rp2350-waveshare-touch-amoled-18`
-- USB-host reference: `../waveshare-rp2350-usb-a`
+- USB-host reference: [ugufru/waveshare-rp2350-usb-a](https://github.com/ugufru/waveshare-rp2350-usb-a)
 - Upstream DVI driver: [Wren6991/PicoDVI](https://github.com/Wren6991/PicoDVI)
 - USB host stack: [sekigon-gonnoc/Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) + Adafruit TinyUSB
