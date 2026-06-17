@@ -10,6 +10,11 @@ comfortably: it boots Color BASIC over HDMI at a **locked 60 fps** (standard **6
 real-time, with a real **USB keyboard typing directly into BASIC** and **CoCo audio played over the
 same HDMI cable**. Only joystick input remains open.
 
+<p align="center">
+  <img src="docs/images/board-wired.jpg" width="460"
+       alt="Waveshare RP2350-PiZero running XRoar: board powered up (status LED lit) with USB-C power, a USB-host cable, a mini-HDMI-to-HDMI adapter, and a microSD card inserted">
+</p>
+
 ## Goal
 
 - Output to HDMI at 2× the CoCo's native resolution, at 30 fps or better.
@@ -30,6 +35,13 @@ same HDMI cable**. Only joystick input remains open.
 - **USB-C power** to the power/programming port.
 - For building/flashing: a host PC with **[PlatformIO](https://platformio.org/install)**
   (Core CLI or the VS Code extension).
+
+<p align="center">
+  <img src="docs/images/connections.jpg" width="420"
+       alt="The board's connector edge: two USB-C connections (USB-host keyboard cable and USB-C power) and a mini-HDMI-to-HDMI adapter">
+  <br>
+  <em>The connections: two USB-C (USB-host keyboard + power) and the mini-HDMI→HDMI adapter.</em>
+</p>
 
 > **ROMs are not included.** Color/Extended/Disk BASIC are © Microsoft/Tandy and
 > are not redistributable. You must supply your own dumps (from hardware you own).
