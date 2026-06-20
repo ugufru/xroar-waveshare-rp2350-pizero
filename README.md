@@ -112,6 +112,10 @@ The RP2350 has two ways to generate that high-speed TMDS bitstream:
 On this board the HDMI connector is on **GPIO 32–39**, so **HSTX cannot drive it** — `libdvi` (PIO) is
 the only option. This matches Waveshare's own reference demos, which use `libdvi` on this board.
 
+For the full end-to-end signal path — emulated CoCo screen and sound all the way to the HDMI pins,
+including how audio rides inside the TMDS stream as data islands — see
+[`docs/pipeline.md`](docs/pipeline.md).
+
 ### Display geometry
 
 A literal 640×480 RGB565 framebuffer would be ~614 KB and does not fit in 520 KB SRAM alongside the

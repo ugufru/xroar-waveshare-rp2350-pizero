@@ -5,6 +5,8 @@ XRoar (Tandy CoCo) on the **Waveshare RP2350-PiZero** (mini-HDMI + USB host).
 **All project documentation lives in `README.md` and `docs/`** — hardware specs, the confirmed pinout,
 the `libdvi`/HSTX rationale, the display geometry, and the clock-conflict risk are written up there, not
 here. Don't duplicate them. This file is just pointers and conventions for working in the repo.
+The end-to-end video+audio signal path (CoCo → HDMI) is mapped in `docs/pipeline.md`, which links the
+deeper `docs/hdmi-audio-notes.md` and `docs/BUILD.md`.
 
 ## Local references (not committed)
 
