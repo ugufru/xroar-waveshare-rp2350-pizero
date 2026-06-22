@@ -181,6 +181,7 @@ Authoritative reference is [`BUILD.md`](BUILD.md); this is the orientation table
 ## See also
 
 - [`hdmi-audio-notes.md`](hdmi-audio-notes.md) — audio architecture, rationale, gotchas
+- [`cpu-speed.md`](cpu-speed.md) — emulation pacing & CoCo high-speed (double-speed) behavior
 - [`audio-decision.md`](audio-decision.md) — original scoping/decision record
 - [`BUILD.md`](BUILD.md) — build envs and the full flag matrix
 - [`../README.md`](../README.md) — hardware, pinout, clock reconciliation

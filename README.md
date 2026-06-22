@@ -272,6 +272,11 @@ Performance instrumentation, clock, and vreg tuning landed in `PIZERO-15`; the s
 per-second `[run]` fps/cpu/blit stats. For comparison, the AMOLED port manages ~15 fps (~36%
 real-time), so this is roughly a **4× improvement**.
 
+That ~31% headroom also sets the ceiling on guest-initiated **CoCo high-speed POKEs** (SAM
+double-speed): the emulation is paced by fixed emulated *time* per frame, so audio pitch and video
+stay correct, but a sustained full `POKE 65497` roughly doubles core-0 emulation cost and overruns
+the frame budget. See [`docs/cpu-speed.md`](docs/cpu-speed.md).
+
 Note the two distinct clocks: the host RP2350 MCU runs at **252 MHz** (set from the DVI TMDS bit
 clock), while the *emulated* 6809 runs at its authentic **~0.895 MHz** — independent of the host clock.
 
