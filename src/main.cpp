@@ -38,7 +38,21 @@ extern "C" {
 #define HOST_PIN_DP  28
 static Adafruit_USBH_Host USBHost;
 static volatile uint32_t g_usb_devices = 0;
+// PIZERO-11b diag: HID report flow — the signal that actually changes on
+// unplug (a removed device can't answer IN polls). rpts climbs while a device
+// streams reports; rfail counts tuh_hid_receive_report() rejections.
+static volatile uint32_t g_hid_reports   = 0;
+static volatile uint32_t g_hid_recv_fail = 0;
 extern "C" uint32_t pio_usb_host_get_frame_number(void);
+// PIZERO-11b diag: thin C shim over the C-only pio_usb_ll.h internals
+// (root_port_t + pio_usb_bus_get_line_state). Defined in src/usb_hotplug_diag.c
+// so that header is never pulled into this C++ TU.
+extern "C" uint8_t  usbdiag_line_state(void);  // 0=SE0 1=J/FS 2=K/LS 3=SE1
+extern "C" int      usbdiag_connected(void);
+extern "C" int      usbdiag_fullspeed(void);
+extern "C" unsigned usbdiag_event(void);       // 0=NONE 1=CONNECT 2=DISCONNECT 3=HUB
+extern "C" unsigned usbdiag_ep_error(void);    // endpoint-error register
+extern "C" unsigned usbdiag_ints(void);        // interrupt-status register
 
 extern "C" {
 #include "ff.h"
@@ -1057,6 +1071,28 @@ void loop() {
     wd_phase(WP_USB);
     USBHost.task();   // PIZERO-11: service USB host transfers (prime freeze suspect).
     wd_phase(WP_LOOP);
+
+    // PIZERO-11b diag: sample the PIO-USB root port every frame and log on ANY
+    // change, so a sub-second connect/disconnect that the 1 Hz [run] line would
+    // miss is still caught. `connected` is the lib's own debounced view (the
+    // bisection: if it stays 1 after an unplug, the host stack never saw the
+    // disconnect -> E9/SM masking; if it flips but no re-enum follows, the bug
+    // is higher up in TinyUSB). line_state uses the lib's reader, which applies
+    // the RP2350-E9 input-drain ONLY on chip rev<=2 (this board is rev3 -> plain
+    // read, so a masked SE0 reading here is itself a data point).
+    {
+        static const char *LS[4] = { "SE0", "J/FS", "K/LS", "SE1" };
+        uint8_t ls = usbdiag_line_state();
+        int conn = usbdiag_connected();
+        static int pls = -2, pconn = -2;
+        if ((int)ls != pls || conn != pconn) {
+            Serial.printf("[usb-evt] line=%s conn=%d fs=%d evt=%u usb=%lu (was line=%s conn=%d)\r\n",
+                          LS[ls & 3], conn, usbdiag_fullspeed(),
+                          usbdiag_event(), (unsigned long)g_usb_devices,
+                          (pls >= 0) ? LS[pls & 3] : "?", pconn);
+            pls = (int)ls; pconn = conn;
+        }
+    }
     if (!g_machine_running) { delay(1000); return; }
     static uint32_t next_us = 0;
     if (next_us == 0) next_us = micros();
@@ -1121,15 +1157,24 @@ void loop() {
         int dp = gpio_get(HOST_PIN_DP);
         int dm = gpio_get(HOST_PIN_DP + 1);
         uint32_t sof = pio_usb_host_get_frame_number();
+        // PIZERO-11b: the lib's own line-state read + debounced connection flag.
+        static const char *LS[4] = { "SE0", "J/FS", "K/LS", "SE1" };
+        uint8_t ls = usbdiag_line_state();
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
-                      "| D+=%d D-=%d sof=%lu usb=%lu | freezes=%lu last=%s\r\n",
+                      "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
+                      "| freezes=%lu last=%s\r\n",
                       (unsigned long)frames, (unsigned long)(b - a),
                       (unsigned long)(c - b), (unsigned long)(d - c),
                       (unsigned long)(e - d),
-                      dp, dm, (unsigned long)sof,
+                      LS[ls & 3], usbdiag_connected(),
+                      (unsigned long)sof,
                       (unsigned long)g_usb_devices,
+                      (unsigned long)g_hid_reports,
+                      (unsigned long)g_hid_recv_fail,
+                      usbdiag_ep_error(), usbdiag_ints(),
                       (unsigned long)g_freeze_count,
                       g_freeze_count ? wd_phase_name(g_last_freeze_phase) : "none");
+        (void)dp; (void)dm;
 #ifdef HDMI_STREAM_AUDIO
         // PIZERO-38/39 audio-ring health: fill should hover near AUDIO_RING/2 with
         // skips (overflow) and under (underrun) staying ~flat once primed.
@@ -1184,7 +1229,8 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
     if (len >= 8) {
         hid_keyboard_apply(report);
     }
-    tuh_hid_receive_report(daddr, idx);
+    g_hid_reports++;   // PIZERO-11b diag: proves the device is alive & polled
+    if (!tuh_hid_receive_report(daddr, idx)) g_hid_recv_fail++;
 }
 
 } // extern "C"

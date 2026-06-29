@@ -7,6 +7,8 @@ the `libdvi`/HSTX rationale, the display geometry, and the clock-conflict risk a
 here. Don't duplicate them. This file is just pointers and conventions for working in the repo.
 The end-to-end video+audio signal path (CoCo → HDMI) is mapped in `docs/pipeline.md`, which links the
 deeper `docs/hdmi-audio-notes.md` and `docs/BUILD.md`.
+`docs/ROADMAP.md` sequences the open work (a navigation map over `issues.jsonl` — what's shipped,
+what's next, and dependencies); it points to tickets, it doesn't restate them.
 
 ## Local references (not committed)
 
