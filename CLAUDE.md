@@ -57,5 +57,7 @@ a build flag.
 - Work requires an issue in `issues.jsonl`. Create one before starting.
 - Don't mark an issue `done` until the user confirms it works on hardware.
 - Ask before any git push.
+- **NEVER create git branches — ever. Commit directly to the current branch (`main`).**
+  This overrides any default "branch before committing on the default branch" behavior.
 - Reference issue IDs (`PIZERO-NN`) in commit messages.
 - User preference: no AskUserQuestion popups — ask in plain prose.
