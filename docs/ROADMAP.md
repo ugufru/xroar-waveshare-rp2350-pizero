@@ -5,7 +5,7 @@ map over `issues.jsonl` — it sequences the open work and links the tickets; it
 does **not** restate ticket detail. Authoritative status always lives in the
 ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`).
 
-_Last updated: 2026-07-19._
+_Last updated: 2026-08-05._
 
 ## Shipped / working (V1.0 core)
 
@@ -80,6 +80,44 @@ native-CoCo look. Dependency chain: `PIZERO-53` → `PIZERO-55`.
   → `GAME.FNT`, same fallback chain) — so a game can carry both its palette and
   its font. Cleanly decoupled from the palette LUT (font swaps need no rebuild);
   redefines the 64-glyph alpha slot. Depends on `PIZERO-53`.
+
+## Next: SD write / save & load workstream
+
+Today the port **cannot write to the SD card at all** — every `f_open` in project
+code is `FA_READ` and there is no `f_write` anywhere. The FatFs stack underneath
+is fully write-capable (`FF_FS_READONLY 0`, `disk_write()` implemented), so this
+is additive firmware work, not a dependency fight. Chain:
+`PIZERO-64` → `PIZERO-65` → `PIZERO-66` → `PIZERO-68`, with `PIZERO-67` and
+`PIZERO-69` hanging off `PIZERO-64`.
+
+- **`PIZERO-64` — SD write foundation.** Writable-file helper layer, atomic
+  replace, an explicit flush/sync policy, and **measurement of real write
+  latency** against the frame budget. Blocks everything else here; its numbers
+  are the design input to `PIZERO-65`.
+- **`PIZERO-65` — Deferred sector write-back.** The genuinely hard part, kept as
+  its own ticket so the timing risk isn't buried in the feature. Core 0 has only
+  ~31% slack at 1× (`PIZERO-48`) and SD block-erase stalls run tens-to-hundreds
+  of ms, so a synchronous write on the emulation thread would starve the audio
+  ring and drop frames. Queue + drainer, off the hot path.
+- **`PIZERO-66` — FDC Write Sector → guest `SAVE`/`SAVEM`.** The headline
+  feature. `SAVE`/`SAVEM` are **DECB commands running in the guest**, not XRoar
+  calls — DECB does its own directory/granule allocation, so replacing the
+  write-protect stub (`coco_machine.cpp:252-257`, status `0x40`) also buys
+  `KILL`, `COPY`, `RENAME` and `BACKUP`.
+- **`PIZERO-68` — DECB disk maintenance.** `DSKINI`/format, multi-drive, a real
+  write-protect toggle, and honest FDC error status.
+- **`PIZERO-67` — Firmware-side persistence API.** Config + per-title
+  `.pal`/`.fnt` sidecar writes. **Closes a gap:** `PIZERO-53`/`55`/`57` all
+  assume the firmware can write to SD and none of them declared it. Much easier
+  than `PIZERO-66` on timing — BIOS saves happen with the overlay up, so a
+  synchronous write is fine and the `PIZERO-65` queue isn't needed.
+- **`PIZERO-69` — Emulator save-states.** Freeze/restore the whole machine.
+  XRoar's `serialise.c` (846 lines) is already vendored and compiled in; only the
+  `fs_*` primitives are no-oped (`xroar_stubs.c:21-45`), so this is ~18 one-line
+  functions plus a `FILE*`→`FIL` bridge.
+
+Cassette (`CSAVE`/`CLOAD`, `.CAS`/`.WAV`) is **not** covered by any of these —
+there is no tape emulation in the port at all. Unticketed for now.
 
 ## Audio fidelity & polish
 
@@ -159,6 +197,15 @@ plain CoCo2 boot is untouched.
 - **`PIZERO-53` → `PIZERO-55`**: the launcher overlay (SD browse + persistence +
   the `render_alpha_frame` refactor) must land before the palette editor and
   per-title `.pal` profiles.
+- **`PIZERO-53`/`55`/`57` also need `PIZERO-67`** (and therefore `PIZERO-64`):
+  every one of them persists something to SD — firmware settings, `.pal`
+  sidecars, `.fnt` sidecars — and the port currently has no write path at all.
+  Their *read/render* halves are unblocked; only the **save** halves are gated.
+- **SD write chain**: `PIZERO-64` (foundation + latency numbers) → `PIZERO-65`
+  (write-back queue) → `PIZERO-66` (guest `SAVE`) → `PIZERO-68` (format,
+  multi-drive, WP). `PIZERO-67` and `PIZERO-69` need only `PIZERO-64`, so either
+  can be pulled forward. If `PIZERO-65` has landed, `PIZERO-69` must flush its
+  queue before snapshotting or the restored state disagrees with the card.
 - **Audio/MIDI chain**: `PIZERO-58` (bench) → `PIZERO-17` (synth); `PIZERO-61`
   (Lyra research) → `PIZERO-59` (MIDI bus) → `PIZERO-60` (external endpoints).
   `PIZERO-59` reuses the cycle-accurate PIA-tap from the audio work (`PIZERO-18`)
