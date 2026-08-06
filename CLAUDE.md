@@ -59,5 +59,9 @@ a build flag.
 - Ask before any git push.
 - **NEVER create git branches — ever. Commit directly to the current branch (`main`).**
   This overrides any default "branch before committing on the default branch" behavior.
+  `main` is the only branch; `git branch` must print only `main`. No worktrees, no
+  branch-per-agent isolation, no "safety" branch for risky or half-working work — that
+  goes behind a build flag on `main`, or stays uncommitted. Archive dead exploratory
+  history with a tag (`archive/<topic>`), never a lingering branch. See `CONTRIBUTING.md`.
 - Reference issue IDs (`PIZERO-NN`) in commit messages.
 - User preference: no AskUserQuestion popups — ask in plain prose.
