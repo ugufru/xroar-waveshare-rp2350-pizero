@@ -81,14 +81,47 @@ native-CoCo look. Dependency chain: `PIZERO-53` → `PIZERO-55`.
   its font. Cleanly decoupled from the palette LUT (font swaps need no rebuild);
   redefines the 64-glyph alpha slot. Depends on `PIZERO-53`.
 
-## Next: SD write / save & load workstream
+## Next: storage & filesystem layer (replaces DECB)
+
+**Direction set 2026-08-05.** Floppy geometry, granule maps and 8.3 uppercase
+names are obsolete. The board already has a fast hierarchical filesystem with
+long filenames; emulating a 35-track floppy on top of it reaches *fewer*
+capabilities than the hardware already has. So the storage model is a real
+filesystem, and **floppy emulation is demoted to peripheral support**
+(`PIZERO-79`). Compatibility with 40-year-old software is explicitly not the
+priority; creating and editing new software on the CoCo is.
+
+The stack, bottom to top — the design rule is **keep the 6809 side thin**: all
+filesystem logic stays in C on the RP2350, so backends can change without
+touching guest code.
+
+- **`PIZERO-70` — Storage backend abstraction.** One device interface; SD/FatFs
+  is backend #1. Capabilities are queryable, not assumed.
+- **`PIZERO-71` — VFS core.** Hierarchy, long names, and above all **write**:
+  create, extend, edit, delete, rename. This is the point of the exercise.
+- **`PIZERO-72` — Guest hypercall ABI.** *The contract, and the crux.* Versioned
+  from day one; BASIC, Bare Naked Forth and everything later bind to this rather
+  than to each other. The sync-vs-async decision must be made here — retrofitting
+  async into a blocking ABI breaks every client.
+- **`PIZERO-73` — Replacement cart ROM.** A thin 6809 shim over the hypercall,
+  not a DOS in assembly. Adds a 6809 assembler to the build.
+- **`PIZERO-74` — New guest command surface.** Deliberately *not* DECB-compatible.
+- **Backends**: `PIZERO-75` RAM disk (no hardware, no latency — the practical
+  test target), `PIZERO-76` DriveWire/serial, `PIZERO-77` FujiNet-class networked
+  storage (major focus; needs a hardware decision first), `PIZERO-78` USB MSC.
+
+`PIZERO-64` (write foundation) and `PIZERO-65` (write-back latency) below are
+unchanged and still gate all of it — the latency problem is identical whether the
+bytes come from DECB or from our own VFS.
+
+## Supporting: SD write foundation
 
 Today the port **cannot write to the SD card at all** — every `f_open` in project
 code is `FA_READ` and there is no `f_write` anywhere. The FatFs stack underneath
 is fully write-capable (`FF_FS_READONLY 0`, `disk_write()` implemented), so this
-is additive firmware work, not a dependency fight. Chain:
-`PIZERO-64` → `PIZERO-65` → `PIZERO-66` → `PIZERO-68`, with `PIZERO-67` and
-`PIZERO-69` hanging off `PIZERO-64`.
+is additive firmware work, not a dependency fight. These two tickets underpin the
+filesystem layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
+(`PIZERO-79`).
 
 - **`PIZERO-64` — SD write foundation.** Writable-file helper layer, atomic
   replace, an explicit flush/sync policy, and **measurement of real write
@@ -99,13 +132,12 @@ is additive firmware work, not a dependency fight. Chain:
   ~31% slack at 1× (`PIZERO-48`) and SD block-erase stalls run tens-to-hundreds
   of ms, so a synchronous write on the emulation thread would starve the audio
   ring and drop frames. Queue + drainer, off the hot path.
-- **`PIZERO-66` — FDC Write Sector → guest `SAVE`/`SAVEM`.** The headline
-  feature. `SAVE`/`SAVEM` are **DECB commands running in the guest**, not XRoar
-  calls — DECB does its own directory/granule allocation, so replacing the
-  write-protect stub (`coco_machine.cpp:252-257`, status `0x40`) also buys
-  `KILL`, `COPY`, `RENAME` and `BACKUP`.
-- **`PIZERO-68` — DECB disk maintenance.** `DSKINI`/format, multi-drive, a real
-  write-protect toggle, and honest FDC error status.
+- **`PIZERO-66` (low, legacy) — FDC Write Sector → `SAVE`/`SAVEM` to `.DSK`.**
+  Peripheral polish for old images; replaces the write-protect stub at
+  `coco_machine.cpp:252-257`. **Not** the route to writable storage — that's
+  `PIZERO-71`.
+- **`PIZERO-68` (low, legacy) — DECB disk maintenance.** `DSKINI`/format,
+  multi-drive, write-protect toggle, FDC error status.
 - **`PIZERO-67` — Firmware-side persistence API.** Config + per-title
   `.pal`/`.fnt` sidecar writes. **Closes a gap:** `PIZERO-53`/`55`/`57` all
   assume the firmware can write to SD and none of them declared it. Much easier
@@ -117,7 +149,8 @@ is additive firmware work, not a dependency fight. Chain:
   functions plus a `FILE*`→`FIL` bridge.
 
 Cassette (`CSAVE`/`CLOAD`, `.CAS`/`.WAV`) is **not** covered by any of these —
-there is no tape emulation in the port at all. Unticketed for now.
+there is no tape emulation in the port at all. Unticketed, and under the new
+direction it would be peripheral support if ever wanted.
 
 ## Audio fidelity & polish
 
@@ -201,11 +234,24 @@ plain CoCo2 boot is untouched.
   every one of them persists something to SD — firmware settings, `.pal`
   sidecars, `.fnt` sidecars — and the port currently has no write path at all.
   Their *read/render* halves are unblocked; only the **save** halves are gated.
-- **SD write chain**: `PIZERO-64` (foundation + latency numbers) → `PIZERO-65`
-  (write-back queue) → `PIZERO-66` (guest `SAVE`) → `PIZERO-68` (format,
-  multi-drive, WP). `PIZERO-67` and `PIZERO-69` need only `PIZERO-64`, so either
-  can be pulled forward. If `PIZERO-65` has landed, `PIZERO-69` must flush its
-  queue before snapshotting or the restored state disagrees with the card.
+- **Storage/filesystem chain**: `PIZERO-64` (write foundation + latency numbers)
+  → `PIZERO-65` (write-back queue) → `PIZERO-70` (backend interface) →
+  `PIZERO-71` (VFS) → `PIZERO-72` (hypercall ABI) → `PIZERO-73` (cart ROM) →
+  `PIZERO-74` (commands). `PIZERO-79` (floppy → peripheral) needs `PIZERO-73` for
+  the default cart. Backends `PIZERO-75`/`76`/`77`/`78` need only `PIZERO-70`, and
+  **`PIZERO-75` (RAM disk) is the one to build early** — it exercises the VFS,
+  ABI and command surface with no card and no write latency confounding results.
+- **`PIZERO-72` is the ABI freeze point.** It is the contract Bare Naked Forth and
+  every later guest program bind to, so settle versioning and sync-vs-async there
+  rather than discovering them in `PIZERO-74`.
+- **Address-space conflict to resolve**: `PIZERO-72`'s hypercall registers and
+  `PIZERO-62`'s GIME timer both eye the `$FF90–$FF95` block. Whichever lands
+  first must not squat the range by accident.
+- `PIZERO-67` and `PIZERO-69` need only `PIZERO-64`, so either can be pulled
+  forward. If `PIZERO-65` has landed, `PIZERO-69` must flush its queue before
+  snapshotting or the restored state disagrees with the card.
+- **`PIZERO-66`/`PIZERO-68` are no longer blockers for anything.** Demoted to
+  legacy peripheral polish by `PIZERO-79`.
 - **Audio/MIDI chain**: `PIZERO-58` (bench) → `PIZERO-17` (synth); `PIZERO-61`
   (Lyra research) → `PIZERO-59` (MIDI bus) → `PIZERO-60` (external endpoints).
   `PIZERO-59` reuses the cycle-accurate PIA-tap from the audio work (`PIZERO-18`)
