@@ -114,6 +114,15 @@ touching guest code.
 unchanged and still gate all of it — the latency problem is identical whether the
 bytes come from DECB or from our own VFS.
 
+**No library removes `PIZERO-65`.** Verified in the installed deps: FatFs is
+synchronous at every entry point, SdFat likewise, and carlk3's driver uses DMA
+but spin-waits on it (`my_spi.c:198`). The one non-blocking API in the stack is
+the SDIO backend's `tx_start`/`tx_poll` pair (`rp2040_sdio.h:101-111`), which we
+don't currently use — `hw_config.c` is 1-bit SPI at 12.5 MHz. Tracked as
+**`PIZERO-80`** (deferred; hardware feasibility first). Note even SDIO wouldn't
+fix write stalls: the dominant cost is the card's internal program/erase, which
+no transport speeds up.
+
 ## Supporting: SD write foundation
 
 Today the port **cannot write to the SD card at all** — every `f_open` in project
