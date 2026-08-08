@@ -58,15 +58,23 @@ This is the current push. Order reflects value × independence.
 ## Next: BIOS / launcher & VDG extensions
 
 A new UX workstream — pick what to load and recolor it, all in-firmware with a
-native-CoCo look. Dependency chain: `PIZERO-53` → `PIZERO-55`.
+native-CoCo look. Chain: `PIZERO-81` → `PIZERO-53` → `PIZERO-55`.
 
-- **`PIZERO-53` — Firmware config/launcher overlay ("BIOS" menu).** Function-key
-  overlay drawn over HDMI that browses the SD and loads/mounts images, plus
-  firmware-only settings (SAM-speed cap, joystick source, audio env). **Renders
-  as a real CoCo text screen** by reusing `render_alpha_frame` + the authentic
-  `font_6847t1` char ROM (via a small source-pointer refactor), inverse-video
-  selection. This refactor is the smallest self-contained first brick and it also
-  unblocks the palette editor.
+- **`PIZERO-81` — F12 disk-image switcher** (sliced `81a`–`81d`). Ported from the
+  AMOLED picker but keyboard-driven: **F12** opens, **←/→** select, **ENTER**
+  cold-boots, **ESC** cancels. Emulation is paused while it's up; all three entry
+  types (DSK/BIN/CART). Drawn with real `font_6847t1` glyphs so it looks like the
+  machine it's running on. **Smaller than it looks** — the source-pointer blit
+  `coco_boot_blit_vdg_pizero_src` already exists at `coco_boot.h:76`. What's
+  missing is `coco_boot_enumerate`, the card renderer, and `coco_machine_reset()`
+  (AMOLED has it, this port doesn't). Sequence: `81a` catalogue → `81b` renderer
+  → `81c` keys + pause → `81d` cold-boot launch.
+- **`PIZERO-82` — Boot back into the last launched entry** (`laststate.txt`).
+  Split out of `-81` because it needs SD write (`PIZERO-64`).
+- **`PIZERO-53` — Firmware settings menu ("BIOS").** Now the *superset*, not the
+  first brick: SAM-speed cap, joystick source, audio env, built on `PIZERO-81`'s
+  overlay and state machine. Its planned `render_alpha_frame` refactor turned out
+  to be unnecessary. Settings persistence needs `PIZERO-67`.
 - **`PIZERO-55` — Programmable palette + editor + per-title `.pal` profiles.**
   The concrete, expanded successor to `PIZERO-26`: give the classic 6847 modes a
   GIME-style programmable palette (make the `g_vdg_rgb565_native[16]` LUT
