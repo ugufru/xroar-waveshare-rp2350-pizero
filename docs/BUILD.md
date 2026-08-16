@@ -46,6 +46,7 @@ trap in §4. Add a new `extends = env:pizero` env instead.
 | **`pizero_stream`** | `pizero_audio` | `-DHDMI_STREAM_AUDIO` | single-buffered | **streaming audio (current; warble-fixed)** | ~70% |
 | `pizero_stream_synth` | `pizero_stream` | `-DHDMI_AUDIO_SYNTH` | single-buffered | 440 Hz test tone (transport test) | ~70% |
 | **`pizero_stream_60`** | `pizero_stream` | `-DHDMI_60HZ` | single-buffered | **streaming audio @ true 640x480p60 + USB (PIZERO-45)** | ~70% |
+| `pizero_hotplug` | `pizero_stream_60` | `-DUSB_HOTPLUG_RECOVER` | single-buffered | product build + USB hot-replug recovery (PIZERO-51) | ~71% |
 | **`pizero_60hz`** | `pizero` | `-DHDMI_60HZ_TEST` | double-buffered | none (test) | ~96.8% |
 | `pizero_bench` / `pizero_wdtest` / `pizero_wavmeas` / `pizero_stream_std` / `pizero_stream_lpf` | various | (diagnostics) | — | — | — |
 | `waveshare_demo` | — | (stock USB demo) | — | — | — |
@@ -102,6 +103,7 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 | `HDMI_STD_TIMING` | Diagnostic: 252 MHz / 25.2 MHz pixel but **keeps ~52 Hz** (widened h_fp) and **disables USB**. Used to prove the residual pitch/buzz is *not* the pixel clock (PIZERO-41). |
 | `ARTIFACT_PHASE_LEGACY` | Revert the PMODE4/RG6 NTSC artifact red/blue phase to the pre-PIZERO-43 orientation (default now matches Space Warp). |
 | `WATCHDOG_DISABLE` | Turn off the PIZERO-33 hardware watchdog (default ON: auto-reboots a wedged board in ~3 s + logs the stuck phase in `[run]` as `freezes=N last=<phase>`). Disable only for live freeze debugging. `WATCHDOG_TIMEOUT_MS` overrides the 3000 ms timeout. |
+| `USB_HOTPLUG_RECOVER` | **(PIZERO-51) EXPERIMENTAL — HW-DISPROVEN, do not ship.** USB hot-replug recovery. On this rev3 board an unplug is invisible to the line/connect flags — the PIO SM pins the bus at J/FS and PIO-USB floods ~180 byte-identical phantom HID reports/s (PIZERO-11b). Detects a run of `USB_PHANTOM_FLOOD_N` (default 100, ~0.55 s) identical reports on an interface, then **watchdog-reboots** to re-enumerate (fix v3; the earlier `pio_usb_host_stop/restart` and force-disconnect approaches are dead — see the ticket). **2026-08-16 HW result: does not work.** The reboot does not re-enumerate an attached device (`usb=0` for 200 s), the detector false-positives on an idle composite keyboard (~20 s after mount), and the `scratch[4]` replug sentinel is silently wiped by the pico-SDK (`watchdog_reboot` zeroes it), so recoveries are miscounted as PIZERO-33 freezes. Kept flag-gated in `pizero_hotplug` for re-test only; the real fix needs a GPIO-switched VBUS. |
 
 ### Timing
 | Flag | Effect |

@@ -48,3 +48,35 @@ unsigned usbdiag_ep_error(void) {
 unsigned usbdiag_ints(void) {
     return (unsigned)PIO_USB_ROOT_PORT(0)->ints;
 }
+
+/* PIZERO-51 RECOVERY (not just diagnostic): force a disconnect on root port 0.
+ *
+ * On this rev3 board an unplug never reads SE0 while the port is polling (the SM
+ * pins the line at J/FS), so pio-usb's connection_check() never sets the DISCONNECT
+ * interrupt and the TinyUSB host layer keeps the stale device mounted forever.
+ * main.cpp detects the resulting phantom-report flood (PIZERO-11b) and calls this
+ * to drive the library's OWN disconnect branch by hand — a byte-for-byte copy of
+ * connection_check()'s disconnect path (pio_usb_host.c):
+ *   - clear `connected` and set `suspended` so the SOF service stops driving the
+ *     bus. With the SM released the line reads its true state again: SE0 while the
+ *     port is empty (so the connect-check does NOT re-attach a phantom), FS/LS idle
+ *     once a real device is replugged (-> a clean CONNECT + fresh enumeration).
+ *   - raise DISCONNECT so the very next SOF service invokes the TinyUSB HCD handler
+ *     (hcd_pio_usb.c) -> hcd_event_device_remove -> tuh umounts the dead device and
+ *     frees its address, so the replug mounts cleanly instead of colliding.
+ *   - retire any in-flight transfers on this root so no endpoint is left hung.
+ * Runs on core 0 from loop(), the same core as the pio-usb SOF alarm, so the writes
+ * don't race that handler. */
+void usbdiag_force_disconnect(void) {
+    root_port_t *port = PIO_USB_ROOT_PORT(0);
+    port->connected = false;
+    port->suspended = true;
+    port->ints |= PIO_USB_INTS_DISCONNECT_BITS;
+
+    for (int ep_idx = 0; ep_idx < PIO_USB_EP_POOL_CNT; ep_idx++) {
+        endpoint_t *ep = PIO_USB_ENDPOINT(ep_idx);
+        if (ep->root_idx == 0 && ep->size && ep->has_transfer) {
+            pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
+        }
+    }
+}

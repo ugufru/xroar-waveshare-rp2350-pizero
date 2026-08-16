@@ -44,6 +44,54 @@ static volatile uint32_t g_usb_devices = 0;
 static volatile uint32_t g_hid_reports   = 0;
 static volatile uint32_t g_hid_recv_fail = 0;
 extern "C" uint32_t pio_usb_host_get_frame_number(void);
+
+#ifdef USB_HOTPLUG_RECOVER
+// PIZERO-51: phantom-flood hot-replug recovery. On this rev3 board an unplugged
+// device is INVISIBLE to line_state/connected/ep_error/ints — the PIO SM pins the
+// bus at J/FS, so PIO-USB decodes the held-idle line as a valid IN response and
+// "completes" a byte-IDENTICAL HID report ~180x/s forever (PIZERO-11b, HW-confirmed
+// 2026-06-29). A real boot keyboard reports only on key transitions (it NAKs while
+// idle), so a long run of byte-identical reports on one interface == the device is
+// gone. We count that run per (daddr,idx); crossing the threshold asks loop() to
+// tear down and re-enumerate the root port at a safe point (NOT from inside the tuh
+// callback, which is mid-stack). Alternatives were ruled out in PIZERO-11b:
+// E9-drain (the line is DRIVEN, not leaking) and transfer-error detection (no error
+// ever fires). Flag-gated so the default product build is untouched until HW-proven.
+#ifndef USB_PHANTOM_FLOOD_N
+#define USB_PHANTOM_FLOOD_N 100        // consecutive identical reports (~0.55s @ ~180/s)
+#endif
+#define USB_HP_MAX_DADDR 5             // one root port -> low addresses; skip beyond
+#define USB_HP_TRACK_LEN 16            // compare the leading bytes (8-byte kbd report + slack)
+static uint8_t  g_hp_prev[USB_HP_MAX_DADDR][CFG_TUH_HID][USB_HP_TRACK_LEN];
+static uint16_t g_hp_run [USB_HP_MAX_DADDR][CFG_TUH_HID];
+static uint8_t  g_hp_last[8] = {0};   // last flooding payload, for the recovery log
+static volatile bool g_usb_recover_pending = false;
+
+// Track one interface's report; return true once it has flooded >= N identical.
+static bool hotplug_note_report(uint8_t daddr, uint8_t idx,
+                                const uint8_t *report, uint16_t len) {
+    if (daddr < 1 || daddr > USB_HP_MAX_DADDR || idx >= CFG_TUH_HID) return false;
+    uint8_t *prev = g_hp_prev[daddr - 1][idx];
+    uint16_t n = len < USB_HP_TRACK_LEN ? len : USB_HP_TRACK_LEN;
+    bool same = true;
+    for (uint16_t i = 0; i < n; i++) {
+        if (report[i] != prev[i]) same = false;
+        prev[i] = report[i];
+    }
+    uint16_t *run = &g_hp_run[daddr - 1][idx];
+    if (same) { if (*run < 0xFFFF) (*run)++; } else { *run = 0; }
+    if (*run >= USB_PHANTOM_FLOOD_N) {
+        for (int i = 0; i < 8; i++) g_hp_last[i] = (i < len) ? report[i] : 0;
+        return true;
+    }
+    return false;
+}
+
+static void hotplug_reset_tracking(void) {
+    for (int d = 0; d < USB_HP_MAX_DADDR; d++)
+        for (int i = 0; i < CFG_TUH_HID; i++) g_hp_run[d][i] = 0;
+}
+#endif // USB_HOTPLUG_RECOVER
 // PIZERO-11b diag: thin C shim over the C-only pio_usb_ll.h internals
 // (root_port_t + pio_usb_bus_get_line_state). Defined in src/usb_hotplug_diag.c
 // so that header is never pulled into this C++ TU.
@@ -53,6 +101,9 @@ extern "C" int      usbdiag_fullspeed(void);
 extern "C" unsigned usbdiag_event(void);       // 0=NONE 1=CONNECT 2=DISCONNECT 3=HUB
 extern "C" unsigned usbdiag_ep_error(void);    // endpoint-error register
 extern "C" unsigned usbdiag_ints(void);        // interrupt-status register
+// PIZERO-51: force the pio-usb disconnect branch so TinyUSB umounts a device that
+// vanished without the (masked) SE0 the library normally needs. See the shim.
+extern "C" void usbdiag_force_disconnect(void);
 
 extern "C" {
 #include "ff.h"
@@ -721,6 +772,9 @@ static void audio_encode_frame(void) {
 #define WATCHDOG_TIMEOUT_MS 3000   // >> the ~19ms frame loop; only a real hang trips it
 #endif
 #define WD_MAGIC 0x05330534u   // bumped for scratch[3] freeze-log layout (invalidates stale scratch)
+// PIZERO-51: scratch[4] sentinel marking a DELIBERATE watchdog reboot for USB
+// re-enumeration (device unplugged) so setup() reports it as a replug, not a freeze.
+#define USB_REPLUG_MAGIC 0x51D15C09u
 enum { WP_NONE = 0, WP_SETUP, WP_LOOP, WP_USB, WP_KBD, WP_EMU, WP_RENDER, WP_BLIT, WP_AUDIO, WP_PACE };
 static uint32_t g_freeze_count = 0;        // persistent across reboots (from scratch[3])
 static uint32_t g_last_freeze_phase = WP_NONE;
@@ -758,9 +812,25 @@ void setup() {
     // A FORCEd reboot (power-on / manual reset / picotool / flash) is NOT TIMER, so
     // it starts a FRESH session (count back to 0) -- the tally means "freezes since
     // I last started it", and this also auto-clears the self-test's count on deploy.
+    // PIZERO-51: a deliberate USB-replug reboot is also a TIMER reset — distinguish
+    // it by the scratch[4] sentinel so it isn't logged/counted as a freeze. It
+    // carries the running freeze tally across unchanged (not incremented).
+    bool usb_replug_reboot = (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
+                             && watchdog_hw->scratch[0] == WD_MAGIC
+                             && watchdog_hw->scratch[4] == USB_REPLUG_MAGIC;
+    watchdog_hw->scratch[4] = 0;   // consume the sentinel
+
     bool freeze_reboot = (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
-                         && watchdog_hw->scratch[0] == WD_MAGIC;
-    if (freeze_reboot) {
+                         && watchdog_hw->scratch[0] == WD_MAGIC
+                         && !usb_replug_reboot;
+    if (usb_replug_reboot) {
+        g_freeze_count = watchdog_hw->scratch[3] >> 8;
+        if (g_freeze_count > 1000000u) g_freeze_count = 0;
+        g_last_freeze_phase = watchdog_hw->scratch[1];
+        Serial.print("[usb] re-enumeration reboot (device hot-replug, PIZERO-51) -> "
+                     "mounting whatever is attached now\r\n");
+        Serial.flush();
+    } else if (freeze_reboot) {
         g_freeze_count = watchdog_hw->scratch[3] >> 8;
         if (g_freeze_count > 1000000u) g_freeze_count = 0;      // garbage guard
         g_last_freeze_phase = watchdog_hw->scratch[1];
@@ -1072,6 +1142,41 @@ void loop() {
     USBHost.task();   // PIZERO-11: service USB host transfers (prime freeze suspect).
     wd_phase(WP_LOOP);
 
+#ifdef USB_HOTPLUG_RECOVER
+    // PIZERO-51: a phantom flood (see hotplug_note_report) flagged that a device
+    // was unplugged. RECOVERY = REBOOT into the cold-boot enumeration path.
+    //
+    // Why reboot rather than re-enumerate in place (learned the hard way on HW,
+    // 2026-07-22): on this rev3 board the USB line is a pathological liar — the SM
+    // pins D+/D- at J/FS whether a device is present OR absent (E9 leak), so pio-usb
+    // never sees SE0 and the tuh connect-check cannot tell "empty" from "present".
+    //   - stop()/restart() only cycles the PIO timer; tuh never re-enumerates.
+    //   - Forcing the pio-usb disconnect branch clears `connected`, but the very
+    //     next connect-check re-latches it from the phantom J line -> tuh tries to
+    //     enumerate a non-existent device, fails, and WEDGES (connected=1, usb=0,
+    //     no polling, unrecoverable) — confirmed by a 30 s flat capture.
+    //   - A clean full re-init is impossible: the pio-usb HCD implements no
+    //     hcd_deinit and pio-usb has no host_deinit (a 2nd init re-claims PIO SMs).
+    // The ONLY proven enumeration path on this board is a cold boot. A watchdog
+    // reboot re-runs it and mounts whatever is plugged in at that moment (~2 s,
+    // auto), which is strictly better than today's manual power-cycle. Cost: the
+    // running emulator state is lost on a device swap. Gated behind USB_HOTPLUG_RECOVER.
+    if (g_usb_recover_pending) {
+        g_usb_recover_pending = false;
+        Serial.printf("[usb] phantom flood (>=%d identical HID reports [%02x %02x %02x %02x "
+                      "%02x %02x %02x %02x]) -> device unplugged; rebooting to re-enumerate\r\n",
+                      USB_PHANTOM_FLOOD_N,
+                      g_hp_last[0], g_hp_last[1], g_hp_last[2], g_hp_last[3],
+                      g_hp_last[4], g_hp_last[5], g_hp_last[6], g_hp_last[7]);
+        Serial.flush();
+#ifndef WATCHDOG_DISABLE
+        watchdog_hw->scratch[4] = USB_REPLUG_MAGIC;   // tag: deliberate reboot, NOT a freeze
+#endif
+        watchdog_reboot(0, 0, 30);                     // reboot in ~30 ms (lets serial drain)
+        for (;;) tight_loop_contents();                // wait for the reset
+    }
+#endif
+
     // PIZERO-11b diag: sample the PIO-USB root port every frame and log on ANY
     // change, so a sub-second connect/disconnect that the 1 Hz [run] line would
     // miss is still caught. `connected` is the lib's own debounced view (the
@@ -1230,6 +1335,12 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
         hid_keyboard_apply(report);
     }
     g_hid_reports++;   // PIZERO-11b diag: proves the device is alive & polled
+#ifdef USB_HOTPLUG_RECOVER
+    // PIZERO-51: detect the unplug phantom-flood (byte-identical reports) and ask
+    // loop() to re-enumerate. Kept OUT of hid_keyboard_apply so real keystrokes
+    // (which change the report, resetting the run) never trip it.
+    if (hotplug_note_report(daddr, idx, report, len)) g_usb_recover_pending = true;
+#endif
     if (!tuh_hid_receive_report(daddr, idx)) g_hid_recv_fail++;
 }
 
