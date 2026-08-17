@@ -533,10 +533,16 @@ extern "C" void HOT_FUNC(coco_vdg_render)(void *sptr, unsigned burst, unsigned n
                                           const uint8_t *data) {
     (void)sptr; (void)burst; (void)npixels;
 #ifdef SUPPRESS_RENDER_SCANLINE
-    // AMOLED-57: core 1 owns vdg_buffer now (coco_machine_render_frame).
-    // xroar's render_scanline is suppressed, so the pixel_data this
-    // callback would pack is stale — skip it entirely to avoid racing
-    // core 1's renderer.
+    // vdg_buffer is produced whole-frame by coco_machine_render_frame()
+    // instead of per-scanline here. xroar's render_scanline is suppressed,
+    // so the pixel_data this callback would pack is stale — skip it entirely.
+    //
+    // NOTE (PIZERO-83, 2026-08-17): the original AMOLED-57 comment said
+    // "core 1 owns vdg_buffer now". That is NOT true on this port. Here
+    // core 1 runs only libdvi scanout (core1_main, src/main.cpp:200, which
+    // never returns); coco_machine_render_frame is called from core 0's
+    // loop() in the WP_RENDER phase. There is no cross-core race to avoid —
+    // the buffer has a single writer on core 0.
     (void)data;
     return;
 #endif
@@ -855,20 +861,30 @@ extern "C" const uint8_t *coco_machine_get_vdg_buffer(void) {
     return g_m.vdg_buffer;
 }
 
-// AMOLED-57 phase 2: core-1 VDG renderer. Reads PIA1 PB mode bits +
-// SAM F register + CoCo RAM, generates one frame's worth of palette
-// indices into g_m.vdg_buffer. Called from loop1 in place of core 0's
-// per-scanline render path (which is suppressed by SUPPRESS_RENDER_SCANLINE).
+// Whole-frame VDG renderer. Reads PIA1 PB mode bits + SAM F register +
+// CoCo RAM and generates one frame's worth of palette indices into
+// g_m.vdg_buffer, replacing xroar's per-scanline render path (suppressed
+// by SUPPRESS_RENDER_SCANLINE). Called from core 0's loop() — see the
+// WP_RENDER phase marker in src/main.cpp.
 //
-// MVP modes:
-//   * ALPHA  (PB7 = 0)         — character glyph via font_6847t1, green-on-black
-//   * RG6    (PB7=1, GM=111)   — 1-bit per pixel, white-on-black
+// Mode coverage (dispatch in coco_machine_render_frame below):
+//   * ALPHA  (PB7=0)          — font_6847t1 glyph via the g_alpha_lut fast
+//                               path; SG4 semigraphics handled per-byte
+//                               inside render_alpha_frame (ch & 0x80)
+//   * RG6    (PB7=1, GM=7)    — render_rg6_frame, incl. the NTSC-artifact
+//                               colour path (PIZERO-43 sets the phase)
+//   * GM 0-6 (PB7=1)          — render_graphics_frame: RG = 1 bit/pixel
+//                               fg/bg, CG = 2 bits/pixel (cg_base + value),
+//                               with horizontal replication and nLPR row
+//                               repetition
 //
-// Deferred: SG4/SG6 (semigraphics), CG1-6 (color graphics), artifact LUT
-// for RG6 (AMOLED-22). Those modes show black until implemented.
+// Not implemented: SG6. (The original AMOLED-57 comment here listed SG4 and
+// CG1-6 as deferred "show black until implemented" — that went stale when
+// render_graphics_frame landed; corrected PIZERO-83, 2026-08-17.)
 //
 // Palette indices match g_vdg_rgb565[] in coco_boot.cpp:
-//   0=GREEN  4=WHITE  8=BLACK  etc.
+//   0=GREEN  4=WHITE  8=BLACK  etc.  Indices 12-15 are unused by the 6847
+//   (see PIZERO-55 / PIZERO-85 for making this LUT programmable).
 
 extern "C" const uint8_t font_6847t1[];  // 128 chars × 12 rows = 1.5 KB
 
