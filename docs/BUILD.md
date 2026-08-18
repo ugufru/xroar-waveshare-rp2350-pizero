@@ -187,5 +187,5 @@ in editor — they are **not** real build errors (the actual `pio run` is clean)
 ## 6. See also
 - `CLAUDE.md` — repo conventions, source-repo pointers, workflow rules.
 - `docs/audio-decision.md` — why HDMI audio (vs PWM), the single-buffer trade-off.
-- `docs/product-plan.md` — roadmap / V1.0 scope.
+- `docs/kit.md` — what goes in a built unit, BOM, and assembly (see `PIZERO-91`).
 - `issues.jsonl` — work tracking (`PIZERO-NN`); HDMI-audio rework is PIZERO-35 → 36–40.
