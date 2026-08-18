@@ -68,8 +68,10 @@ see the comments by each `[env:…]` in `platformio.ini`.
 `HDMI_DATA_ISLAND` switches the 320×240 framebuffer from double-buffered
 (2 × ~153 KB) to single-buffered, freeing ~150 KB for the per-line audio-island
 buffers (`main.cpp:98`). The trade-off is possible tearing (core 1 may scan the
-framebuffer mid-blit), accepted per `docs/audio-decision.md`. RAM is tight either
-way (>92%); watch the link report when adding buffers.
+framebuffer mid-blit), accepted per `docs/audio-decision.md`. Net effect measured
+2026-08-17: the audio envs sit at **70.4%** (368,964 B) while the silent
+double-buffered envs are nearly full at **96.8%** (507,340 B, ~17 KB spare) — so
+the audio build is the roomy one. Watch the link report when adding buffers.
 
 ---
 
@@ -169,8 +171,10 @@ in editor — they are **not** real build errors (the actual `pio run` is clean)
 
 ## 5. Verifying a build
 
-- **Size:** the link report prints `RAM: … %`. Both audio envs sit >92% — adding
-  buffers can overflow; check it.
+- **Size:** the link report prints `RAM: … %`. Measured 2026-08-17: audio envs
+  (`pizero_stream`, `pizero_stream_60`) **70.4%**; silent double-buffered envs
+  (`pizero`, `pizero_60hz`) **96.8%** — the latter have only ~17 KB spare, so
+  adding buffers there can overflow. Check it.
 - **Serial telemetry:** `pio device monitor` (115200). The running emulator prints
   `[run] fps cpu render blit aud …` — confirm `fps≈52`, frame time under budget.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.

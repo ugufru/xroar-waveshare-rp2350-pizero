@@ -19,7 +19,7 @@ same HDMI cable**. Only joystick input remains open.
 
 - Output to HDMI at 2× the CoCo's native resolution, at 30 fps or better.
 - USB host for a real keyboard and joystick.
-- CoCo emulation on core 0; video, keyboard, and SD-card access on core 1.
+- CoCo emulation, VDG render/blit, and USB/SD servicing on core 0; `libdvi` DVI scanout owns core 1.
 
 ## What you need
 
@@ -142,8 +142,8 @@ timing is kept only as a fallback env — see [`docs/BUILD.md`](docs/BUILD.md).)
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  core 0  CoCo emulation (6809 + SAM + PIA + VDG)          │
-│  core 1  blit → DVI scanout (libdvi), SD + USB servicing  │
+│  core 0  emulation + VDG render + blit + USB + SD         │
+│  core 1  DVI scanout (libdvi) + HDMI audio encode         │
 ├──────────────────────────────────────────────────────────┤
 │  lib/coco_machine   CoCo bus glue + minimal FDC  (reused) │
 │  lib/xroar_core     vendored XRoar core          (reused) │
@@ -266,7 +266,10 @@ How we got from the first boot (54 fps) to a locked 60 fps:
 - **Glyph-row → packed-32-bit-word render LUT** for alpha (text) mode, replacing per-pixel
   read-modify-write: **~6.4 ms → ~0.56 ms** per frame. (Graphics modes still use the per-pixel path.)
 - **Double buffering** (`PIZERO-14`): two 320×240 RGB565 buffers with a `volatile` front-buffer
-  handoff from core 0 to core 1, so `libdvi` never samples a half-rendered frame. Costs ~89% RAM.
+  handoff from core 0 to core 1, so `libdvi` never samples a half-rendered frame. Costs **96.8% RAM**
+  (507,340 / 524,288 bytes) in the double-buffered envs `pizero` and `pizero_60hz`. The default
+  `pizero_stream_60` **single**-buffers instead — the HDMI data islands need the framebuffer's
+  ~150 KB — and sits at **70.4%** (368,964 bytes), leaving ~155 KB free. Measured 2026-08-17.
 
 Performance instrumentation, clock, and vreg tuning landed in `PIZERO-15`; the serial monitor prints
 per-second `[run]` fps/cpu/blit stats. For comparison, the AMOLED port manages ~15 fps (~36%

@@ -204,7 +204,8 @@ Faithful-extension and "what-if" tracks, explicitly deferred:
   (PIZERO-35/45), so this is now compute + a control surface: runs on core 0
   (~3–4 ms of the ~5.3 ms/frame headroom → ~4–8 rich voices), wavetables/samples
   in 16 MB flash with an SRAM active-frame cache (PSRAM is unpopulated; SRAM is
-  ~89–94% full), guest control via bus-write interception (same trick as the
+  **70.4% full on the default `pizero_stream_60`** — ~155 KB free — and 96.8% on the
+  double-buffered `pizero`/`pizero_60hz` fallbacks; measured 2026-08-17), guest control via bus-write interception (same trick as the
   `PIZERO-55` palette registers). Gated on **`PIZERO-58`**.
 - **`PIZERO-58` — Synth voice-budget bench** (pre-work for `PIZERO-17`): a
   flag-gated build that runs N dummy voices and watches the `[run]` telemetry to
