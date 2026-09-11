@@ -39,8 +39,11 @@ top_t   = 1.8;          // lid roof
 clr     = 0.4;          // clearance between PCB edge and inner wall, per side
 
 standoff_h = 2.6;       // PCB underside to floor: clears bottom-side solder
-head_room  = 13.0;      // [M] PCB top to lid roof. 12.0 fouled the header
-                        //     pins on the first lid print; 13.0 clears.
+head_room  = 12.0;      // [M] PCB top to lid roof. The first lid print
+                        //     fouled, but on the microSD card, not the
+                        //     header, so the height stays at 12.0 and the
+                        //     fix is in the microSD opening below. A 2.54 mm
+                        //     male header stands ~11.5 mm proud of the board.
 
 r_out = 4.0;            // vertical corner radius, outside
 top_chamfer = 1.0;      // chamfer on the top edge (prints flat on the plate)

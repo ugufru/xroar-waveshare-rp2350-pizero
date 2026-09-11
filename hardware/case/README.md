@@ -24,6 +24,12 @@ to drop the pockets if you would rather have a plain flat face.
 
 Current size: 69.8 x 34.8 x 20.6 mm.
 
+## Rule: commit before printing
+
+Every STL that gets sent to a printer must be committed first, so each
+printed revision is recoverable and can be compared against the part in
+hand. Render, commit, then open in the slicer. Never the other way round.
+
 ## Rendering
 
 ```
@@ -87,14 +93,18 @@ headroom fouled the header pins. Revision 2 changes:
 
 | | was | now |
 |---|---|---|
-| `head_room` | 12.0 | 13.0 |
 | mini-HDMI opening height | 4.5 | 3.5 |
 | microSD slot width | 10.2 | 11.7 |
 | microSD thumb dish | none | R10 x 1.2 mm deep |
 | BAT opening height | 7.0 | 6.0 |
 | BAT opening, low-y edge | 14.4 | 15.4 |
 
-Case height is now 21.6 mm, up from 20.6.
+Case height stays at 20.6 mm.
+
+The first lid fouled on assembly. That initially read as the 40-pin header
+and `head_room` went to 13.0, but the real obstruction was the microSD
+card, so the height is back to 12.0 and the fix lives in the microSD
+opening instead. Keeping the closed case as low as it will go.
 
 Note that the base wall rim sits exactly at the PCB top surface, so with a
 board seated the rim is a z-zero datum you can measure connector heights

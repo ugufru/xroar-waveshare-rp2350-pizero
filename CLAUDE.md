@@ -64,4 +64,8 @@ a build flag.
   goes behind a build flag on `main`, or stays uncommitted. Archive dead exploratory
   history with a tag (`archive/<topic>`), never a lingering branch. See `CONTRIBUTING.md`.
 - Reference issue IDs (`PIZERO-NN`) in commit messages.
+- **Commit STLs before sending them to a printer.** Every revision that
+  gets printed must exist as a commit first, so the physical part in hand
+  always maps to a recoverable version. Render, commit, then open the
+  slicer. See `hardware/case/README.md`.
 - User preference: no AskUserQuestion popups — ask in plain prose.
