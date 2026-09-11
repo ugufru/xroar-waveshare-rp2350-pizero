@@ -61,8 +61,11 @@ Board geometry is scaled off the Waveshare wiki dimension drawing against
 its 65.00 mm callout, good to roughly +/- 0.2 mm. Those parameters are
 marked `[W]` in the source.
 
-Parameters marked `[?]` are estimates that need calipers on a real board:
-PCB thickness, connector heights, plug clearances, and header height.
+Parameters marked `[M]` were corrected from a printed part on real
+hardware, and are the most trustworthy of the three.
+
+Parameters marked `[?]` are still estimates that need calipers on a real
+board: PCB thickness, USB-C and microSD heights, and plug clearances.
 
 ## Port test coupon
 
@@ -76,9 +79,22 @@ try real plugs before committing to a full lid.
 
 ## Status
 
-Base printed and confirmed 2026-09-11: board seats without force, walls
-feel rigid, hole pattern correct. That validates the `[W]` parameters.
-The lid's `[?]` parameters are still unmeasured.
+**Base**, printed 2026-09-11: board seats without force, walls rigid, hole
+pattern correct. Validates the `[W]` parameters.
+
+**Lid**, first print 2026-09-11: shape and fit good, but 12.0 mm of
+headroom fouled the header pins. Revision 2 changes:
+
+| | was | now |
+|---|---|---|
+| `head_room` | 12.0 | 13.0 |
+| mini-HDMI opening height | 4.5 | 3.5 |
+| microSD slot width | 10.2 | 11.7 |
+| microSD thumb dish | none | R10 x 1.2 mm deep |
+| BAT opening height | 7.0 | 6.0 |
+| BAT opening, low-y edge | 14.4 | 15.4 |
+
+Case height is now 21.6 mm, up from 20.6.
 
 Note that the base wall rim sits exactly at the PCB top surface, so with a
 board seated the rim is a z-zero datum you can measure connector heights

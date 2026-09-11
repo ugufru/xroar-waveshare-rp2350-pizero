@@ -39,8 +39,8 @@ top_t   = 1.8;          // lid roof
 clr     = 0.4;          // clearance between PCB edge and inner wall, per side
 
 standoff_h = 2.6;       // PCB underside to floor: clears bottom-side solder
-head_room  = 12.0;      // [?] PCB top to lid roof. A 2.54 mm male header
-                        //     stands ~11.5 mm proud of the board.
+head_room  = 13.0;      // [M] PCB top to lid roof. 12.0 fouled the header
+                        //     pins on the first lid print; 13.0 clears.
 
 r_out = 4.0;            // vertical corner radius, outside
 top_chamfer = 1.0;      // chamfer on the top edge (prints flat on the plate)
@@ -75,19 +75,29 @@ port_frame_t = 0.8;     // wall left in front of the socket, inside the pocket
 plug_clr     = 0.3;     // clearance around the plug overmould, per side
 
 // [ centre_x, body_w, body_h, plug_w, plug_h ]
-hdmi = [12.35, 12.1, 4.0, 15.5, 7.0];   // [W] centre, [?] the rest
+hdmi = [12.35, 12.1, 3.0, 15.5, 7.0];   // [W] centre, [M] 3.0 body height
 usbc_host  = [39.1, 9.6, 3.3, 12.5, 7.0];   // PIO-USB host port (keyboard)
 usbc_power = [53.6, 9.6, 3.3, 12.5, 7.0];   // power / programming port
 front_ports = [hdmi, usbc_host, usbc_power];
 
-sd_y0 = 10.8;           // [W] microSD slot, from the connector edge
-sd_y1 = 21.0;           // [W]
+sd_y0 =  9.8;           // [W] microSD slot, from the connector edge,
+sd_y1 = 21.5;           //     opened out 1.0 mm total after the first print
 sd_oh = 2.5;            // [?] height above the PCB top
 
-bat_open = true;        // opening for the 2-pin battery connector
-bat_y0 = 14.4;          // [W]
+// Thumb dish around the microSD slot, so a card edge can be pinched and
+// pulled. Cut from both halves, so it straddles the split line.
+sd_scoop   = true;
+sd_scoop_r = 10.0;      // dish radius: shallow and wide, not a deep pocket
+sd_scoop_d = 1.2;       // depth into the wall, same as the plug pockets
+sd_scoop_z = 0.8;       // centre height above the split line
+
+// 2-pin battery connector. Nothing in this project drives it, but it stays
+// reachable. Trimmed after the first lid print: 1 mm off the top and 1 mm
+// off the low-y edge, which is the left one seen from outside that wall.
+bat_open = true;
+bat_y0 = 15.4;          // [W] 14.4, pulled in 1.0
 bat_y1 = 23.6;          // [W]
-bat_oh = 7.0;           // [?]
+bat_oh = 6.0;           // [M] was 7.0
 
 buttons_open = true;    // paperclip holes over RUN and BOOT
 run_pos  = [41.0, 21.6];   // [W]
@@ -147,6 +157,14 @@ module port_pocket(p, z_lo, z_hi) {
             cube([w, pocket_d + 0.01, hi - lo]);
 }
 
+module sd_scoop_cut() {
+    if (sd_scoop)
+        translate([x0 - sd_scoop_r + sd_scoop_d,
+                   (sd_y0 + sd_y1)/2,
+                   split_z + sd_scoop_z])
+            sphere(r = sd_scoop_r);
+}
+
 /* ---------- base ----------------------------------------------------- */
 
 module base() {
@@ -162,6 +180,7 @@ module base() {
         }
         // relief so a plug overmould clears the base wall
         for (p = front_ports) port_pocket(p, -1, split_z);
+        sd_scoop_cut();
 
         // screw clearance + countersink from below
         for (h = holes) {
@@ -207,6 +226,7 @@ module lid() {
         }
 
         notch_left(sd_y0, sd_y1, sd_oh);
+        sd_scoop_cut();
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
         if (buttons_open) for (b = [run_pos, boot_pos])
