@@ -126,6 +126,12 @@ vent_rib     = 4.0;     // solid between slots             [C] measured
 vent_rows    = 4;
 vent_gap     = 10.0;    // clear space between the two banks
 vent_margin  = 5.0;     // slots stop this far from the left and right edges
+// Slots run full length across the corner screw bosses. Where a slot
+// crosses one it still cuts cleanly through the 1.8 mm band roof; the boss
+// top simply becomes the visible floor of the slot instead of open air.
+// The pilot hole tops out 5 mm below that, so nothing breaches it.
+// Set true to shorten rows 1 and 4 clear of the bosses instead.
+vent_clear_bosses = false;
 vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 
 vent_pitch   = vent_w + vent_rib;
@@ -233,10 +239,10 @@ vent_keepout = boss_d/2 + vent_w/2 + vent_boss_clr;
 function boss_push(cy, by) =
     (abs(cy - by) >= vent_keepout) ? 0
     : sqrt(vent_keepout*vent_keepout - (cy - by)*(cy - by));
-function row_lo(cy) = max([vent_x_lo,
+function row_lo(cy) = !vent_clear_bosses ? vent_x_lo : max([vent_x_lo,
     for (h = holes) if (h[0] < bw/2 && abs(cy - h[1]) < vent_keepout)
         h[0] + boss_push(cy, h[1])]);
-function row_hi(cy) = min([vent_x_hi,
+function row_hi(cy) = !vent_clear_bosses ? vent_x_hi : min([vent_x_hi,
     for (h = holes) if (h[0] > bw/2 && abs(cy - h[1]) < vent_keepout)
         h[0] - boss_push(cy, h[1])]);
 

@@ -100,11 +100,16 @@ around the slots with R3 corners, inset 2.0 mm from the sides and 2.4 mm
 from the ends. Case height 20.6 -> 22.6, exactly the recess depth. The
 roof under the band stays 1.8 mm.
 
-Rows 1 and 4 come out shorter than rows 2 and 3. At full length they run
-straight through the corner screw bosses, so each row's ends are pulled
-back clear of any boss they would breach. That is computed from the boss
-positions, not typed in, and it happens to reproduce the stepped grille
-on the real machine.
+All four rows run the full length, including across the corner screw
+bosses. Where a slot crosses one it still cuts cleanly through the 1.8 mm
+band roof; the boss top just becomes the visible floor of the slot instead
+of open air, showing as a small crescent at each corner. The pilot hole
+tops out at z 13.8 and that floor is at z 18.8, so nothing breaches the
+screw. The boss-to-roof joint drops from 28.3 mm2 to about 12 mm2, which
+is still far more than an M2.5 in a plastic boss will ever load.
+
+Set `vent_clear_bosses = true` to shorten rows 1 and 4 clear of the bosses
+instead, which gives the stepped grille the real machine has.
 
 At a 7 mm pitch only BOOT lands under a slot; RUN does not. A 5 mm pitch
 would catch both, since row 2 sits on BOOT and RUN is 10 mm further back,
