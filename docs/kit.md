@@ -121,7 +121,8 @@ These four items account for essentially every question you will be asked.
 > peripherals will not enumerate.
 >
 > **3. The two USB-C ports are different.** One is the keyboard (host), the
-> other is power. They look identical. *(Marked on the case.)*
+> other is power. They look identical. *(Mark them before you pack the unit:
+> the case does not label them. See §5.)*
 >
 > **4. You need to supply CoCo ROMs — until you do, THE SCREEN STAYS BLACK.**
 > A black screen does *not* mean the unit is broken; it means no ROM was found.
