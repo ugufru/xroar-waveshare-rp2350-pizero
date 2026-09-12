@@ -122,16 +122,15 @@ button_hole_d = 3.0;
 
 vents        = true;
 vent_w       = 3.0;     // slot width, front to back       [C] measured
-vent_rib     = 4.0;     // solid between slots             [C] measured
+vent_rib     = 3.0;     // solid between slots, for a 6.0 mm row pitch
 vent_rows    = 4;
 vent_gap     = 10.0;    // clear space between the two banks
 vent_margin  = 5.0;     // slots stop this far from the left and right edges
-// Slots run full length across the corner screw bosses. Where a slot
-// crosses one it still cuts cleanly through the 1.8 mm band roof; the boss
-// top simply becomes the visible floor of the slot instead of open air.
-// The pilot hole tops out 5 mm below that, so nothing breaches it.
-// Set true to shorten rows 1 and 4 clear of the bosses instead.
-vent_clear_bosses = false;
+// Slot ends stop beside the corner screw bosses rather than running over
+// them. Only the rows that actually come near a boss are pulled back, so
+// the outer rows end up shorter than the inner ones, which is the stepped
+// grille the real CoCo 2 has.
+vent_clear_bosses = true;
 vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 
 vent_pitch   = vent_w + vent_rib;
@@ -154,6 +153,11 @@ vent_y0      = boot_pos[1] - vent_pitch;
 band         = true;
 band_margin  = 3.0;     // solid recess border around the vent group
 band_r       = 3.0;     // corner radius of the recess
+// The recess runs out over the left and right edges, cutting the tops of
+// the side walls, rather than closing into a panel. Its corners then fall
+// outside the part, so band_r no longer shows; it applies again if this
+// goes false.
+band_over_edges = true;
 band_depth   = 2.0;     // how far below the top surface. The roof under the
                         // band stays base_roof_t, so the case grows by
                         // exactly this much.
@@ -267,8 +271,8 @@ module vent_cuts() {
 // the roof print without support: layer one is one island, not two.
 band_h  = vent_span + 2*band_margin;
 band_y0 = y0 + od/2 - band_h/2;
-band_x0 = vent_x_lo - band_margin;
-band_x1 = vent_x_hi + band_margin;
+band_x0 = band_over_edges ? x0 - band_r - 1      : vent_x_lo - band_margin;
+band_x1 = band_over_edges ? x0 + ow + band_r + 1 : vent_x_hi + band_margin;
 
 module band_cut() {
     if (band)

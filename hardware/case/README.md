@@ -92,33 +92,30 @@ pattern correct. Validates the `[W]` parameters.
 
 **Recessed vent band**, on the CoCo 2 pattern (see `coco2-image.png`):
 two banks of four slots in a panel recessed 2 mm below the top. Slots are
-3.0 mm across with 4.0 mm ribs, both as measured off a real CoCo 2.
+3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs.
 
 Layout: slots stop 5.0 mm from the left and right edges, with a 10.0 mm
-gap between the banks. The recess is a rounded panel, a 3.0 mm border
-around the slots with R3 corners, inset 2.0 mm from the sides and 2.4 mm
-from the ends. Case height 20.6 -> 22.6, exactly the recess depth. The
-roof under the band stays 1.8 mm.
+gap between the banks. The recess runs out over the left and right edges,
+cutting the tops of the side walls, and is 3.0 mm of border clear of the
+slots front and back. Flanks 3.9 mm. Case height 20.6 -> 22.6, exactly
+the recess depth. The roof under the band stays 1.8 mm.
 
-All four rows run the full length, including across the corner screw
-bosses. Where a slot crosses one it still cuts cleanly through the 1.8 mm
-band roof; the boss top just becomes the visible floor of the slot instead
-of open air, showing as a small crescent at each corner. The pilot hole
-tops out at z 13.8 and that floor is at z 18.8, so nothing breaches the
-screw. The boss-to-roof joint drops from 28.3 mm2 to about 12 mm2, which
-is still far more than an M2.5 in a plastic boss will ever load.
+Rows 1 and 4 are shorter than rows 2 and 3. At full length they run over
+the corner screw bosses, so each row's ends stop beside any boss they
+would otherwise cross. That is computed from the boss positions via
+`row_lo`/`row_hi`, not typed in, so it tracks if anything moves. It also
+reproduces the stepped grille on the real machine.
 
-Set `vent_clear_bosses = true` to shorten rows 1 and 4 clear of the bosses
-instead, which gives the stepped grille the real machine has.
+At a 6 mm pitch only BOOT lands under a slot; RUN does not. Row 2 sits on
+BOOT and RUN is 10 mm further back, so a pitch that divides 10 catches
+both: 5 mm does, 6 and the CoCo's 7 do not. The model echoes which buttons
+are covered rather than leaving it to chance.
 
-At a 7 mm pitch only BOOT lands under a slot; RUN does not. A 5 mm pitch
-would catch both, since row 2 sits on BOOT and RUN is 10 mm further back,
-but 5 mm is not the CoCo spacing. The model echoes which buttons are
-covered rather than leaving it to chance.
-
-Thinnest rim between the recess and the outside is 2.0 mm, at the middle
-of each long side. The 1 mm top chamfer eats into that, leaving 1.0 mm of
-flat there and 1.4 mm at the ends.
+**Printing note.** Because the recess crosses the side walls, the roof's
+first layer is two separate strips 3.9 mm wide with a 27 mm span between
+them, so this will want support on the top face. Setting
+`band_over_edges = false` closes the recess into a rounded panel inset
+from the sides, which joins the flanks into a ring and removes the need.
 
 **Roof vents**, first version: two banks of four slots, 1 mm wide,
 20 mm long, rounded ends. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6
