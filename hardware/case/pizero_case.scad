@@ -174,8 +174,9 @@ band_over_edges = true;
 // slots and running the full width across the side walls.
 groove       = true;
 groove_w     = 0.5;
-groove_d     = 0.5;
-groove_off   = 3.0;
+groove_d     = 0.6;     // an exact 3 layers at 0.2 mm, so it reads cleanly
+groove_off   = 2.0;     // each groove sits 1 mm nearer the slots than the
+                        // 3 mm the recess border used
 // The recess is defined by the slots, not by the case: band_margin of
 // border in front of the first row and behind the last, and wherever the
 // grille has to sit for the buttons is where the whole thing sits. On this

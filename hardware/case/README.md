@@ -96,8 +96,10 @@ at y 4.6, 10.6, 16.6 and 22.6. Every slot is 20.8 mm long, running 8.7 to
 29.5 on the left and 35.5 to 56.3 on the right, with a 6.0 mm gap between
 the banks.
 
-**Grooves, not a recess.** The banded look is two 0.5 mm grooves, 0.5 mm
-deep, at y 0.1 and 27.1, running the full width across the side walls.
+**Grooves, not a recess.** The banded look is two 0.5 mm grooves, 0.6 mm
+deep, at y 1.1 and 26.1, running the full width across the side walls.
+0.6 mm is an exact three layers at 0.2 mm, so the depth does not quantise
+to something shallower than intended.
 They replace a 2 mm recessed panel that **failed to print**: roof-down its
 floor had to bridge 27 mm between two strips of first layer, and because
 it ran edge to edge and cut the side walls, those strips were not even
@@ -127,8 +129,8 @@ are covered, so a later change to pitch, shift or slot width will say if
 it breaks this.
 
 The grille sits where the buttons put it, not where the case centre is, so
-it is off-centre front to back: 2.5 mm from the front edge to the first
-groove, 5.3 mm from the last groove to the back. Deliberate.
+it is off-centre front to back: 3.5 mm from the front edge to the first
+groove, 6.3 mm from the last groove to the back. Deliberate.
 
 **Roof vents**, first version: two banks of four slots, 1 mm wide,
 20 mm long, rounded ends. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6
