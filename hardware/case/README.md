@@ -91,25 +91,29 @@ pattern correct. Validates the `[W]` parameters.
 **Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
 
 **Recessed vent band**, on the CoCo 2 pattern (see `coco2-image.png`):
-two banks of slots sitting in a panel recessed 2 mm below the top, running
-edge to edge. Slots are 3.0 mm across. Ribs between them are 2.0 mm, not
-the CoCo's 4.0: see the fit note below. Case height 20.6 -> 22.6, the
-recess depth exactly. The roof under the band stays 1.8 mm.
+two banks of four slots in a panel recessed 2 mm below the top. Slots are
+3.0 mm across with 4.0 mm ribs, both as measured off a real CoCo 2.
 
-The measured CoCo proportions do not fit this case. At 3 mm slots with
-4 mm ribs, four rows plus a 5 mm border need 34.0 mm of a 34.8 mm roof,
-leaving a 0.4 mm sliver of original surface: the band stops reading as a
-band because it is the whole top. Options, all one parameter each:
+Layout: slots stop 5.0 mm from the left and right edges, with a 10.0 mm
+gap between the banks. The recess is a rounded panel, a 3.0 mm border
+around the slots with R3 corners, inset 2.0 mm from the sides and 2.4 mm
+from the ends. Case height 20.6 -> 22.6, exactly the recess depth. The
+roof under the band stays 1.8 mm.
 
-| | rows | rib | flanks | buttons reachable |
-|---|---|---|---|---|
-| A, as measured | 4 | 4.0 | 0.4 mm | no |
-| B, CoCo proportions | 3 | 4.0 | 3.9 mm | no |
-| C, current default | 4 | 2.0 | 3.4 mm | yes |
+Rows 1 and 4 come out shorter than rows 2 and 3. At full length they run
+straight through the corner screw bosses, so each row's ends are pulled
+back clear of any boss they would breach. That is computed from the boss
+positions, not typed in, and it happens to reproduce the stepped grille
+on the real machine.
 
-Row pitch is what decides button access. Row 2 lands on BOOT; RUN lands on
-a row only when the 10 mm between the buttons is a whole number of
-pitches. A 5 mm pitch divides it, the CoCo's 7 mm does not.
+At a 7 mm pitch only BOOT lands under a slot; RUN does not. A 5 mm pitch
+would catch both, since row 2 sits on BOOT and RUN is 10 mm further back,
+but 5 mm is not the CoCo spacing. The model echoes which buttons are
+covered rather than leaving it to chance.
+
+Thinnest rim between the recess and the outside is 2.0 mm, at the middle
+of each long side. The 1 mm top chamfer eats into that, leaving 1.0 mm of
+flat there and 1.4 mm at the ends.
 
 **Roof vents**, first version: two banks of four slots, 1 mm wide,
 20 mm long, rounded ends. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6

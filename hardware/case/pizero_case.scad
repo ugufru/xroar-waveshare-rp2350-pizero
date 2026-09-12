@@ -122,10 +122,11 @@ button_hole_d = 3.0;
 
 vents        = true;
 vent_w       = 3.0;     // slot width, front to back       [C] measured
-vent_rib     = 2.0;     // solid between slots             [C] is 4.0
-vent_len     = 20.0;    // slot length, end to end
+vent_rib     = 4.0;     // solid between slots             [C] measured
 vent_rows    = 4;
-vent_gap     = 9.0;     // clear space between the two banks
+vent_gap     = 10.0;    // clear space between the two banks
+vent_margin  = 5.0;     // slots stop this far from the left and right edges
+vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 
 vent_pitch   = vent_w + vent_rib;
 vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
@@ -136,8 +137,7 @@ vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
 // echo below says so out loud rather than letting it pass unnoticed.
 vent_y0      = boot_pos[1] - vent_pitch;
 
-vent_bank_cx = [ bw/2 - vent_gap/2 - vent_len/2,      // 18.0
-                 bw/2 + vent_gap/2 + vent_len/2 ];    // 47.0
+// (bank extents and boss keepout are derived below, after x0/ow/holes)
 
 // Recessed decorative band around the vents, edge to edge, as on the
 // CoCo 2. band_depth eats into the roof, so the roof thickens to suit and
@@ -146,7 +146,8 @@ vent_bank_cx = [ bw/2 - vent_gap/2 - vent_len/2,      // 18.0
 // 1.6 mm behind the case centre, so anchoring the band to them would leave
 // visibly unequal flanks on a part where the eye goes straight to the edge.
 band         = true;
-band_margin  = 5.0;     // solid recess around the vent group
+band_margin  = 3.0;     // solid recess border around the vent group
+band_r       = 3.0;     // corner radius of the recess
 band_depth   = 2.0;     // how far below the top surface. The roof under the
                         // band stays base_roof_t, so the case grows by
                         // exactly this much.
@@ -156,13 +157,14 @@ $fn = 64;
 // The whole point of anchoring rows on the buttons is that a paperclip can
 // still reach RUN and BOOT through a vent slot. Shout if a change breaks it.
 module _check_button(name, p) {
-    covered = [for (cx = vent_bank_cx)
-                 if (abs(p[0] - cx) <= (vent_len - vent_w)/2
-                     && min([for (r = [0 : vent_rows - 1])
-                               abs(p[1] - (vent_y0 + r*vent_pitch))]) <= vent_w/2)
+    covered = [for (b = vent_banks, r = [0 : vent_rows - 1])
+                 let (cy = vent_y0 + r*vent_pitch)
+                 if (abs(p[1] - cy) <= vent_w/2
+                     && p[0] >= max(b[0], row_lo(cy))
+                     && p[0] <= min(b[1], row_hi(cy)))
                  1];
     if (vents && len(covered) == 0)
-        echo(str("WARNING: ", name, " is no longer under a vent slot"));
+        echo(str("NOTE: ", name, " is not under a vent slot"));
 }
 
 /* ===================================================================== */
@@ -217,28 +219,56 @@ module port_pocket(p, z_lo, z_hi) {
             cube([w, pocket_d + 0.01, hi - lo]);
 }
 
-// One slot: a stadium, so the ends are rounded rather than square.
-module vent_slot(cx, cy) {
-    hull() for (d = [-1, 1])
-        translate([cx + d*(vent_len - vent_w)/2, cy, 0])
-            cylinder(d = vent_w, h = top_t + 0.08);
+// Banks run from vent_margin off each outer edge in to the centre gap.
+vent_x_lo = x0 + vent_margin;
+vent_x_hi = x0 + ow - vent_margin;
+vent_banks = [ [vent_x_lo,             bw/2 - vent_gap/2],
+               [bw/2 + vent_gap/2,     vent_x_hi] ];
+
+// Rows 1 and 4 run straight through the corner screw bosses at this
+// length, so each row's ends are pulled back clear of any boss it would
+// otherwise breach. Outer rows come out shorter than inner ones, which is
+// the stepped look the real CoCo 2 grille has.
+vent_keepout = boss_d/2 + vent_w/2 + vent_boss_clr;
+function boss_push(cy, by) =
+    (abs(cy - by) >= vent_keepout) ? 0
+    : sqrt(vent_keepout*vent_keepout - (cy - by)*(cy - by));
+function row_lo(cy) = max([vent_x_lo,
+    for (h = holes) if (h[0] < bw/2 && abs(cy - h[1]) < vent_keepout)
+        h[0] + boss_push(cy, h[1])]);
+function row_hi(cy) = min([vent_x_hi,
+    for (h = holes) if (h[0] > bw/2 && abs(cy - h[1]) < vent_keepout)
+        h[0] - boss_push(cy, h[1])]);
+
+// One slot: a stadium between lo and hi, so the ends are rounded.
+module vent_slot(lo, hi, cy) {
+    if (hi - lo >= vent_w)
+        hull() for (x = [lo + vent_w/2, hi - vent_w/2])
+            translate([x, cy, 0]) cylinder(d = vent_w, h = top_t + 0.08);
 }
 
 module vent_cuts() {
     if (vents)
         translate([0, 0, split_z + head_room - 0.02])
-            for (cx = vent_bank_cx, r = [0 : vent_rows - 1])
-                vent_slot(cx, vent_y0 + r*vent_pitch);
+            for (b = vent_banks, r = [0 : vent_rows - 1])
+                let (cy = vent_y0 + r*vent_pitch)
+                    vent_slot(max(b[0], row_lo(cy)),
+                              min(b[1], row_hi(cy)), cy);
 }
 
+// The recess is a closed rounded panel now, not a channel running off both
+// edges. That keeps the flanks joined into a ring, which is also what lets
+// the roof print without support: layer one is one island, not two.
 band_h  = vent_span + 2*band_margin;
 band_y0 = y0 + od/2 - band_h/2;
-band_y1 = y0 + od/2 + band_h/2;
+band_x0 = vent_x_lo - band_margin;
+band_x1 = vent_x_hi + band_margin;
 
 module band_cut() {
     if (band)
-        translate([x0 - 1, band_y0, case_h - band_depth])
-            cube([ow + 2, band_y1 - band_y0, band_depth + 1]);
+        translate([0, 0, case_h - band_depth])
+            rrect(band_x0, band_y0, band_x1 - band_x0, band_h,
+                  band_depth + 1, band_r);
 }
 
 module sd_scoop_cut() {
@@ -379,10 +409,17 @@ module mock_pcb() {
 
 /* ---------- output --------------------------------------------------- */
 
-echo(str("band y ", band_y0, " .. ", band_y1,
-         "  roof y ", y0, " .. ", y0 + od,
-         "  flanks ", band_y0 - y0, " / ", y0 + od - band_y1,
+echo(str("band x ", band_x0, " .. ", band_x1,
+         "  y ", band_y0, " .. ", band_y0 + band_h,
+         "  inset ", band_x0 - x0, " side / ", band_y0 - y0, " end",
          "  case height ", case_h));
+for (r = [0 : vent_rows - 1])
+    let (cy = vent_y0 + r*vent_pitch)
+        echo(str("row ", r + 1, " y ", cy,
+                 "  left bank ", max(vent_banks[0][0], row_lo(cy)),
+                 " .. ", vent_banks[0][1],
+                 "  right bank ", vent_banks[1][0],
+                 " .. ", min(vent_banks[1][1], row_hi(cy))));
 
 _check_button("RUN", run_pos);
 _check_button("BOOT", boot_pos);
