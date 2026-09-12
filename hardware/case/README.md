@@ -90,54 +90,45 @@ pattern correct. Validates the `[W]` parameters.
 
 **Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
 
-**Recessed vent band**, on the CoCo 2 pattern (see `coco2-image.png`):
-two banks of four slots in a panel recessed 2 mm below the top. Slots are
-3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs.
+**Vent grille**, on the CoCo 2 pattern (see `coco2-image.png`): two banks
+of four slots, 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs. Rows
+at y 4.6, 10.6, 16.6 and 22.6. Every slot is 20.8 mm long, running 8.7 to
+29.5 on the left and 35.5 to 56.3 on the right, with a 6.0 mm gap between
+the banks.
 
-Layout: 6.0 mm gap between the two banks. Every slot is 20.8 mm long,
-running 8.7 to 29.5 on the left and 35.5 to 56.3 on the right. Rows sit
-at y 4.6, 10.6, 16.6 and 22.6. The recess runs out over the left and right edges,
-cutting the tops of the side walls, and is 3.0 mm of border clear of the
-slots front and back. Flanks 3.9 mm. Case height 20.6 -> 22.6, exactly
-the recess depth. The roof under the band stays 1.8 mm.
+**Grooves, not a recess.** The banded look is two 0.5 mm grooves, 0.5 mm
+deep, at y 0.1 and 27.1, running the full width across the side walls.
+They replace a 2 mm recessed panel that **failed to print**: roof-down its
+floor had to bridge 27 mm between two strips of first layer, and because
+it ran edge to edge and cut the side walls, those strips were not even
+joined to each other. A 0.5 mm groove is a 0.5 mm bridge, so this costs
+nothing. Dropping the recess also takes the case from 22.6 mm back to
+20.6, since the roof no longer has to carry the recess depth. `band =
+true` restores the recess if it is ever wanted for a different process.
 
 Slot ends stop beside the corner screw bosses rather than crossing them.
 Only rows 1 and 4 actually come near a boss, but with `vent_uniform` every
 row is cut back to whatever the worst row needs, so the grille stays a
 rectangle. That worst case is computed from the boss positions via
-`row_lo`/`row_hi`, not typed in, so it tracks if anything moves. The cost
-is 5.8 mm off each end of rows 2 and 3, which need none of it: set
-`vent_uniform = false` for the stepped grille the real machine has, where
-only the outer rows shorten.
+`row_lo`/`row_hi`, not typed in, so it tracks if anything moves. Set
+`vent_uniform = false` for the stepped grille the real machine has.
 
 **Both buttons are reachable.** Row 2 would land exactly on BOOT, but RUN
 sits 10 mm behind it and the pitch is 6, so RUN would fall 2 mm off row 4
-with only 0.25 mm of its plunger under open slot: technically not blocked,
-practically not pressable. `vent_shift = -1.0` nudges the whole group 1 mm
-forward, putting both buttons 1 mm off a centreline with 1.25 mm of each
-plunger open. The window that catches both is -1.5 to -0.5, so -1.0 is the
-middle of it.
+with only 0.25 mm of its plunger under open slot. `vent_shift = -1.0`
+nudges the whole group 1 mm forward, putting both buttons 1 mm off a
+centreline with 1.25 mm of each plunger open.
 
-The recess is defined by the slots, not by the case: exactly
-`band_margin` of border in front of the first row and behind the last, and
-the whole assembly sits wherever the buttons put it. That leaves it
-off-centre on the case, flanks 2.5 mm front and 5.3 mm back, by design.
+That is the best a 6 mm pitch allows: a row exactly on BOOT throws RUN
+2 mm off, and vice versa, since only a pitch dividing the 10 mm between
+the buttons can centre both. `vent_rib = 2.0`, a 5 mm pitch, would centre
+both at the cost of the 3 mm rib spacing. The model echoes which buttons
+are covered, so a later change to pitch, shift or slot width will say if
+it breaks this.
 
-One limit worth knowing. With a 6 mm pitch, 1 mm off each button is the
-best available: a row exactly on BOOT puts RUN 2 mm off the next row, and
-vice versa. Only a pitch that divides the 10 mm between the buttons can
-centre both, so `vent_rib = 2.0` (a 5 mm pitch) would land both dead
-centre at the cost of the 3 mm rib spacing.
-
-The model echoes which buttons are covered rather than leaving it to
-chance, so a later change to pitch, shift or slot width will say if it
-breaks this.
-
-**Printing note.** Because the recess crosses the side walls, the roof's
-first layer is two separate strips 3.9 mm wide with a 27 mm span between
-them, so this will want support on the top face. Setting
-`band_over_edges = false` closes the recess into a rounded panel inset
-from the sides, which joins the flanks into a ring and removes the need.
+The grille sits where the buttons put it, not where the case centre is, so
+it is off-centre front to back: 2.5 mm from the front edge to the first
+groove, 5.3 mm from the last groove to the back. Deliberate.
 
 **Roof vents**, first version: two banks of four slots, 1 mm wide,
 20 mm long, rounded ends. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6

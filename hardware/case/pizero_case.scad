@@ -153,13 +153,14 @@ vent_y0      = boot_pos[1] - vent_pitch + vent_shift;
 
 // (bank extents and boss keepout are derived below, after x0/ow/holes)
 
-// Recessed decorative band around the vents, edge to edge, as on the
-// CoCo 2. band_depth eats into the roof, so the roof thickens to suit and
-// the case grows by exactly band_depth.
-// The band is centred on the CASE, not on the vent group. The buttons sit
-// 1.6 mm behind the case centre, so anchoring the band to them would leave
-// visibly unequal flanks on a part where the eye goes straight to the edge.
-band         = true;
+// The 2 mm recess did not print. Roof-down, its floor had to bridge 27 mm
+// between two strips of first layer, and because it ran edge to edge and
+// cut the side walls those strips were not even joined to each other.
+// Replaced by a pair of shallow grooves, which give the same banded look
+// for nothing: a 0.5 mm groove is a 0.5 mm bridge. Dropping the recess
+// also takes the case back from 22.6 mm to 20.6, since the roof no longer
+// has to carry its depth. Set true to get the recess back.
+band         = false;
 band_margin  = 3.0;     // solid recess border around the vent group
 band_r       = 3.0;     // corner radius of the recess
 // The recess runs out over the left and right edges, cutting the tops of
@@ -167,6 +168,14 @@ band_r       = 3.0;     // corner radius of the recess
 // outside the part, so band_r no longer shows; it applies again if this
 // goes false.
 band_over_edges = true;
+
+// Decorative grooves in place of the recess, one in front of the grille
+// and one behind, each centred groove_off clear of the outer edge of the
+// slots and running the full width across the side walls.
+groove       = true;
+groove_w     = 0.5;
+groove_d     = 0.5;
+groove_off   = 3.0;
 // The recess is defined by the slots, not by the case: band_margin of
 // border in front of the first row and behind the last, and wherever the
 // grille has to sit for the buttons is where the whole thing sits. On this
@@ -297,6 +306,13 @@ band_y1 = vent_group_y1 + band_margin;
 band_x0 = band_over_edges ? x0 - band_r - 1      : vent_x_lo - band_margin;
 band_x1 = band_over_edges ? x0 + ow + band_r + 1 : vent_x_hi + band_margin;
 
+module groove_cuts() {
+    if (groove)
+        for (cy = [vent_group_y0 - groove_off, vent_group_y1 + groove_off])
+            translate([x0 - 1, cy - groove_w/2, case_h - groove_d])
+                cube([ow + 2, groove_w, groove_d + 1]);
+}
+
 module band_cut() {
     if (band)
         translate([0, 0, case_h - band_depth])
@@ -377,6 +393,7 @@ module lid() {
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
         band_cut();
+        groove_cuts();
         vent_cuts();
 
         if (buttons_open) for (b = [run_pos, boot_pos])
@@ -442,11 +459,11 @@ module mock_pcb() {
 
 /* ---------- output --------------------------------------------------- */
 
-echo(str("band x ", band_x0, " .. ", band_x1,
-         "  y ", band_y0, " .. ", band_y1,
-         "  flanks ", band_y0 - y0, " front / ", y0 + od - band_y1, " back",
-         "  border ", vent_group_y0 - band_y0, " / ",
-                      band_y1 - vent_group_y1,
+echo(str("slots y ", vent_group_y0, " .. ", vent_group_y1,
+         band ? str("  recess y ", band_y0, " .. ", band_y1) : "",
+         groove ? str("  grooves at y ", vent_group_y0 - groove_off,
+                      " and ", vent_group_y1 + groove_off) : "",
+         "  roof ", top_t, " thick",
          "  case height ", case_h));
 for (r = [0 : vent_rows - 1])
     let (cy = vent_y0 + r*vent_pitch)
