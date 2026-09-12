@@ -124,13 +124,14 @@ vents        = true;
 vent_w       = 3.0;     // slot width, front to back       [C] measured
 vent_rib     = 3.0;     // solid between slots, for a 6.0 mm row pitch
 vent_rows    = 4;
-vent_gap     = 10.0;    // clear space between the two banks
+vent_gap     = 6.0;     // clear space between the two banks, left to right
 vent_margin  = 5.0;     // slots stop this far from the left and right edges
 // Slot ends stop beside the corner screw bosses rather than running over
-// them. Only the rows that actually come near a boss are pulled back, so
-// the outer rows end up shorter than the inner ones, which is the stepped
-// grille the real CoCo 2 has.
+// them. With vent_uniform every row is cut back to whatever the worst row
+// needs, so the grille stays a rectangle instead of stepping; set it false
+// for the stepped look, where only the rows near a boss are shortened.
 vent_clear_bosses = true;
+vent_uniform      = true;
 vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 
 vent_pitch   = vent_w + vent_rib;
@@ -170,8 +171,8 @@ module _check_button(name, p) {
     covered = [for (b = vent_banks, r = [0 : vent_rows - 1])
                  let (cy = vent_y0 + r*vent_pitch)
                  if (abs(p[1] - cy) <= vent_w/2
-                     && p[0] >= max(b[0], row_lo(cy))
-                     && p[0] <= min(b[1], row_hi(cy)))
+                     && p[0] >= max(b[0], slot_lo(cy))
+                     && p[0] <= min(b[1], slot_hi(cy)))
                  1];
     if (vents && len(covered) == 0)
         echo(str("NOTE: ", name, " is not under a vent slot"));
@@ -257,13 +258,20 @@ module vent_slot(lo, hi, cy) {
             translate([x, cy, 0]) cylinder(d = vent_w, h = top_t + 0.08);
 }
 
+// Worst case across every row, so all rows can share one length.
+vent_lo_all = max([for (r = [0 : vent_rows - 1]) row_lo(vent_y0 + r*vent_pitch)]);
+vent_hi_all = min([for (r = [0 : vent_rows - 1]) row_hi(vent_y0 + r*vent_pitch)]);
+
+function slot_lo(cy) = vent_uniform ? vent_lo_all : row_lo(cy);
+function slot_hi(cy) = vent_uniform ? vent_hi_all : row_hi(cy);
+
 module vent_cuts() {
     if (vents)
         translate([0, 0, split_z + head_room - 0.02])
             for (b = vent_banks, r = [0 : vent_rows - 1])
                 let (cy = vent_y0 + r*vent_pitch)
-                    vent_slot(max(b[0], row_lo(cy)),
-                              min(b[1], row_hi(cy)), cy);
+                    vent_slot(max(b[0], slot_lo(cy)),
+                              min(b[1], slot_hi(cy)), cy);
 }
 
 // The recess is a closed rounded panel now, not a channel running off both
@@ -426,10 +434,11 @@ echo(str("band x ", band_x0, " .. ", band_x1,
 for (r = [0 : vent_rows - 1])
     let (cy = vent_y0 + r*vent_pitch)
         echo(str("row ", r + 1, " y ", cy,
-                 "  left bank ", max(vent_banks[0][0], row_lo(cy)),
+                 "  left bank ", max(vent_banks[0][0], slot_lo(cy)),
                  " .. ", vent_banks[0][1],
                  "  right bank ", vent_banks[1][0],
-                 " .. ", min(vent_banks[1][1], row_hi(cy))));
+                 " .. ", min(vent_banks[1][1], slot_hi(cy)),
+                 "  len ", vent_banks[0][1] - max(vent_banks[0][0], slot_lo(cy))));
 
 _check_button("RUN", run_pos);
 _check_button("BOOT", boot_pos);

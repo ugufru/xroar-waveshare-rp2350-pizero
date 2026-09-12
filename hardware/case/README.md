@@ -94,17 +94,20 @@ pattern correct. Validates the `[W]` parameters.
 two banks of four slots in a panel recessed 2 mm below the top. Slots are
 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs.
 
-Layout: slots stop 5.0 mm from the left and right edges, with a 10.0 mm
-gap between the banks. The recess runs out over the left and right edges,
+Layout: 6.0 mm gap between the two banks. Every slot is 21.1 mm long,
+running 8.4 to 29.5 on the left and 35.5 to 56.6 on the right. The recess runs out over the left and right edges,
 cutting the tops of the side walls, and is 3.0 mm of border clear of the
 slots front and back. Flanks 3.9 mm. Case height 20.6 -> 22.6, exactly
 the recess depth. The roof under the band stays 1.8 mm.
 
-Rows 1 and 4 are shorter than rows 2 and 3. At full length they run over
-the corner screw bosses, so each row's ends stop beside any boss they
-would otherwise cross. That is computed from the boss positions via
-`row_lo`/`row_hi`, not typed in, so it tracks if anything moves. It also
-reproduces the stepped grille on the real machine.
+Slot ends stop beside the corner screw bosses rather than crossing them.
+Only rows 1 and 4 actually come near a boss, but with `vent_uniform` every
+row is cut back to whatever the worst row needs, so the grille stays a
+rectangle. That worst case is computed from the boss positions via
+`row_lo`/`row_hi`, not typed in, so it tracks if anything moves. The cost
+is 5.8 mm off each end of rows 2 and 3, which need none of it: set
+`vent_uniform = false` for the stepped grille the real machine has, where
+only the outer rows shorten.
 
 At a 6 mm pitch only BOOT lands under a slot; RUN does not. Row 2 sits on
 BOOT and RUN is 10 mm further back, so a pitch that divides 10 catches
