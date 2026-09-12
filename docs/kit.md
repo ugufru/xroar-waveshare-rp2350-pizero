@@ -19,7 +19,7 @@ than just handing someone a board.
 | In the box | Why it must be included |
 |---|---|
 | **Waveshare RP2350-PiZero**, pre-flashed | The only irreplaceable item |
-| **Case**, cutouts opened | See §5 |
+| **Case**, printed | See §5. About $0.55 in filament and screws |
 | **mini-HDMI → HDMI cable** | The board's HDMI is the **mini** size. Nobody has one of these in a drawer |
 | **USB-C male → USB-A female adapter** (OTG) | The **USB host port is a Type-C**. A normal USB keyboard cannot physically reach it without this |
 | **Printed card** | See §4. Cheaper than answering the same question ten times |
@@ -47,12 +47,14 @@ placeholders and confirm at order time.
 |---|---|---|---|---|
 | Waveshare RP2350-PiZero | 12 | **$9.99** direct from Waveshare | waveshare.com | **Sourced** |
 | *(same board on Amazon)* | — | *$17.17* | — | **Sourced** — nearly 2× |
-| CNC aluminum case | 10 | ~$6 | — | User-sourced |
+| Printed case + 4 screws | 10 | ~**$0.55** | `hardware/case/`, self-printed | **Sourced** |
 | mini-HDMI → HDMI cable | 10 | ~$7–10 | Amazon | *Estimate* |
 | USB-C → USB-A OTG adapter | 10 | ~$3–5 (cheaper in multipacks) | Amazon | *Estimate* |
 | microSD card *(optional)* | 10 | ~$5 | Amazon | *Estimate* |
 
-**Roughly $28/unit, ~$280 for ten**, before shipping.
+**Roughly $23/unit, ~$230 for ten**, before shipping. It was $28/unit until
+the case became a printed part; that change takes about $55 off a batch of
+ten.
 
 Two things worth knowing:
 
@@ -79,10 +81,11 @@ estimates rather than quotes. Fill in real numbers when ordering.
    a firmware will not do it, and the unit sits in a drawer. Shipping it working
    is the single biggest difference between a gift and a project.
 
-2. **Fit the case.** Open the cutouts (§5), then check every port physically
-   before closing it — both Type-C, mini-HDMI, microSD, and **BOOT button
-   access**. BOOT is the recovery path when a flash goes wrong; a case that
-   buries it turns a five-minute fix into disassembly.
+2. **Fit the case** (§5). Nothing needs opening by hand, but still check every
+   port physically before closing it: both Type-C, mini-HDMI, microSD, and
+   **BOOT button access** with a paperclip through the top vents. BOOT is the
+   recovery path when a flash goes wrong, so confirm you can actually reach it
+   on the first unit rather than discovering otherwise on the tenth.
 
 3. **Prepare the SD card** *(if including one)*. Format FAT32 and create the
    layout from `AUTORUN.md`:
@@ -132,34 +135,61 @@ These four items account for essentially every question you will be asked.
 
 ## 5. Case
 
-**Current plan: off-the-shelf CNC aluminum shells (~$6), cutouts opened by
-hand.** Budget 10–15 minutes of filing per unit. That is ~2 hours across a batch
-of ten — annoying but cheaper than the alternative, because designing a custom
-case costs more than 2 hours the first time.
+**Print them.** `hardware/case/` holds a two-part case designed for this board
+and confirmed on hardware. See
+[`hardware/case/README.md`](../hardware/case/README.md).
 
-**Why not print them?** Filament for a case this size is only about 20 g, or
-**$0.40–0.50** — an order of magnitude under $6. But saving ~$5.50 a case against
-a ~$200 printer breaks even at roughly **40 cases**, so printing is the right
-answer for a second or third batch, not this one.
+|  |  |
+|---|---|
+| Size | 69.8 x 34.8 x 20.6 mm |
+| Material | About 20 g per case, roughly **$0.40 to $0.50** |
+| Time | 1 to 2 hours for both parts |
+| Supports | None |
+| Fasteners | 4 x M2.5 countersunk, 12 mm, self-tapping. About $0.15 a set |
+| Openings | mini-HDMI, both USB-C, microSD, battery connector, RUN and BOOT |
 
-**Why not CNC them?** At the ~$500 entry point you get a 3018-class router:
-excellent for wood, plastic, acrylic and PCB work, and fine for *engraving*
-aluminum, but not rigid enough to mill an enclosure from billet. Machines that
-cut aluminum properly start well above that, and still would not beat $6/unit.
-CNC's real use here would be **opening the cutouts on bought cases** with a
-fixture instead of a file — worth setting up at 100 units, not at 10.
+Nothing is filed, drilled or opened by hand. The ports are cut where the board
+actually has them, which is the whole reason a bought shell did not work.
 
-**Fit note:** the board is **65 × 30 mm, the same outline as a Raspberry Pi
-Zero**, so Pi Zero shells match the footprint and mounting holes. They do *not*
-match the ports: a Pi Zero uses **micro-USB** where this board uses **USB-C**,
-and this board adds a second Type-C, a 2-pin battery connector and a 3-pin debug
-header. Always test-fit one case before buying a batch.
+**What changed.** This section used to plan bought CNC aluminium shells at ~$6
+with the cutouts opened by hand, budgeting 10 to 15 minutes of filing per unit.
+That was the right call when it was written, because no design existed and the
+break-even against buying a printer was around 40 cases. Both halves of that
+arithmetic have since gone: the design exists, and so does the printer. The
+comparison is now **$0.55 against $6 with no filing**, which saves roughly $55
+across a batch of ten and about two hours of work.
 
-**Follow-on:** publish an STL once a printed design exists. Some recipients own
-printers, which takes the case out of the BOM entirely for them — and a printed
-shell can expose the **40-pin GPIO header**, which the emulator does not use at
-all and which is the most interesting thing on the board for anyone who wants to
-attach a joystick or a peripheral.
+**The real cost is printer time, not money.** Ten units is 15 to 20 hours of
+printing. It is unattended and it runs in the background over a couple of days,
+but it is not instant, and it is the one thing to start early when assembling a
+batch.
+
+**If a recipient owns a printer**, send them the STLs and the case leaves the
+BOM entirely. That was always the argument for publishing a design, and it now
+holds.
+
+**BOOT and RUN are reachable** through the vent slots on the top, with a
+paperclip or a straightened clip. No disassembly, which matters because BOOT is
+the recovery path when a flash goes wrong (§3). It is fiddlier than a dedicated
+hole: the slots are 3 mm wide and each button sits about 1 mm off its slot's
+centreline. Try it once before packing a unit so you know the feel of it.
+
+**Two things the case does not do yet**, both open if wanted:
+
+- **The 40-pin GPIO header is enclosed**, not exposed. The emulator does not use
+  it, and it is arguably the most interesting thing on the board for anyone who
+  wants to attach a joystick or a peripheral. Opening a slot for it is a change
+  to one module in the source, not a redesign.
+- **The two USB-C ports are not labelled on the case.** §1 and §4 both note that
+  the first thing every recipient does is plug power into the wrong one. Embossed
+  text beside each port would fix that at the source instead of with a sticker.
+
+**Buying instead.** If you would rather not print, the board is **65 x 30 mm,
+the same outline as a Raspberry Pi Zero**, so Pi Zero shells match the footprint
+and the mounting holes. They do **not** match the ports: a Pi Zero uses micro-USB
+where this board uses USB-C, in different positions, and this board adds a second
+Type-C, a 2-pin battery connector and a 3-pin debug header. Test-fit one before
+buying a batch, and expect to open every cutout by hand.
 
 ## 6. Licensing
 
