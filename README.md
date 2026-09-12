@@ -33,6 +33,10 @@ same HDMI cable**. Only joystick input remains open.
   work; high-speed USB 2.0 peripherals do not enumerate (see Status).
 - **A microSD card** (FAT32) holding the CoCo ROMs you supply (see below) — required.
 - **USB-C power** to the power/programming port.
+- *Optional:* a **case**. There is a printable one in
+  [`hardware/case/`](hardware/case/README.md), or any Raspberry Pi Zero shell
+  will bolt on (the board shares the Pi Zero outline and hole pattern) but will
+  not line up with this board's ports.
 - For building/flashing: a host PC with **[PlatformIO](https://platformio.org/install)**
   (Core CLI or the VS Code extension).
 
@@ -282,6 +286,27 @@ the frame budget. See [`docs/cpu-speed.md`](docs/cpu-speed.md).
 
 Note the two distinct clocks: the host RP2350 MCU runs at **252 MHz** (set from the DVI TMDS bit
 clock), while the *emulated* 6809 runs at its authentic **~0.895 MHz** — independent of the host clock.
+
+## Case
+
+A two-part 3D-printed case lives in [`hardware/case/`](hardware/case/README.md),
+styled after the ventilated top of a Tandy Color Computer 2. It is 69.8 x 34.8 x
+20.6 mm, prints without supports, and closes with four M2.5 screws that pass
+through the board's own mounting holes so one set of fasteners both clamps the
+board and shuts the case. Openings for mini-HDMI, both USB-C ports, the microSD
+slot and the battery connector, with the RUN and BOOT buttons reachable through
+the vent slots.
+
+The source is a single parametric OpenSCAD file, so every dimension is a named
+parameter and the STLs are rendered from it rather than drawn. The board
+geometry was scaled off Waveshare's published dimension drawing rather than
+measured by hand. [`hardware/case/README.md`](hardware/case/README.md) has the
+full account, including what had to be changed after each test print and the one
+detail that turned out not to be printable.
+
+Note that a stock Raspberry Pi Zero shell fits the outline and mounting holes but
+**not the ports**: this board uses two USB-C where a Pi Zero has micro-USB, in
+different positions, and adds a battery connector and a debug header.
 
 ## References
 

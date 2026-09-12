@@ -1,9 +1,32 @@
-# Case (PIZERO-94)
+# Case
 
-Two-part 3D-printed case for the Waveshare RP2350-PiZero.
+A two-part 3D-printed case for the Waveshare RP2350-PiZero, styled after the
+ventilated top of a Tandy Color Computer 2. Confirmed on hardware.
+
+|  |  |
+|---|---|
+| Size | 69.8 x 34.8 x 20.6 mm |
+| Parts | `base.stl`, `top.stl` (or `plate.stl` for both at once) |
+| Fasteners | 4 x M2.5 countersunk, 12 mm, self-tapping into the lid |
+| Supports | None |
+| Material | Any. Roughly 20 g, about 1 to 2 hours |
+| Openings | mini-HDMI, both USB-C, microSD, battery connector, RUN and BOOT |
 
 - `pizero_case.scad` is the only source. Every dimension is a named parameter.
-- `base.stl` and `top.stl` are rendered from it. Do not edit them by hand.
+- The STLs are rendered from it. Do not edit them by hand.
+
+## Printing it
+
+Load `base.stl` and `top.stl`, slice, print. Both arrive already flat on z=0
+in the orientation they need, so do not rotate them, and do not let the
+slicer add supports.
+
+Then drop the board into the base, sit the lid on top, and drive four
+M2.5 x 12 mm countersunk screws up through the underside. They pass through
+the floor and the board's own mounting holes and thread straight into the
+plastic bosses in the lid, so one set of screws clamps the board and closes
+the case. No inserts or nuts needed; 12 mm gives 5.2 mm of thread engagement
+with 1.8 mm to spare before bottoming out.
 
 ## Design
 
@@ -23,6 +46,67 @@ fully instead of bottoming out on a 2 mm wall. Set `plug_pocket = false`
 to drop the pockets if you would rather have a plain flat face.
 
 Current size: 69.8 x 34.8 x 20.6 mm.
+
+## How it was designed
+
+The whole case is code. `pizero_case.scad` is an OpenSCAD program, and the
+STLs are rendered from it by a command line, never drawn by hand. That choice
+shaped everything else: a change like "move the vents 1 mm forward" is one
+number, and the consequences of it recompute rather than needing to be
+re-drawn.
+
+**The board geometry came from Waveshare's dimension drawing, not from
+calipers.** The drawing is a top-down photograph with a 65.00 mm callout
+across the board. Measuring it in pixels and scaling against that callout
+gives every port position, the mounting-hole pattern and the header extents
+to roughly +/- 0.2 mm, which is well inside printer tolerance. Those values
+are marked `[W]` in the source. The base printed first time and the board
+dropped in without forcing.
+
+**Constraints are derived, not typed.** The interesting parameters are
+expressions over other parameters, so the design stays correct when something
+moves:
+
+- `vent_pitch` and `vent_y0` come from `run_pos` and `boot_pos`, so the vent
+  rows stay lined up with the RUN and BOOT buttons by construction. A
+  render-time check echoes a warning if a change ever moves a button out from
+  under a slot.
+- `row_lo` and `row_hi` compute how far each slot must stop short of the
+  corner screw bosses, from the boss positions and diameter. Nobody typed
+  "8.7 mm"; it falls out, and it would follow a boss that moved.
+- The recess, when enabled, is derived from the slot group rather than from
+  the case, so its border is exactly `band_margin` whatever else changes.
+
+**The split line is the load-bearing decision.** The case divides at the top
+surface of the PCB. Because every connector sits on top of the board, that
+makes each port opening a notch open at the bottom of the lid, so nothing has
+to bridge. It also means the base wall rim is exactly at PCB height, which
+makes it a z-zero datum you can measure connector heights against with the
+board in place.
+
+**Port openings are sized for the plug, not the socket.** The sockets sit
+flush with the board edge, and a USB-C plug's metal shell protrudes about as
+far as the socket is deep, so a full 2 mm wall in front of one would stop it
+seating. Each front port is therefore two cuts: a tight through opening sized
+to the connector, and a shallow pocket on the outer face sized to the plug
+overmould, leaving 0.8 mm of wall in front of the socket.
+
+**It took four prints and fourteen revisions**, in one evening. The loop was
+print, fit, measure, change one parameter, re-render. Two things it taught
+that no amount of modelling would have:
+
+- The first lid fouled on assembly. It looked like the 40-pin header, and the
+  case grew 1 mm to clear it. The real obstruction was the microSD card, so
+  the height came back off and the fix went into the microSD opening instead.
+- A 2 mm recessed panel across the top, the closest match to the real CoCo 2,
+  does not print. Roof-down, its floor has to bridge 27 mm between two strips
+  of first layer, and running it edge to edge cuts the side walls so those
+  strips are not even joined. It is replaced by two 0.6 mm grooves that read
+  almost the same and cost nothing. `band = true` brings the recess back for
+  a process that can make it.
+
+Every printed revision is a commit, so any part in hand maps to a recoverable
+version. See the rule below.
 
 ## Rule: commit before printing
 
