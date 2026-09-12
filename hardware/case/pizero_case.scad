@@ -167,6 +167,13 @@ band_r       = 3.0;     // corner radius of the recess
 // outside the part, so band_r no longer shows; it applies again if this
 // goes false.
 band_over_edges = true;
+// The slot group sits 1 mm forward of the case centre (see vent_shift), so
+// a band centred on the case leaves only 1.6 mm of border in front of the
+// grille against 4.4 mm behind. This extends the front edge alone, putting
+// the border back to 2.6 mm without dragging the back edge with it. The
+// band is then off-centre on the case by 0.5 mm, which is the asymmetry
+// being traded for.
+band_front_extra = 1.0;
 band_depth   = 2.0;     // how far below the top surface. The roof under the
                         // band stays base_roof_t, so the case grows by
                         // exactly this much.
@@ -286,14 +293,15 @@ module vent_cuts() {
 // edges. That keeps the flanks joined into a ring, which is also what lets
 // the roof print without support: layer one is one island, not two.
 band_h  = vent_span + 2*band_margin;
-band_y0 = y0 + od/2 - band_h/2;
+band_y0 = y0 + od/2 - band_h/2 - band_front_extra;
+band_y1 = y0 + od/2 + band_h/2;
 band_x0 = band_over_edges ? x0 - band_r - 1      : vent_x_lo - band_margin;
 band_x1 = band_over_edges ? x0 + ow + band_r + 1 : vent_x_hi + band_margin;
 
 module band_cut() {
     if (band)
         translate([0, 0, case_h - band_depth])
-            rrect(band_x0, band_y0, band_x1 - band_x0, band_h,
+            rrect(band_x0, band_y0, band_x1 - band_x0, band_y1 - band_y0,
                   band_depth + 1, band_r);
 }
 
@@ -436,8 +444,10 @@ module mock_pcb() {
 /* ---------- output --------------------------------------------------- */
 
 echo(str("band x ", band_x0, " .. ", band_x1,
-         "  y ", band_y0, " .. ", band_y0 + band_h,
-         "  inset ", band_x0 - x0, " side / ", band_y0 - y0, " end",
+         "  y ", band_y0, " .. ", band_y1,
+         "  flanks ", band_y0 - y0, " front / ", y0 + od - band_y1, " back",
+         "  border ", (vent_y0 - vent_w/2) - band_y0, " / ",
+                      band_y1 - (vent_y0 + (vent_rows-1)*vent_pitch + vent_w/2),
          "  case height ", case_h));
 for (r = [0 : vent_rows - 1])
     let (cy = vent_y0 + r*vent_pitch)

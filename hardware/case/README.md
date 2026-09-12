@@ -118,9 +118,11 @@ forward, putting both buttons 1 mm off a centreline with 1.25 mm of each
 plunger open. The window that catches both is -1.5 to -0.5, so -1.0 is the
 middle of it.
 
-The band does not move with the shift. It stays centred on the case, so
-the case reads symmetric from outside and the asymmetry goes inside the
-recess instead: 1.6 mm of border in front of the grille, 4.4 mm behind.
+The band's front edge follows the shift; its back edge does not
+(`band_front_extra`). That puts the border back to 2.6 mm in front of the
+grille against 4.4 mm behind, instead of a thin 1.6 mm. The band ends up
+0.5 mm forward of the case centre, so the flanks are 2.9 mm front and
+3.9 mm back. Front to back the case is deliberately not symmetric.
 
 The model echoes which buttons are covered rather than leaving it to
 chance, so a later change to pitch, shift or slot width will say if it
