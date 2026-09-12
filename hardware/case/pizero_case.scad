@@ -35,7 +35,7 @@ hole_in = 3.5;          // [W] hole centre inset from each edge (Pi Zero pattern
 
 wall    = 2.0;          // side wall thickness
 floor_t = 2.6;          // base floor (thick enough to countersink a screw head)
-top_t   = 1.8;          // lid roof
+base_roof_t = 1.8;      // lid roof where there is no recessed band
 clr     = 0.4;          // clearance between PCB edge and inner wall, per side
 
 standoff_h = 2.6;       // PCB underside to floor: clears bottom-side solder
@@ -121,15 +121,35 @@ button_hole_d = 3.0;
 // halved. The left bank is the right bank mirrored about the board centre.
 
 vents        = true;
-vent_w       = 1.0;     // slot width
+vent_w       = 3.0;     // slot width, front to back       [C] measured
+vent_rib     = 2.0;     // solid between slots             [C] is 4.0
 vent_len     = 20.0;    // slot length, end to end
 vent_rows    = 4;
-vent_pitch   = (run_pos[1] - boot_pos[1]) / 2;   // 5.0
-vent_y0      = boot_pos[1] - vent_pitch;         // 6.6, first row
 vent_gap     = 9.0;     // clear space between the two banks
+
+vent_pitch   = vent_w + vent_rib;
+vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
+
+// Row 2 lands on BOOT. RUN then lands on a row only if the 10 mm between
+// the buttons is a whole number of pitches, which is why a 5 mm pitch
+// keeps both buttons reachable and the CoCo's 7 mm pitch does not. The
+// echo below says so out loud rather than letting it pass unnoticed.
+vent_y0      = boot_pos[1] - vent_pitch;
 
 vent_bank_cx = [ bw/2 - vent_gap/2 - vent_len/2,      // 18.0
                  bw/2 + vent_gap/2 + vent_len/2 ];    // 47.0
+
+// Recessed decorative band around the vents, edge to edge, as on the
+// CoCo 2. band_depth eats into the roof, so the roof thickens to suit and
+// the case grows by exactly band_depth.
+// The band is centred on the CASE, not on the vent group. The buttons sit
+// 1.6 mm behind the case centre, so anchoring the band to them would leave
+// visibly unequal flanks on a part where the eye goes straight to the edge.
+band         = true;
+band_margin  = 5.0;     // solid recess around the vent group
+band_depth   = 2.0;     // how far below the top surface. The roof under the
+                        // band stays base_roof_t, so the case grows by
+                        // exactly this much.
 
 $fn = 64;
 
@@ -149,6 +169,7 @@ module _check_button(name, p) {
 
 split_z = floor_t + standoff_h + pcb_t;   // base wall top = PCB top surface
 base_h  = split_z;
+top_t   = base_roof_t + (band ? band_depth : 0);
 lid_h   = head_room + top_t;
 case_h  = split_z + lid_h;
 
@@ -200,7 +221,7 @@ module port_pocket(p, z_lo, z_hi) {
 module vent_slot(cx, cy) {
     hull() for (d = [-1, 1])
         translate([cx + d*(vent_len - vent_w)/2, cy, 0])
-            cylinder(d = vent_w, h = top_t + 0.04);
+            cylinder(d = vent_w, h = top_t + 0.08);
 }
 
 module vent_cuts() {
@@ -208,6 +229,16 @@ module vent_cuts() {
         translate([0, 0, split_z + head_room - 0.02])
             for (cx = vent_bank_cx, r = [0 : vent_rows - 1])
                 vent_slot(cx, vent_y0 + r*vent_pitch);
+}
+
+band_h  = vent_span + 2*band_margin;
+band_y0 = y0 + od/2 - band_h/2;
+band_y1 = y0 + od/2 + band_h/2;
+
+module band_cut() {
+    if (band)
+        translate([x0 - 1, band_y0, case_h - band_depth])
+            cube([ow + 2, band_y1 - band_y0, band_depth + 1]);
 }
 
 module sd_scoop_cut() {
@@ -282,6 +313,7 @@ module lid() {
         sd_scoop_cut();
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
+        band_cut();
         vent_cuts();
 
         if (buttons_open) for (b = [run_pos, boot_pos])
@@ -346,6 +378,11 @@ module mock_pcb() {
 }
 
 /* ---------- output --------------------------------------------------- */
+
+echo(str("band y ", band_y0, " .. ", band_y1,
+         "  roof y ", y0, " .. ", y0 + od,
+         "  flanks ", band_y0 - y0, " / ", y0 + od - band_y1,
+         "  case height ", case_h));
 
 _check_button("RUN", run_pos);
 _check_button("BOOT", boot_pos);

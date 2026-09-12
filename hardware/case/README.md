@@ -90,9 +90,29 @@ pattern correct. Validates the `[W]` parameters.
 
 **Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
 
-**Roof vents**, added after that: two banks of four slots, 1 mm wide,
-20 mm long, rounded ends, on the CoCo 2 pattern of slots cut across the
-top with no fan. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6
+**Recessed vent band**, on the CoCo 2 pattern (see `coco2-image.png`):
+two banks of slots sitting in a panel recessed 2 mm below the top, running
+edge to edge. Slots are 3.0 mm across. Ribs between them are 2.0 mm, not
+the CoCo's 4.0: see the fit note below. Case height 20.6 -> 22.6, the
+recess depth exactly. The roof under the band stays 1.8 mm.
+
+The measured CoCo proportions do not fit this case. At 3 mm slots with
+4 mm ribs, four rows plus a 5 mm border need 34.0 mm of a 34.8 mm roof,
+leaving a 0.4 mm sliver of original surface: the band stops reading as a
+band because it is the whole top. Options, all one parameter each:
+
+| | rows | rib | flanks | buttons reachable |
+|---|---|---|---|---|
+| A, as measured | 4 | 4.0 | 0.4 mm | no |
+| B, CoCo proportions | 3 | 4.0 | 3.9 mm | no |
+| C, current default | 4 | 2.0 | 3.4 mm | yes |
+
+Row pitch is what decides button access. Row 2 lands on BOOT; RUN lands on
+a row only when the 10 mm between the buttons is a whole number of
+pitches. A 5 mm pitch divides it, the CoCo's 7 mm does not.
+
+**Roof vents**, first version: two banks of four slots, 1 mm wide,
+20 mm long, rounded ends. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6
 and 21.6.
 
 The rows are not chosen, they are anchored on the buttons. BOOT sits on
