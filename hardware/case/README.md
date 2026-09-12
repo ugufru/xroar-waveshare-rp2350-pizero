@@ -88,6 +88,23 @@ try real plugs before committing to a full lid.
 **Base**, printed 2026-09-11: board seats without force, walls rigid, hole
 pattern correct. Validates the `[W]` parameters.
 
+**Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
+
+**Roof vents**, added after that: two banks of four slots, 1 mm wide,
+20 mm long, rounded ends, on the CoCo 2 pattern of slots cut across the
+top with no fan. Banks at x 8..28 and 37..57, rows at y 6.6, 11.6, 16.6
+and 21.6.
+
+The rows are not chosen, they are anchored on the buttons. BOOT sits on
+row 2 and RUN on row 4, and the pitch is half the 10 mm between them.
+That gets rid of the two conspicuous round holes while keeping paperclip
+access to both buttons, and it is why `vent_pitch` and `vent_y0` are
+derived from `run_pos` and `boot_pos` rather than typed in. The source
+echoes a warning if a change ever moves a button out from under a slot.
+
+The left bank sits over the RP2350 itself (roughly x 19..29, y 14..24),
+which is where the heat is.
+
 **Lid**, first print 2026-09-11: shape and fit good, but 12.0 mm of
 headroom fouled the header pins. Revision 2 changes:
 

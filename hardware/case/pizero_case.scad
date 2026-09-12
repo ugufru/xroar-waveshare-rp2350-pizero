@@ -102,12 +102,48 @@ bat_y0 = 15.4;          // [W] 14.4, pulled in 1.0
 bat_y1 = 23.6;          // [W]
 bat_oh = 6.0;           // [M] was 7.0
 
-buttons_open = true;    // paperclip holes over RUN and BOOT
 run_pos  = [41.0, 21.6];   // [W]
 boot_pos = [41.2, 11.6];   // [W]
+
+// Bare round holes over RUN and BOOT read as holes. The vent grille below
+// swallows them: two of its rows sit exactly on the two buttons, so the
+// access is there but nothing on the lid looks like an access hole.
+buttons_open = false;
 button_hole_d = 3.0;
 
+/* ---------- roof vents ------------------------------------------------ */
+//
+// The CoCo 2 had no fan, just slots cut across the top. Same idea here.
+// Two banks of four slots, each slot 1 mm wide with rounded ends.
+//
+// Rows are anchored on the two buttons rather than chosen: BOOT sets the
+// second row, RUN the fourth, and the pitch is the 10 mm between them
+// halved. The left bank is the right bank mirrored about the board centre.
+
+vents        = true;
+vent_w       = 1.0;     // slot width
+vent_len     = 20.0;    // slot length, end to end
+vent_rows    = 4;
+vent_pitch   = (run_pos[1] - boot_pos[1]) / 2;   // 5.0
+vent_y0      = boot_pos[1] - vent_pitch;         // 6.6, first row
+vent_gap     = 9.0;     // clear space between the two banks
+
+vent_bank_cx = [ bw/2 - vent_gap/2 - vent_len/2,      // 18.0
+                 bw/2 + vent_gap/2 + vent_len/2 ];    // 47.0
+
 $fn = 64;
+
+// The whole point of anchoring rows on the buttons is that a paperclip can
+// still reach RUN and BOOT through a vent slot. Shout if a change breaks it.
+module _check_button(name, p) {
+    covered = [for (cx = vent_bank_cx)
+                 if (abs(p[0] - cx) <= (vent_len - vent_w)/2
+                     && min([for (r = [0 : vent_rows - 1])
+                               abs(p[1] - (vent_y0 + r*vent_pitch))]) <= vent_w/2)
+                 1];
+    if (vents && len(covered) == 0)
+        echo(str("WARNING: ", name, " is no longer under a vent slot"));
+}
 
 /* ===================================================================== */
 
@@ -158,6 +194,20 @@ module port_pocket(p, z_lo, z_hi) {
     if (plug_pocket && hi > lo)
         translate([p[0] - w/2, y0 - 0.01, lo])
             cube([w, pocket_d + 0.01, hi - lo]);
+}
+
+// One slot: a stadium, so the ends are rounded rather than square.
+module vent_slot(cx, cy) {
+    hull() for (d = [-1, 1])
+        translate([cx + d*(vent_len - vent_w)/2, cy, 0])
+            cylinder(d = vent_w, h = top_t + 0.04);
+}
+
+module vent_cuts() {
+    if (vents)
+        translate([0, 0, split_z + head_room - 0.02])
+            for (cx = vent_bank_cx, r = [0 : vent_rows - 1])
+                vent_slot(cx, vent_y0 + r*vent_pitch);
 }
 
 module sd_scoop_cut() {
@@ -232,6 +282,8 @@ module lid() {
         sd_scoop_cut();
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
+        vent_cuts();
+
         if (buttons_open) for (b = [run_pos, boot_pos])
             translate([b[0], b[1], split_z + head_room - 0.01])
                 cylinder(d = button_hole_d, h = top_t + 0.02);
@@ -294,6 +346,9 @@ module mock_pcb() {
 }
 
 /* ---------- output --------------------------------------------------- */
+
+_check_button("RUN", run_pos);
+_check_button("BOOT", boot_pos);
 
 if (part == "coupon") coupon_printable();
 else if (part == "base") base_printable();
