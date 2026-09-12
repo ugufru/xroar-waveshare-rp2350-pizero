@@ -118,11 +118,16 @@ forward, putting both buttons 1 mm off a centreline with 1.25 mm of each
 plunger open. The window that catches both is -1.5 to -0.5, so -1.0 is the
 middle of it.
 
-The band's front edge follows the shift; its back edge does not
-(`band_front_extra`). That puts the border back to 2.6 mm in front of the
-grille against 4.4 mm behind, instead of a thin 1.6 mm. The band ends up
-0.5 mm forward of the case centre, so the flanks are 2.9 mm front and
-3.9 mm back. Front to back the case is deliberately not symmetric.
+The recess is defined by the slots, not by the case: exactly
+`band_margin` of border in front of the first row and behind the last, and
+the whole assembly sits wherever the buttons put it. That leaves it
+off-centre on the case, flanks 2.5 mm front and 5.3 mm back, by design.
+
+One limit worth knowing. With a 6 mm pitch, 1 mm off each button is the
+best available: a row exactly on BOOT puts RUN 2 mm off the next row, and
+vice versa. Only a pitch that divides the 10 mm between the buttons can
+centre both, so `vent_rib = 2.0` (a 5 mm pitch) would land both dead
+centre at the cost of the 3 mm rib spacing.
 
 The model echoes which buttons are covered rather than leaving it to
 chance, so a later change to pitch, shift or slot width will say if it
