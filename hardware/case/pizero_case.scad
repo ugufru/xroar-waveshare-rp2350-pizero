@@ -141,7 +141,15 @@ vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
 // the buttons is a whole number of pitches, which is why a 5 mm pitch
 // keeps both buttons reachable and the CoCo's 7 mm pitch does not. The
 // echo below says so out loud rather than letting it pass unnoticed.
-vent_y0      = boot_pos[1] - vent_pitch;
+// Row 2 would land exactly on BOOT, but RUN sits 10 mm behind it and the
+// pitch is 6, so RUN would fall 2 mm off row 4 with only 0.25 mm of its
+// plunger under open slot. Nudging the whole group 1 mm forward puts both
+// buttons 1 mm off a centreline instead, leaving 1.25 mm of each plunger
+// open. The window that catches both is -1.5 .. -0.5, so -1.0 is the
+// middle of it. The band deliberately does NOT move with this: it stays
+// centred on the case, so the border goes 1.6 mm front and 4.4 mm back.
+vent_shift   = -1.0;
+vent_y0      = boot_pos[1] - vent_pitch + vent_shift;
 
 // (bank extents and boss keepout are derived below, after x0/ow/holes)
 

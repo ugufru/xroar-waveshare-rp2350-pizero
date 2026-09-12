@@ -94,8 +94,9 @@ pattern correct. Validates the `[W]` parameters.
 two banks of four slots in a panel recessed 2 mm below the top. Slots are
 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs.
 
-Layout: 6.0 mm gap between the two banks. Every slot is 21.1 mm long,
-running 8.4 to 29.5 on the left and 35.5 to 56.6 on the right. The recess runs out over the left and right edges,
+Layout: 6.0 mm gap between the two banks. Every slot is 20.8 mm long,
+running 8.7 to 29.5 on the left and 35.5 to 56.3 on the right. Rows sit
+at y 4.6, 10.6, 16.6 and 22.6. The recess runs out over the left and right edges,
 cutting the tops of the side walls, and is 3.0 mm of border clear of the
 slots front and back. Flanks 3.9 mm. Case height 20.6 -> 22.6, exactly
 the recess depth. The roof under the band stays 1.8 mm.
@@ -109,10 +110,21 @@ is 5.8 mm off each end of rows 2 and 3, which need none of it: set
 `vent_uniform = false` for the stepped grille the real machine has, where
 only the outer rows shorten.
 
-At a 6 mm pitch only BOOT lands under a slot; RUN does not. Row 2 sits on
-BOOT and RUN is 10 mm further back, so a pitch that divides 10 catches
-both: 5 mm does, 6 and the CoCo's 7 do not. The model echoes which buttons
-are covered rather than leaving it to chance.
+**Both buttons are reachable.** Row 2 would land exactly on BOOT, but RUN
+sits 10 mm behind it and the pitch is 6, so RUN would fall 2 mm off row 4
+with only 0.25 mm of its plunger under open slot: technically not blocked,
+practically not pressable. `vent_shift = -1.0` nudges the whole group 1 mm
+forward, putting both buttons 1 mm off a centreline with 1.25 mm of each
+plunger open. The window that catches both is -1.5 to -0.5, so -1.0 is the
+middle of it.
+
+The band does not move with the shift. It stays centred on the case, so
+the case reads symmetric from outside and the asymmetry goes inside the
+recess instead: 1.6 mm of border in front of the grille, 4.4 mm behind.
+
+The model echoes which buttons are covered rather than leaving it to
+chance, so a later change to pitch, shift or slot width will say if it
+breaks this.
 
 **Printing note.** Because the recess crosses the side walls, the roof's
 first layer is two separate strips 3.9 mm wide with a 27 mm span between
