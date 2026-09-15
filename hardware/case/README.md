@@ -174,14 +174,36 @@ pattern correct. Validates the `[W]` parameters.
 
 **Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
 
+**Style pass (PIZERO-101)**, rendered 2026-09-14, not yet printed:
+
+- **Floor vents** in the base: the lid's slot (3.0 mm, 3.0 mm rib, 6.0 mm
+  pitch, rounded ends) turned to run front to back. Two banks of four with
+  the same 6.0 mm gap, centred on the board at x 8.5 to 56.5, each slot
+  y 2.6 to 27.4. They clear the corner standoffs by 2.0 mm. Through the
+  floor, so nothing bridges. `base_vents = false` drops them.
+- **Corners** 4 to 5 mm (`r_out`). The cavity corner `r_in` is now its own
+  2.0 mm parameter instead of `r_out - wall`, so the outside can be
+  restyled without touching board fit. The top edge stays a 1 mm chamfer:
+  a 5 mm round there would break through the wall and roof.
+- **Port corners** rounded: `port_r` 1.0 mm on the top corners of each
+  through opening (the bottom is open at the split line), `pocket_r`
+  2.0 mm on all four corners of each plug pocket, split across base and lid.
+- **Groove loop.** Grooves widened from 0.5 to 2.0 mm (still 0.6 deep) and
+  joined into one closed loop with 3.0 mm corners (`groove_r`, on the
+  centreline). The side legs run front to back at x 1.1 and 63.9, 1.5 mm
+  inside the top chamfer, the same margin the front groove has. This fixes
+  the front groove running out through the side wall right where the
+  corner curve starts. `groove_loop = false` gives straight grooves again.
+
 **Vent grille**, on the CoCo 2 pattern (see `coco2-image.png`): two banks
 of four slots, 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs. Rows
 at y 4.6, 10.6, 16.6 and 22.6. Every slot is 20.8 mm long, running 8.7 to
 29.5 on the left and 35.5 to 56.3 on the right, with a 6.0 mm gap between
 the banks.
 
-**Grooves, not a recess.** The banded look is two 0.5 mm grooves, 0.6 mm
-deep, at y 1.1 and 26.1, running the full width across the side walls.
+**Grooves, not a recess.** The banded look was two 0.5 mm grooves, 0.6 mm
+deep, at y 1.1 and 26.1, running the full width across the side walls
+(now a 2.0 mm loop, see the style pass above).
 0.6 mm is an exact three layers at 0.2 mm, so the depth does not quantise
 to something shallower than intended.
 They replace a 2 mm recessed panel that **failed to print**: roof-down its

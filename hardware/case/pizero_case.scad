@@ -45,7 +45,10 @@ head_room  = 12.0;      // [M] PCB top to lid roof. The first lid print
                         //     fix is in the microSD opening below. A 2.54 mm
                         //     male header stands ~11.5 mm proud of the board.
 
-r_out = 4.0;            // vertical corner radius, outside
+r_out = 5.0;            // vertical corner radius, outside (PIZERO-101, was 4)
+r_in  = 2.0;            // inner cavity corner. Fixed rather than r_out - wall,
+                        // so restyling the outside never changes board fit;
+                        // the corners just get thicker.
 top_chamfer = 1.0;      // chamfer on the top edge (prints flat on the plate)
 
 part_gap = 10.0;        // clear space between the two parts on a shared plate
@@ -76,6 +79,9 @@ port_clr     = 0.5;     // clearance around the connector body, per side
 plug_pocket  = true;
 port_frame_t = 0.8;     // wall left in front of the socket, inside the pocket
 plug_clr     = 0.3;     // clearance around the plug overmould, per side
+port_r       = 1.0;     // corner radius of the through opening (top corners;
+                        // the bottom is open at the split line)
+pocket_r     = 2.0;     // corner radius of the plug pocket, all four corners
 
 // [ centre_x, body_w, body_h, plug_w, plug_h ]
 hdmi = [12.35, 12.1, 3.0, 15.5, 7.0];   // [W] centre, [M] 3.0 body height
@@ -134,6 +140,13 @@ vent_clear_bosses = true;
 vent_uniform      = true;
 vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 
+// Floor vents in the base (PIZERO-101): the same slot, rib and bank gap as
+// the lid, but running front to back, centred on the board. Each slot runs
+// the case depth less vent_margin at each end. The banks land well inside
+// the corner standoffs, so no boss keepout is needed; the echo below
+// reports the clearance.
+base_vents = true;
+
 vent_pitch   = vent_w + vent_rib;
 vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
 
@@ -173,10 +186,17 @@ band_over_edges = true;
 // and one behind, each centred groove_off clear of the outer edge of the
 // slots and running the full width across the side walls.
 groove       = true;
-groove_w     = 0.5;
+groove_w     = 2.0;     // PIZERO-101, was 0.5. Still only a 2 mm bridge.
 groove_d     = 0.6;     // an exact 3 layers at 0.2 mm, so it reads cleanly
-groove_off   = 2.0;     // each groove sits 1 mm nearer the slots than the
-                        // 3 mm the recess border used
+groove_off   = 2.0;     // groove centreline, clear of the outer edge of the slots
+// Straight grooves ran out through the side walls, and the front one left
+// right where the corner curve starts. As a loop, the front and back
+// grooves are joined by front-to-back legs near the left and right edges,
+// with rounded corners, so the groove outlines the whole top instead.
+groove_loop  = true;
+groove_edge  = 1.5;     // solid between the top chamfer and the outer edge
+                        // of a side leg (matches the front groove's margin)
+groove_r     = 3.0;     // loop corner radius, on the groove centreline
 // The recess is defined by the slots, not by the case: band_margin of
 // border in front of the first row and behind the last, and wherever the
 // grille has to sit for the buttons is where the whole thing sits. On this
@@ -212,7 +232,6 @@ ow = bw + 2*clr + 2*wall;      // outer width
 od = bd + 2*clr + 2*wall;      // outer depth
 x0 = -(clr + wall);            // outer shell origin, in board coords
 y0 = -(clr + wall);
-r_in = max(0.1, r_out - wall);
 
 pocket_d = wall - port_frame_t;
 
@@ -232,24 +251,45 @@ module inner_cavity(h) { rrect(-clr, -clr, bw + 2*clr, bd + 2*clr, h, r_in); }
 // z_lo/z_hi bound the cut, so the same geometry serves the lid (above the
 // split line) and the base relief (below it).
 
+// Prism running +y from y_at for len, with an x/z face that spans x cx +/- w/2
+// and z zb..zt. The top corners are rounded to r, and the bottom ones too
+// if round_bottom; otherwise the bottom is square.
+module xz_rrect(cx, w, zb, zt, y_at, len, r, round_bottom) {
+    rr = min(r, w/2, (zt - zb)/2);
+    hull() for (x = [cx - w/2 + rr, cx + w/2 - rr]) {
+        translate([x, y_at, zt - rr]) rotate([-90, 0, 0]) cylinder(r = rr, h = len);
+        if (round_bottom)
+            translate([x, y_at, zb + rr]) rotate([-90, 0, 0]) cylinder(r = rr, h = len);
+        else
+            translate([x - rr, y_at, zb]) cube([2*rr, len, 0.01]);
+    }
+}
+
+// Clip a cut to the slab z_lo..z_hi, so one shape can be split between parts.
+module z_slab(z_lo, z_hi) {
+    intersection() {
+        children();
+        translate([x0 - 1, y0 - 1, z_lo]) cube([ow + 2, od + 2, z_hi - z_lo]);
+    }
+}
+
 module port_through(p, z_lo, z_hi) {
     w = p[1] + 2*port_clr;
-    zb = split_z;                        // connector sits on the PCB top
+    zb = split_z - 0.01;                 // connector sits on the PCB top
     zt = split_z + p[2] + port_clr;
-    lo = max(z_lo, zb - 0.01); hi = min(z_hi, zt);
-    if (hi > lo)
-        translate([p[0] - w/2, y0 - 1, lo])
-            cube([w, wall + clr + 2, hi - lo]);
+    if (min(z_hi, zt) > max(z_lo, zb))
+        z_slab(z_lo, z_hi)
+            xz_rrect(p[0], w, zb, zt, y0 - 1, wall + clr + 2, port_r, false);
 }
 
 module port_pocket(p, z_lo, z_hi) {
     w  = p[3] + 2*plug_clr;
     h  = p[4] + 2*plug_clr;
     cz = split_z + p[2]/2;               // plug is centred on the socket
-    lo = max(z_lo, cz - h/2); hi = min(z_hi, cz + h/2);
-    if (plug_pocket && hi > lo)
-        translate([p[0] - w/2, y0 - 0.01, lo])
-            cube([w, pocket_d + 0.01, hi - lo]);
+    if (plug_pocket && min(z_hi, cz + h/2) > max(z_lo, cz - h/2))
+        z_slab(z_lo, z_hi)
+            xz_rrect(p[0], w, cz - h/2, cz + h/2, y0 - 0.01, pocket_d + 0.01,
+                     pocket_r, true);
 }
 
 // Banks run from vent_margin off each outer edge in to the centre gap.
@@ -307,11 +347,40 @@ band_y1 = vent_group_y1 + band_margin;
 band_x0 = band_over_edges ? x0 - band_r - 1      : vent_x_lo - band_margin;
 band_x1 = band_over_edges ? x0 + ow + band_r + 1 : vent_x_hi + band_margin;
 
+groove_yf = vent_group_y0 - groove_off;    // front groove centreline
+groove_yb = vent_group_y1 + groove_off;    // back groove centreline
+groove_xl = x0 + top_chamfer + groove_edge + groove_w/2;   // left leg
+groove_xr = x0 + ow - top_chamfer - groove_edge - groove_w/2;
+
 module groove_cuts() {
-    if (groove)
-        for (cy = [vent_group_y0 - groove_off, vent_group_y1 + groove_off])
+    if (groove && groove_loop)
+        translate([0, 0, case_h - groove_d]) difference() {
+            rrect(groove_xl - groove_w/2, groove_yf - groove_w/2,
+                  groove_xr - groove_xl + groove_w, groove_yb - groove_yf + groove_w,
+                  groove_d + 1, groove_r + groove_w/2);
+            translate([0, 0, -0.5])
+                rrect(groove_xl + groove_w/2, groove_yf + groove_w/2,
+                      groove_xr - groove_xl - groove_w, groove_yb - groove_yf - groove_w,
+                      groove_d + 2, max(0.1, groove_r - groove_w/2));
+        }
+    else if (groove)
+        for (cy = [groove_yf, groove_yb])
             translate([x0 - 1, cy - groove_w/2, case_h - groove_d])
                 cube([ow + 2, groove_w, groove_d + 1]);
+}
+
+// Base floor vents: slot x centres for both banks, and the slot y extent.
+base_vent_x = [ for (x_lo = [bw/2 - vent_gap/2 - vent_span, bw/2 + vent_gap/2],
+                     r = [0 : vent_rows - 1])
+                  x_lo + vent_w/2 + r*vent_pitch ];
+base_vent_y0 = y0 + vent_margin;
+base_vent_y1 = y0 + od - vent_margin;
+
+module base_vent_cuts() {
+    if (base_vents)
+        for (cx = base_vent_x)
+            hull() for (y = [base_vent_y0 + vent_w/2, base_vent_y1 - vent_w/2])
+                translate([cx, y, -1]) cylinder(d = vent_w, h = floor_t + 2);
 }
 
 module band_cut() {
@@ -345,6 +414,7 @@ module base() {
         // relief so a plug overmould clears the base wall
         for (p = front_ports) port_pocket(p, -1, split_z);
         sd_scoop_cut();
+        base_vent_cuts();
 
         // screw clearance + countersink from below
         for (h = holes) {
@@ -474,6 +544,16 @@ for (r = [0 : vent_rows - 1])
                  "  right bank ", vent_banks[1][0],
                  " .. ", min(vent_banks[1][1], slot_hi(cy)),
                  "  len ", vent_banks[0][1] - max(vent_banks[0][0], slot_lo(cy))));
+
+if (base_vents)
+    echo(str("base vents x ", base_vent_x[0] - vent_w/2, " .. ",
+             base_vent_x[len(base_vent_x) - 1] + vent_w/2,
+             "  y ", base_vent_y0, " .. ", base_vent_y1,
+             "  clear of standoffs by ",
+             base_vent_x[0] - vent_w/2 - (hole_in + boss_d/2)));
+if (groove && groove_loop)
+    echo(str("groove loop centreline x ", groove_xl, " .. ", groove_xr,
+             "  y ", groove_yf, " .. ", groove_yb));
 
 _check_button("RUN", run_pos);
 _check_button("BOOT", boot_pos);
