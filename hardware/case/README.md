@@ -233,6 +233,10 @@ pattern correct. Validates the `[W]` parameters.
   centreline is now z 15.1. The base floor vents keep their own 3.0 mm
   slot (`base_vent_w`) and are unchanged. A 1 mm printed slot comes out
   nearer 0.8 mm, so a paperclip is a tight fit.
+- **Floor vents match the roof** (rev 6). `base_vent_w` and `base_vent_rib`
+  now follow the roof's 1.0 mm slot and 3.33 mm pitch. Seven slots per bank
+  span exactly the 21 mm the old four 3 mm slots did, so the footprint
+  (x 8.5 to 56.5, 2.0 mm clear of the standoffs) is unchanged.
 
 The grille and button notes below describe revs 1 to 3. Rev 4 above
 centres the grille on three rows and replaces the button anchoring.

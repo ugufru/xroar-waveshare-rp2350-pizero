@@ -160,9 +160,11 @@ vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 // reports the clearance. Rows and rib are the base's own, so reshaping the
 // roof grille leaves the floor alone.
 base_vents = true;
-base_vent_w    = 3.0;
-base_vent_rows = 4;
-base_vent_rib  = 3.0;
+// Rev 6: same slot width and pitch as the roof. Seven per bank fills the
+// same 21 mm the old four 3 mm slots did, so the footprint is unchanged.
+base_vent_w    = vent_w;
+base_vent_rows = 7;
+base_vent_rib  = vent_rib;
 
 vent_pitch   = vent_w + vent_rib;
 vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
