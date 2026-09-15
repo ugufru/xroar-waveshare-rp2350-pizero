@@ -245,6 +245,11 @@ pattern correct. Validates the `[W]` parameters.
   four sides (`groove_gap`, `groove_hug`): centreline x 5.2 to 59.8,
   y 4.33 to 25.67, corners 3.5 mm on the centreline so they are concentric
   with a sharp grille corner.
+- **Bottom chamfer** (rev 8). The base's bottom edge gets the same 1.0 mm
+  chamfer as the lid's top edge (`bottom_chamfer`), so the case has no
+  sharp horizontal edge top or bottom. It sits on the bed and narrows
+  inward, so it adds no overhang, and it takes the edge off any first-layer
+  squish. It stays clear of the countersinks and plug pockets.
 
 The grille and button notes below describe revs 1 to 3. Rev 4 above
 centres the grille on three rows and replaces the button anchoring.

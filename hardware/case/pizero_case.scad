@@ -50,6 +50,8 @@ r_in  = 2.0;            // inner cavity corner. Fixed rather than r_out - wall,
                         // so restyling the outside never changes board fit;
                         // the corners just get thicker.
 top_chamfer = 1.0;      // chamfer on the top edge, used only when top_r = 0
+bottom_chamfer = 1.0;   // rev 8: same chamfer on the base's bottom edge. It
+                        // sits on the bed and narrows inward, so no overhang.
 // Round between the side walls and the roof (PIZERO-101 rev 2). Equal to
 // r_out, so every outer corner of the lid is a sphere. A 5 mm round on a
 // 2 mm wall would break through, so the cavity's top edges are rounded too,
@@ -278,6 +280,16 @@ module rrect(px, py, w, d, h, r) {
 }
 
 module outer_shell(h)  { rrect(x0, y0, ow, od, h, r_out); }
+
+// outer_shell with its bottom edge chamfered by c
+module outer_shell_chamfered(h, c) {
+    if (c > 0)
+        hull() {
+            rrect(x0 + c, y0 + c, ow - 2*c, od - 2*c, 0.01, max(0.1, r_out - c));
+            translate([0, 0, c]) rrect(x0, y0, ow, od, h - c, r_out);
+        }
+    else outer_shell(h);
+}
 module inner_cavity(h) { rrect(-clr, -clr, bw + 2*clr, bd + 2*clr, h, r_in); }
 
 // rounded rectangle prism whose top edges are also rounded to r: vertical
@@ -499,7 +511,7 @@ module base() {
     difference() {
         union() {
             difference() {
-                outer_shell(base_h);
+                outer_shell_chamfered(base_h, bottom_chamfer);
                 translate([0, 0, floor_t]) inner_cavity(base_h);
             }
             for (h = holes)
