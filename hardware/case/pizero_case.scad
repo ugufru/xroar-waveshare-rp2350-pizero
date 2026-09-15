@@ -99,16 +99,41 @@ usbc_host  = [39.1, 9.6, 3.3, 12.5, 7.0];   // PIO-USB host port (keyboard)
 usbc_power = [53.6, 9.6, 3.3, 12.5, 7.0];   // power / programming port
 front_ports = [hdmi, usbc_host, usbc_power];
 
-sd_y0 =  9.8;           // [W] microSD slot, from the connector edge,
-sd_y1 = 21.5;           //     opened out 1.0 mm total after the first print
-sd_oh = 2.5;            // [?] height above the PCB top
+// microSD (PIZERO-103). The socket is a XunPu TF-110 (schematic J1):
+// housing 11.95 wide x 11.55 deep x 1.32 tall, the 11.00 mm card centred in
+// it, card tail 3.90 mm out of the housing front when latched. Position
+// measured off the Waveshare drawing: housing front at x 0.5, y 10.9..22.9.
+// The old slot (y 9.8..21.5, 2.5 mm tall) sat 1.2 mm forward of the socket,
+// so the card caught on its back edge, and was tall enough for the card to
+// ride up over the 1.32 mm socket and drop inside the case.
+sd_cy      = 16.9;      // [W] socket and card centreline
+sd_front_x = 0.5;       // [W] housing front edge, the card entry side
+sd_card_w  = 11.0;      // microSD card width
+sd_ch_clr  = 0.3;       // channel clearance per side, across the width
+sd_ch_h    = 1.3;       // channel height above the PCB top: a 1.0 mm card
+                        // plus 0.3, and below the 1.32 mm housing top so the
+                        // card cannot be steered over the socket
+// Guide: the channel runs through the wall and on through a guide block on
+// the inside wall face, ending sd_guide_gap short of the housing, so the
+// card is held level and centred right up to the socket mouth. The outside
+// end flares so a card finds the channel by feel.
+sd_guide_gap  = 0.4;    // guide block to socket housing
+sd_guide_side = 2.0;    // solid either side of the channel, in the block
+sd_guide_top  = 1.5;    // solid above the channel, in the block
+sd_flare_w    = 1.2;    // extra width per side at the outside face
+sd_flare_h    = 1.2;    // extra height at the outside face, upward only
+sd_flare_d    = 1.2;    // how far into the wall the flare runs
+sd_housing = [11.55, 11.95, 1.32];   // TF-110 depth, width, height
+sd_y0 = sd_cy - sd_card_w/2 - sd_ch_clr;   // channel edges
+sd_y1 = sd_cy + sd_card_w/2 + sd_ch_clr;
 
 // Thumb dish around the microSD slot, so a card edge can be pinched and
-// pulled. Cut from both halves, so it straddles the split line.
+// pulled. PIZERO-103: lid only, the base half was unnecessary; centred on
+// the channel.
 sd_scoop   = true;
 sd_scoop_r = 10.0;      // dish radius: shallow and wide, not a deep pocket
 sd_scoop_d = 1.2;       // depth into the wall, same as the plug pockets
-sd_scoop_z = 0.8;       // centre height above the split line
+sd_scoop_z = sd_ch_h/2; // centre height above the split line
 
 // 2-pin battery connector. Nothing in this project drives it, but it stays
 // reachable. Trimmed after the first lid print: 1 mm off the top and 1 mm
@@ -509,6 +534,30 @@ module band_cut() {
                   band_depth + 1, band_r);
 }
 
+// Card channel through the lid wall and guide block, with a flared mouth.
+module sd_channel_cut() {
+    w  = sd_card_w + 2*sd_ch_clr;
+    zb = split_z - 0.01;
+    translate([x0 - 1, sd_cy - w/2, zb])
+        cube([sd_front_x - sd_guide_gap - x0 + 1.01, w, sd_ch_h + 0.01]);
+    hull() {
+        translate([x0 + sd_flare_d, sd_cy - w/2, zb])
+            cube([0.01, w, sd_ch_h + 0.01]);
+        translate([x0 - 0.5, sd_cy - w/2 - sd_flare_w, zb])
+            cube([0.01, w + 2*sd_flare_w, sd_ch_h + sd_flare_h + 0.01]);
+    }
+}
+
+// Guide block on the inside wall face, around the channel.
+module sd_guide() {
+    w     = sd_card_w + 2*sd_ch_clr;
+    x_in  = -clr;
+    x_end = sd_front_x - sd_guide_gap;
+    if (x_end > x_in)
+        translate([x_in - 0.01, sd_cy - w/2 - sd_guide_side, split_z])
+            cube([x_end - x_in + 0.01, w + 2*sd_guide_side, sd_ch_h + sd_guide_top]);
+}
+
 module sd_scoop_cut() {
     if (sd_scoop)
         translate([x0 - sd_scoop_r + sd_scoop_d,
@@ -532,7 +581,6 @@ module base() {
         }
         // relief so a plug overmould clears the base wall
         for (p = front_ports) port_pocket(p, -1, split_z);
-        sd_scoop_cut();
         base_vent_cuts();
 
         // screw clearance + countersink from below
@@ -572,6 +620,7 @@ module lid() {
                         cylinder(d = boss_d, h = head_room);
                 translate([0, 0, split_z]) lid_cavity(head_room);
             }
+            sd_guide();
         }
         for (h = holes)
             translate([h[0], h[1], split_z - 0.01])
@@ -582,7 +631,7 @@ module lid() {
             port_pocket(p, split_z, case_h);
         }
 
-        notch_left(sd_y0, sd_y1, sd_oh);
+        sd_channel_cut();
         sd_scoop_cut();
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
@@ -653,7 +702,10 @@ module mock_pcb() {
     color("#c0c0c0") translate([8.07, 25.2, pcb_t]) cube([48.9, 3.1, 11.5]);
     for (p = front_ports)
         color("#999") translate([p[0] - p[1]/2, -0.3, pcb_t]) cube([p[1], 7.2, p[2]]);
-    color("#999") translate([-0.5, sd_y0, pcb_t]) cube([11.5, sd_y1 - sd_y0, 1.4]);
+    color("#999") translate([sd_front_x, sd_cy - sd_housing[1]/2, pcb_t])
+        cube(sd_housing);
+    color("#333") translate([sd_front_x - 3.9, sd_cy - sd_card_w/2, pcb_t + 0.15])
+        cube([15.0, sd_card_w, 1.0]);
 }
 
 /* ---------- output --------------------------------------------------- */
@@ -689,6 +741,10 @@ if (groove && groove_wrap)
 else if (groove && groove_loop)
     echo(str("groove loop centreline x ", groove_xl, " .. ", groove_xr,
              "  y ", groove_yf, " .. ", groove_yb));
+
+echo(str("microSD channel y ", sd_y0, " .. ", sd_y1, ", ", sd_ch_h,
+         " mm tall  guide block x ", -clr, " .. ", sd_front_x - sd_guide_gap,
+         "  latched card tail x ", sd_front_x - 3.9, " (outer wall x ", x0, ")"));
 
 if (header_open) {
     hx0 = hdr_cx - hdr_open_w/2;  hx1 = hdr_cx + hdr_open_w/2;

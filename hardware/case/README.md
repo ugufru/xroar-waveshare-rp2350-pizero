@@ -157,6 +157,33 @@ hardware, and are the most trustworthy of the three.
 Parameters marked `[?]` are still estimates that need calipers on a real
 board: PCB thickness, USB-C and microSD heights, and plug clearances.
 
+## microSD fit (PIZERO-103)
+
+Printed cases were unreliable: the card either slid in over the socket and
+dropped inside the case, or caught on the slot sides and would not enter
+the socket. Re-derived from the socket datasheet and the Waveshare drawing:
+
+- The socket is a XunPu TF-110 (schematic J1): housing 11.95 wide, 11.55
+  deep, 1.32 tall. A latched card's tail stands 3.90 mm out of the housing.
+- On the drawing the housing spans y 10.9 to 22.9 with its front at x 0.5,
+  so the card runs y 11.4 to 22.4. The old slot was y 9.8 to 21.5, 1.2 mm
+  too far forward (the card caught on its back edge), and 2.5 mm tall,
+  enough to steer the card over the 1.32 mm socket.
+
+Changes:
+
+- **Channel** 11.6 x 1.3 mm (card plus 0.3 each side, and below the housing
+  top), centred on the socket at y 16.9 (`sd_cy`, `sd_ch_h`).
+- **Guide block** on the inside wall face carries the channel on to 0.4 mm
+  short of the housing (`sd_guide_*`), so the card is held level and
+  centred until it is in the socket mouth.
+- **Flared mouth** on the outside, 1.2 mm wider each side and 1.2 mm taller
+  at the face, narrowing over 1.2 mm (`sd_flare_*`), so a card finds the
+  channel by feel.
+- **Thumb dish** now lid only, centred on the channel. The base half is gone.
+
+A latched card's tail sits at x -3.4, 1.0 mm proud of the outside wall.
+
 ## Header lid (draft, PIZERO-102)
 
 ```
