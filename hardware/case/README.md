@@ -237,6 +237,14 @@ pattern correct. Validates the `[W]` parameters.
   now follow the roof's 1.0 mm slot and 3.33 mm pitch. Seven slots per bank
   span exactly the 21 mm the old four 3 mm slots did, so the footprint
   (x 8.5 to 56.5, 2.0 mm clear of the standoffs) is unchanged.
+- **Crisp top edge, groove hugs the grille** (rev 7). The rev 6 print did
+  not like the 5 mm top round: roof down, its first layers overhang the
+  bed. `top_r = 0` restores the 1 mm chamfer; the 5 mm vertical corners
+  stay. The groove no longer wraps down the sides (`groove_wrap = false`).
+  It is a closed 1.0 mm loop on the roof, 3.0 mm clear of the slots on all
+  four sides (`groove_gap`, `groove_hug`): centreline x 5.2 to 59.8,
+  y 4.33 to 25.67, corners 3.5 mm on the centreline so they are concentric
+  with a sharp grille corner.
 
 The grille and button notes below describe revs 1 to 3. Rev 4 above
 centres the grille on three rows and replaces the button anchoring.

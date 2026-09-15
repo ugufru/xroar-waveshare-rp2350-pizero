@@ -54,7 +54,9 @@ top_chamfer = 1.0;      // chamfer on the top edge, used only when top_r = 0
 // r_out, so every outer corner of the lid is a sphere. A 5 mm round on a
 // 2 mm wall would break through, so the cavity's top edges are rounded too,
 // by top_r - wall about nearly the same centres, keeping the shell ~2 mm.
-top_r = 5.0;
+// Rev 7: back to 0 (the 1 mm chamfer). The 5 mm round printed badly, its
+// first layers overhanging the bed with the lid roof down.
+top_r = 0;
 assert(top_r == 0 || top_r == r_out, "top_r must be 0 or equal r_out");
 
 part_gap = 10.0;        // clear space between the two parts on a shared plate
@@ -204,7 +206,8 @@ band_over_edges = true;
 groove       = true;
 groove_w     = 1.0;     // PIZERO-101: 0.5, then 2.0, now 1.0 (rev 5)
 groove_d     = 0.6;     // an exact 3 layers at 0.2 mm, so it reads cleanly
-groove_off   = 2.0;     // groove centreline, clear of the outer edge of the slots
+groove_gap   = 3.0;     // rev 7: clear space between the slots and the groove
+groove_off   = groove_gap + groove_w/2;   // groove centreline, off the slot edges
 // Straight grooves ran out through the side walls, and the front one left
 // right where the corner curve starts. As a loop, the front and back
 // grooves are joined by front-to-back legs near the left and right edges,
@@ -219,7 +222,11 @@ groove_r     = 3.0;     // loop corner radius, on the groove centreline
 // corners are on the side walls. The leg's top edge meets the start of the
 // side round; the echo reports how much wall that leaves above the battery
 // opening, the tallest cut in either side wall.
-groove_wrap  = true;
+groove_wrap  = false;   // rev 7: off, the groove stays on the roof
+// Rev 7: the loop hugs the grille, groove_gap clear of the slots on all four
+// sides, instead of running out to the top chamfer. Its corners are
+// concentric with a sharp grille corner: groove_r becomes groove_off.
+groove_hug   = true;
 // The recess is defined by the slots, not by the case: band_margin of
 // border in front of the first row and behind the last, and wherever the
 // grille has to sit for the buttons is where the whole thing sits. On this
@@ -405,8 +412,11 @@ band_x1 = band_over_edges ? x0 + ow + band_r + 1 : vent_x_hi + band_margin;
 
 groove_yf = vent_group_y0 - groove_off;    // front groove centreline
 groove_yb = vent_group_y1 + groove_off;    // back groove centreline
-groove_xl = x0 + top_chamfer + groove_edge + groove_w/2;   // left leg
-groove_xr = x0 + ow - top_chamfer - groove_edge - groove_w/2;
+groove_xl = groove_hug ? vent_lo_all - groove_off                 // left leg
+                       : x0 + top_chamfer + groove_edge + groove_w/2;
+groove_xr = groove_hug ? vent_hi_all + groove_off
+                       : x0 + ow - top_chamfer - groove_edge - groove_w/2;
+groove_loop_r = groove_hug ? groove_off : groove_r;
 
 groove_leg_z = case_h - top_r - groove_w/2;  // side leg centreline
 
@@ -442,11 +452,11 @@ module groove_cuts() {
         translate([0, 0, case_h - groove_d]) difference() {
             rrect(groove_xl - groove_w/2, groove_yf - groove_w/2,
                   groove_xr - groove_xl + groove_w, groove_yb - groove_yf + groove_w,
-                  groove_d + 1, groove_r + groove_w/2);
+                  groove_d + 1, groove_loop_r + groove_w/2);
             translate([0, 0, -0.5])
                 rrect(groove_xl + groove_w/2, groove_yf + groove_w/2,
                       groove_xr - groove_xl - groove_w, groove_yb - groove_yf - groove_w,
-                      groove_d + 2, max(0.1, groove_r - groove_w/2));
+                      groove_d + 2, max(0.1, groove_loop_r - groove_w/2));
         }
     else if (groove)
         for (cy = [groove_yf, groove_yb])
