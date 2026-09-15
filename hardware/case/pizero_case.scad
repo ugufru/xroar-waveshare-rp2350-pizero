@@ -128,18 +128,21 @@ button_hole_d = 3.0;
 /* ---------- roof vents ------------------------------------------------ */
 //
 // The CoCo 2 had no fan, just slots cut across the top. Same idea here.
-// Two banks of four slots, each slot 1 mm wide with rounded ends.
-//
-// Rows are anchored on the two buttons rather than chosen: BOOT sets the
-// second row, RUN the fourth, and the pitch is the 10 mm between them
-// halved. The left bank is the right bank mirrored about the board centre.
+// Two banks of three slots, each slot 3 mm wide with rounded ends, centred
+// front to back (rev 4; see vent_y0 for how that treats RUN and BOOT).
+// The left bank is the right bank mirrored about the board centre.
 
 vents        = true;
 vent_w       = 3.0;     // slot width, front to back       [C] measured
-vent_rib     = 3.0;     // solid between slots, for a 6.0 mm row pitch
-vent_rows    = 4;
+vent_rib     = 2.0;     // solid between slots, for a 5.0 mm row pitch (rev 4, was 3.0)
+vent_rows    = 3;       // rev 4, was 4: four rows and two grooves do not fit
+                        // on the 24.8 mm of flat roof the 5 mm rounds leave
 vent_gap     = 6.0;     // clear space between the two banks, left to right
-vent_margin  = 5.0;     // slots stop this far from the left and right edges
+vent_margin  = 5.0;     // base floor slots stop this far from the case edges
+// Roof slots stop this far from the left and right edges. Rows used to be
+// cut back to clear the corner bosses, which gave 20.8 mm slots; centred
+// rows no longer come near a boss, so this holds that length instead.
+roof_vent_margin = 11.1;
 // Slot ends stop beside the corner screw bosses rather than running over
 // them. With vent_uniform every row is cut back to whatever the worst row
 // needs, so the grille stays a rectangle instead of stepping; set it false
@@ -152,25 +155,25 @@ vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 // the lid, but running front to back, centred on the board. Each slot runs
 // the case depth less vent_margin at each end. The banks land well inside
 // the corner standoffs, so no boss keepout is needed; the echo below
-// reports the clearance.
+// reports the clearance. Rows and rib are the base's own, so reshaping the
+// roof grille leaves the floor alone.
 base_vents = true;
+base_vent_rows = 4;
+base_vent_rib  = 3.0;
 
 vent_pitch   = vent_w + vent_rib;
 vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
+base_vent_pitch = vent_w + base_vent_rib;
+base_vent_span  = base_vent_rows*vent_w + (base_vent_rows - 1)*base_vent_rib;
 
-// Row 2 lands on BOOT. RUN then lands on a row only if the 10 mm between
-// the buttons is a whole number of pitches, which is why a 5 mm pitch
-// keeps both buttons reachable and the CoCo's 7 mm pitch does not. The
-// echo below says so out loud rather than letting it pass unnoticed.
-// Row 2 would land exactly on BOOT, but RUN sits 10 mm behind it and the
-// pitch is 6, so RUN would fall 2 mm off row 4 with only 0.25 mm of its
-// plunger under open slot. Nudging the whole group 1 mm forward puts both
-// buttons 1 mm off a centreline instead, leaving 1.25 mm of each plunger
-// open. The window that catches both is -1.5 .. -0.5, so -1.0 is the
-// middle of it. The band deliberately does NOT move with this: it stays
-// centred on the case, so the border goes 1.6 mm front and 4.4 mm back.
-vent_shift   = -1.0;
-vent_y0      = boot_pos[1] - vent_pitch + vent_shift;
+// Rev 4: the grille is centred front to back on the case, so the grooves
+// either side of it both land on the flat roof. It used to be anchored on
+// BOOT (row 2) and nudged 1 mm forward to catch RUN, 1.25 mm of each
+// plunger open. Centred rows are symmetric about y 15.0 but the buttons are
+// not (BOOT 3.4 mm in front, RUN 6.6 mm behind), so no pitch centres both.
+// The 5 mm pitch is the one that treats them equally: rows at 10, 15, 20,
+// each button 1.6 mm off a row, about 0.65 mm of each plunger open. The
+// echo below reports it. (vent_y0 is set below, once y0 and od exist.)
 
 // (bank extents and boss keepout are derived below, after x0/ow/holes)
 
@@ -224,15 +227,17 @@ $fn = 64;
 
 // The whole point of anchoring rows on the buttons is that a paperclip can
 // still reach RUN and BOOT through a vent slot. Shout if a change breaks it.
+// Reports how much of the plunger, front to back, sits under open slot.
+button_d = 1.5;         // [?] plunger diameter, inferred from the rev 1 grille
 module _check_button(name, p) {
-    covered = [for (b = vent_banks, r = [0 : vent_rows - 1])
-                 let (cy = vent_y0 + r*vent_pitch)
-                 if (abs(p[1] - cy) <= vent_w/2
-                     && p[0] >= max(b[0], slot_lo(cy))
-                     && p[0] <= min(b[1], slot_hi(cy)))
-                 1];
-    if (vents && len(covered) == 0)
-        echo(str("NOTE: ", name, " is not under a vent slot"));
+    open = [for (b = vent_banks, r = [0 : vent_rows - 1])
+              let (cy = vent_y0 + r*vent_pitch)
+              if (p[0] >= max(b[0], slot_lo(cy)) && p[0] <= min(b[1], slot_hi(cy)))
+                  min(button_d, vent_w/2 + button_d/2 - abs(p[1] - cy))];
+    best = len(open) ? max(open) : 0;
+    if (vents)
+        echo(best > 0 ? str(name, ": ", best, " mm of plunger under a vent slot")
+                      : str("NOTE: ", name, " is not under a vent slot"));
 }
 
 /* ===================================================================== */
@@ -251,6 +256,8 @@ y0 = -(clr + wall);
 pocket_d = wall - port_frame_t;
 
 holes = [ for (hx = [hole_in, bw - hole_in], hy = [hole_in, bd - hole_in]) [hx, hy] ];
+
+vent_y0 = y0 + od/2 - (vent_rows - 1)*vent_pitch/2;   // first roof row, centred
 
 // rounded rectangle prism, corner at (px,py), size (w,d,h), radius r
 module rrect(px, py, w, d, h, r) {
@@ -337,8 +344,8 @@ module port_pocket(p, z_lo, z_hi) {
 }
 
 // Banks run from vent_margin off each outer edge in to the centre gap.
-vent_x_lo = x0 + vent_margin;
-vent_x_hi = x0 + ow - vent_margin;
+vent_x_lo = x0 + roof_vent_margin;
+vent_x_hi = x0 + ow - roof_vent_margin;
 vent_banks = [ [vent_x_lo,             bw/2 - vent_gap/2],
                [bw/2 + vent_gap/2,     vent_x_hi] ];
 
@@ -443,9 +450,9 @@ module groove_cuts() {
 }
 
 // Base floor vents: slot x centres for both banks, and the slot y extent.
-base_vent_x = [ for (x_lo = [bw/2 - vent_gap/2 - vent_span, bw/2 + vent_gap/2],
-                     r = [0 : vent_rows - 1])
-                  x_lo + vent_w/2 + r*vent_pitch ];
+base_vent_x = [ for (x_lo = [bw/2 - vent_gap/2 - base_vent_span, bw/2 + vent_gap/2],
+                     r = [0 : base_vent_rows - 1])
+                  x_lo + vent_w/2 + r*base_vent_pitch ];
 base_vent_y0 = y0 + vent_margin;
 base_vent_y1 = y0 + od - vent_margin;
 

@@ -209,6 +209,22 @@ pattern correct. Validates the `[W]` parameters.
   edge clears the battery opening by 1.3 mm (0.8 before rev 3). It is cut as
   a 0.6 mm skin that follows the outside surface, so depth stays constant
   over the round.
+- **Grille centred, three rows** (rev 4). The 5 mm rounds leave 24.8 mm of
+  flat roof front to back, and four rows plus two grooves need 25 mm, so
+  the front groove sat on the round. Now three 3.0 mm slots on a 5.0 mm
+  pitch (2.0 mm ribs, `vent_rows`, `vent_rib`), centred on the case at
+  y 10, 15 and 20. The grooves follow at y 6.5 and 23.5, both on the flat
+  roof, 7.9 mm from the front and back edges. Slots keep their 20.8 mm
+  length (`roof_vent_margin`). The base floor vents keep their own four rows
+  on 3.0 mm ribs (`base_vent_rows`, `base_vent_rib`) and are unchanged.
+  **Buttons:** no pitch can centre both, because centred rows are symmetric
+  about y 15 and the buttons are not (BOOT 3.4 mm in front, RUN 6.6 mm
+  behind). The 5 mm pitch treats them equally: each is 1.6 mm off a row,
+  with about 0.65 mm of plunger under open slot (was 1.25). Needs a
+  paperclip test on the print.
+
+The grille and button notes below describe revs 1 to 3. Rev 4 above
+centres the grille on three rows and replaces the button anchoring.
 
 **Vent grille**, on the CoCo 2 pattern (see `coco2-image.png`): two banks
 of four slots, 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs. Rows
