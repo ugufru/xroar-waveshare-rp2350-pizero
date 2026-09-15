@@ -109,10 +109,12 @@ sd_scoop_z = 0.8;       // centre height above the split line
 // 2-pin battery connector. Nothing in this project drives it, but it stays
 // reachable. Trimmed after the first lid print: 1 mm off the top and 1 mm
 // off the low-y edge, which is the left one seen from outside that wall.
+// Tightened again in PIZERO-101 rev 3: 1 mm off the high-y (right, seen
+// from outside) edge and 0.5 mm off the top.
 bat_open = true;
 bat_y0 = 15.4;          // [W] 14.4, pulled in 1.0
-bat_y1 = 23.6;          // [W]
-bat_oh = 6.0;           // [M] was 7.0
+bat_y1 = 22.6;          // [W] 23.6, pulled in 1.0
+bat_oh = 5.5;           // [M] was 7.0, then 6.0
 
 run_pos  = [41.0, 21.6];   // [W]
 boot_pos = [41.2, 11.6];   // [W]
@@ -206,10 +208,10 @@ groove_r     = 3.0;     // loop corner radius, on the groove centreline
 // Wrapped loop (PIZERO-101 rev 2), supersedes groove_loop: the front and
 // back grooves run across the top, over the rounded edge and down the left
 // and right sides, where a front-to-back leg joins them. The loop's rounded
-// corners are on the side walls. The leg sits just above the battery
-// opening, which is the tallest cut in either side wall.
+// corners are on the side walls. The leg's top edge meets the start of the
+// side round; the echo reports how much wall that leaves above the battery
+// opening, the tallest cut in either side wall.
 groove_wrap  = true;
-groove_leg_lip = 0.8;   // solid between the battery opening and the leg
 // The recess is defined by the slots, not by the case: band_margin of
 // border in front of the first row and behind the last, and wherever the
 // grille has to sit for the buttons is where the whole thing sits. On this
@@ -394,7 +396,7 @@ groove_yb = vent_group_y1 + groove_off;    // back groove centreline
 groove_xl = x0 + top_chamfer + groove_edge + groove_w/2;   // left leg
 groove_xr = x0 + ow - top_chamfer - groove_edge - groove_w/2;
 
-groove_leg_z = split_z + bat_oh + groove_leg_lip + groove_w/2;  // side leg centreline
+groove_leg_z = case_h - top_r - groove_w/2;  // side leg centreline
 
 // 2D stroke in the y/z plane: up the front groove, round the corner, along
 // the leg, round the corner, up the back groove. The tops run above the case.
@@ -630,7 +632,9 @@ if (groove && groove_wrap)
     echo(str("groove wraps at y ", groove_yf, " and ", groove_yb,
              "  side leg centreline z ", groove_leg_z,
              " (groove ", groove_leg_z - groove_w/2, " .. ", groove_leg_z + groove_w/2,
-             ", side round starts at z ", case_h - top_r, ")"));
+             ", side round starts at z ", case_h - top_r, ")",
+             "  wall above battery opening ",
+             groove_leg_z - groove_w/2 - (split_z + bat_oh)));
 else if (groove && groove_loop)
     echo(str("groove loop centreline x ", groove_xl, " .. ", groove_xr,
              "  y ", groove_yf, " .. ", groove_yb));

@@ -206,7 +206,7 @@ pattern correct. Validates the `[W]` parameters.
   across the top, over the rounded edge and down both side walls, where a
   front-to-back leg at z 14.6 joins them with 3.0 mm corners on the side
   face. The leg's top edge meets the start of the side round, and its lower
-  edge clears the battery opening by 0.8 mm (`groove_leg_lip`). It is cut as
+  edge clears the battery opening by 1.3 mm (0.8 before rev 3). It is cut as
   a 0.6 mm skin that follows the outside surface, so depth stays constant
   over the round.
 
