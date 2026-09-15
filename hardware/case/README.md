@@ -222,6 +222,17 @@ pattern correct. Validates the `[W]` parameters.
   behind). The 5 mm pitch treats them equally: each is 1.6 mm off a row,
   with about 0.65 mm of plunger under open slot (was 1.25). Needs a
   paperclip test on the print.
+- **Finer grille, 1 mm grooves** (rev 5). Slots 3.0 to 1.0 mm wide so more
+  fit, five rows instead of three. The pitch is a third of the 10 mm
+  between RUN and BOOT (3.33 mm, a 2.33 mm rib, derived in `vent_rib`), so
+  with five rows centred on the case, rows 2 and 5 land within 0.07 mm of
+  BOOT and RUN: 1.18 mm of each 1.5 mm plunger under open slot. Rows at
+  y 8.33, 11.67, 15.0, 18.33, 21.67, still 20.8 mm long. Grooves back to
+  1.0 mm wide, at y 5.83 and 24.17 (7.7 mm from the front and back edges);
+  the side leg keeps its top edge at the start of the round, so its
+  centreline is now z 15.1. The base floor vents keep their own 3.0 mm
+  slot (`base_vent_w`) and are unchanged. A 1 mm printed slot comes out
+  nearer 0.8 mm, so a paperclip is a tight fit.
 
 The grille and button notes below describe revs 1 to 3. Rev 4 above
 centres the grille on three rows and replaces the button anchoring.

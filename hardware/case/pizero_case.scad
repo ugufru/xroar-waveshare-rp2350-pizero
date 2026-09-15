@@ -128,15 +128,17 @@ button_hole_d = 3.0;
 /* ---------- roof vents ------------------------------------------------ */
 //
 // The CoCo 2 had no fan, just slots cut across the top. Same idea here.
-// Two banks of three slots, each slot 3 mm wide with rounded ends, centred
-// front to back (rev 4; see vent_y0 for how that treats RUN and BOOT).
+// Two banks of five slots, each slot 1 mm wide with rounded ends, centred
+// front to back (rev 5; see vent_rib for how that lands on RUN and BOOT).
 // The left bank is the right bank mirrored about the board centre.
 
 vents        = true;
-vent_w       = 3.0;     // slot width, front to back       [C] measured
-vent_rib     = 2.0;     // solid between slots, for a 5.0 mm row pitch (rev 4, was 3.0)
-vent_rows    = 3;       // rev 4, was 4: four rows and two grooves do not fit
-                        // on the 24.8 mm of flat roof the 5 mm rounds leave
+vent_w       = 1.0;     // slot width, front to back (rev 5, was 3.0 [C])
+vent_rows    = 5;       // rev 5, was 3
+// Rev 5: pitch is a third of the RUN to BOOT distance (3.33 mm, a 2.33 mm
+// rib). With an odd row count centred on the case, rows 2 and 5 then land
+// within 0.07 mm of BOOT and RUN.
+vent_rib     = (run_pos[1] - boot_pos[1])/3 - vent_w;
 vent_gap     = 6.0;     // clear space between the two banks, left to right
 vent_margin  = 5.0;     // base floor slots stop this far from the case edges
 // Roof slots stop this far from the left and right edges. Rows used to be
@@ -158,22 +160,23 @@ vent_boss_clr = 0.8;    // clear space between a slot and a screw boss
 // reports the clearance. Rows and rib are the base's own, so reshaping the
 // roof grille leaves the floor alone.
 base_vents = true;
+base_vent_w    = 3.0;
 base_vent_rows = 4;
 base_vent_rib  = 3.0;
 
 vent_pitch   = vent_w + vent_rib;
 vent_span    = vent_rows*vent_w + (vent_rows - 1)*vent_rib;
-base_vent_pitch = vent_w + base_vent_rib;
-base_vent_span  = base_vent_rows*vent_w + (base_vent_rows - 1)*base_vent_rib;
+base_vent_pitch = base_vent_w + base_vent_rib;
+base_vent_span  = base_vent_rows*base_vent_w + (base_vent_rows - 1)*base_vent_rib;
 
 // Rev 4: the grille is centred front to back on the case, so the grooves
 // either side of it both land on the flat roof. It used to be anchored on
-// BOOT (row 2) and nudged 1 mm forward to catch RUN, 1.25 mm of each
-// plunger open. Centred rows are symmetric about y 15.0 but the buttons are
-// not (BOOT 3.4 mm in front, RUN 6.6 mm behind), so no pitch centres both.
-// The 5 mm pitch is the one that treats them equally: rows at 10, 15, 20,
-// each button 1.6 mm off a row, about 0.65 mm of each plunger open. The
-// echo below reports it. (vent_y0 is set below, once y0 and od exist.)
+// BOOT (row 2) and nudged 1 mm forward to catch RUN. Centred rows are
+// symmetric about y 15.0 but the buttons are not (BOOT 3.4 mm in front,
+// RUN 6.6 mm behind). Rev 4's 3 mm slots on a 5 mm pitch left each button
+// 1.6 mm off a row; rev 5's 1 mm slots on a 3.33 mm pitch put both within
+// 0.07 mm. The echo below reports the plunger width under open slot.
+// (vent_y0 is set below, once y0 and od exist.)
 
 // (bank extents and boss keepout are derived below, after x0/ow/holes)
 
@@ -197,7 +200,7 @@ band_over_edges = true;
 // and one behind, each centred groove_off clear of the outer edge of the
 // slots and running the full width across the side walls.
 groove       = true;
-groove_w     = 2.0;     // PIZERO-101, was 0.5. Still only a 2 mm bridge.
+groove_w     = 1.0;     // PIZERO-101: 0.5, then 2.0, now 1.0 (rev 5)
 groove_d     = 0.6;     // an exact 3 layers at 0.2 mm, so it reads cleanly
 groove_off   = 2.0;     // groove centreline, clear of the outer edge of the slots
 // Straight grooves ran out through the side walls, and the front one left
@@ -452,15 +455,15 @@ module groove_cuts() {
 // Base floor vents: slot x centres for both banks, and the slot y extent.
 base_vent_x = [ for (x_lo = [bw/2 - vent_gap/2 - base_vent_span, bw/2 + vent_gap/2],
                      r = [0 : base_vent_rows - 1])
-                  x_lo + vent_w/2 + r*base_vent_pitch ];
+                  x_lo + base_vent_w/2 + r*base_vent_pitch ];
 base_vent_y0 = y0 + vent_margin;
 base_vent_y1 = y0 + od - vent_margin;
 
 module base_vent_cuts() {
     if (base_vents)
         for (cx = base_vent_x)
-            hull() for (y = [base_vent_y0 + vent_w/2, base_vent_y1 - vent_w/2])
-                translate([cx, y, -1]) cylinder(d = vent_w, h = floor_t + 2);
+            hull() for (y = [base_vent_y0 + base_vent_w/2, base_vent_y1 - base_vent_w/2])
+                translate([cx, y, -1]) cylinder(d = base_vent_w, h = floor_t + 2);
 }
 
 module band_cut() {
@@ -630,11 +633,11 @@ for (r = [0 : vent_rows - 1])
                  "  len ", vent_banks[0][1] - max(vent_banks[0][0], slot_lo(cy))));
 
 if (base_vents)
-    echo(str("base vents x ", base_vent_x[0] - vent_w/2, " .. ",
-             base_vent_x[len(base_vent_x) - 1] + vent_w/2,
+    echo(str("base vents x ", base_vent_x[0] - base_vent_w/2, " .. ",
+             base_vent_x[len(base_vent_x) - 1] + base_vent_w/2,
              "  y ", base_vent_y0, " .. ", base_vent_y1,
              "  clear of standoffs by ",
-             base_vent_x[0] - vent_w/2 - (hole_in + boss_d/2)));
+             base_vent_x[0] - base_vent_w/2 - (hole_in + boss_d/2)));
 if (groove && groove_wrap)
     echo(str("groove wraps at y ", groove_yf, " and ", groove_yb,
              "  side leg centreline z ", groove_leg_z,
