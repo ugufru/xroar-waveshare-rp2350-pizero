@@ -49,7 +49,13 @@ r_out = 5.0;            // vertical corner radius, outside (PIZERO-101, was 4)
 r_in  = 2.0;            // inner cavity corner. Fixed rather than r_out - wall,
                         // so restyling the outside never changes board fit;
                         // the corners just get thicker.
-top_chamfer = 1.0;      // chamfer on the top edge (prints flat on the plate)
+top_chamfer = 1.0;      // chamfer on the top edge, used only when top_r = 0
+// Round between the side walls and the roof (PIZERO-101 rev 2). Equal to
+// r_out, so every outer corner of the lid is a sphere. A 5 mm round on a
+// 2 mm wall would break through, so the cavity's top edges are rounded too,
+// by top_r - wall about nearly the same centres, keeping the shell ~2 mm.
+top_r = 5.0;
+assert(top_r == 0 || top_r == r_out, "top_r must be 0 or equal r_out");
 
 part_gap = 10.0;        // clear space between the two parts on a shared plate
 coupon_depth = 9.0;     // depth of the port test coupon, front wall only
@@ -197,6 +203,13 @@ groove_loop  = true;
 groove_edge  = 1.5;     // solid between the top chamfer and the outer edge
                         // of a side leg (matches the front groove's margin)
 groove_r     = 3.0;     // loop corner radius, on the groove centreline
+// Wrapped loop (PIZERO-101 rev 2), supersedes groove_loop: the front and
+// back grooves run across the top, over the rounded edge and down the left
+// and right sides, where a front-to-back leg joins them. The loop's rounded
+// corners are on the side walls. The leg sits just above the battery
+// opening, which is the tallest cut in either side wall.
+groove_wrap  = true;
+groove_leg_lip = 0.8;   // solid between the battery opening and the leg
 // The recess is defined by the slots, not by the case: band_margin of
 // border in front of the first row and behind the last, and wherever the
 // grille has to sit for the buttons is where the whole thing sits. On this
@@ -245,6 +258,35 @@ module rrect(px, py, w, d, h, r) {
 
 module outer_shell(h)  { rrect(x0, y0, ow, od, h, r_out); }
 module inner_cavity(h) { rrect(-clr, -clr, bw + 2*clr, bd + 2*clr, h, r_in); }
+
+// rounded rectangle prism whose top edges are also rounded to r: vertical
+// cylinders up to h - r, capped by a sphere at each corner
+module rrect_rtop(px, py, w, d, h, r) {
+    hull() for (dx = [r, w - r], dy = [r, d - r]) {
+        translate([px + dx, py + dy, 0]) cylinder(h = h - r, r = r);
+        translate([px + dx, py + dy, h - r]) sphere(r = r);
+    }
+}
+
+// lid outside and cavity, in lid-local z (0 = split line)
+module lid_outer(h) {
+    if (top_r > 0) rrect_rtop(x0, y0, ow, od, h, r_out);
+    else outer_shell(h);
+}
+// The cavity keeps its r_in corners wherever the board is, and only its
+// top ri blends into spheres of radius top_r - wall. Those spheres share the
+// outer spheres' x/y centres and sit (top_t - wall) higher, so the shell over
+// the round is between top_t and wall thick.
+module lid_cavity(h) {
+    ri = top_r - wall;
+    if (top_r > 0)
+        hull() {
+            inner_cavity(h - ri);
+            for (dx = [ri, bw + 2*clr - ri], dy = [ri, bd + 2*clr - ri])
+                translate([-clr + dx, -clr + dy, h - ri]) sphere(r = ri);
+        }
+    else inner_cavity(h);
+}
 
 /* ---------- front port cuts ------------------------------------------ */
 //
@@ -352,8 +394,37 @@ groove_yb = vent_group_y1 + groove_off;    // back groove centreline
 groove_xl = x0 + top_chamfer + groove_edge + groove_w/2;   // left leg
 groove_xr = x0 + ow - top_chamfer - groove_edge - groove_w/2;
 
+groove_leg_z = split_z + bat_oh + groove_leg_lip + groove_w/2;  // side leg centreline
+
+// 2D stroke in the y/z plane: up the front groove, round the corner, along
+// the leg, round the corner, up the back groove. The tops run above the case.
+module groove_u_2d() {
+    module rr(y_lo, z_lo, y_hi, z_hi, r)
+        hull() for (y = [y_lo + r, y_hi - r], z = [z_lo + r, z_hi - r])
+            translate([y, z]) circle(r = r);
+    difference() {
+        rr(groove_yf - groove_w/2, groove_leg_z - groove_w/2,
+           groove_yb + groove_w/2, case_h + 10, groove_r + groove_w/2);
+        rr(groove_yf + groove_w/2, groove_leg_z + groove_w/2,
+           groove_yb - groove_w/2, case_h + 20, max(0.1, groove_r - groove_w/2));
+    }
+}
+
 module groove_cuts() {
-    if (groove && groove_loop)
+    if (groove && groove_wrap)
+        // the stroke, extruded left to right, kept to a groove_d skin that
+        // follows the outside surface, so it is cut normal to the round
+        intersection() {
+            translate([x0 - 1, 0, 0]) rotate([90, 0, 90])
+                linear_extrude(ow + 2) groove_u_2d();
+            difference() {
+                translate([0, 0, split_z]) lid_outer(lid_h + 1);
+                translate([0, 0, split_z - 1])
+                    rrect_rtop(x0 + groove_d, y0 + groove_d, ow - 2*groove_d,
+                               od - 2*groove_d, lid_h + 1 - groove_d, r_out - groove_d);
+            }
+        }
+    else if (groove && groove_loop)
         translate([0, 0, case_h - groove_d]) difference() {
             rrect(groove_xl - groove_w/2, groove_yf - groove_w/2,
                   groove_xr - groove_xl + groove_w, groove_yb - groove_yf + groove_w,
@@ -441,14 +512,18 @@ module lid() {
     difference() {
         union() {
             translate([0, 0, split_z]) difference() {
-                outer_shell(lid_h);
-                translate([0, 0, -0.01]) inner_cavity(head_room + 0.01);
+                lid_outer(lid_h);
+                translate([0, 0, -0.01]) lid_cavity(head_room + 0.01);
             }
             // bosses: full pillars from the PCB top up to the roof, so they
-            // tie the roof down and clamp the board at the same time
-            for (h = holes)
-                translate([h[0], h[1], split_z])
-                    cylinder(d = boss_d, h = head_room);
+            // tie the roof down and clamp the board at the same time. Kept
+            // inside the cavity, or their tops poke out through the top round.
+            intersection() {
+                for (h = holes)
+                    translate([h[0], h[1], split_z])
+                        cylinder(d = boss_d, h = head_room);
+                translate([0, 0, split_z]) lid_cavity(head_room);
+            }
         }
         for (h = holes)
             translate([h[0], h[1], split_z - 0.01])
@@ -471,8 +546,8 @@ module lid() {
             translate([b[0], b[1], split_z + head_room - 0.01])
                 cylinder(d = button_hole_d, h = top_t + 0.02);
 
-        // chamfer the top edge
-        translate([0, 0, case_h - top_chamfer])
+        // chamfer the top edge, when it is not rounded
+        if (top_r == 0) translate([0, 0, case_h - top_chamfer])
             difference() {
                 translate([x0 - 1, y0 - 1, -0.5])
                     cube([ow + 2, od + 2, top_chamfer + 0.52]);
@@ -551,7 +626,12 @@ if (base_vents)
              "  y ", base_vent_y0, " .. ", base_vent_y1,
              "  clear of standoffs by ",
              base_vent_x[0] - vent_w/2 - (hole_in + boss_d/2)));
-if (groove && groove_loop)
+if (groove && groove_wrap)
+    echo(str("groove wraps at y ", groove_yf, " and ", groove_yb,
+             "  side leg centreline z ", groove_leg_z,
+             " (groove ", groove_leg_z - groove_w/2, " .. ", groove_leg_z + groove_w/2,
+             ", side round starts at z ", case_h - top_r, ")"));
+else if (groove && groove_loop)
     echo(str("groove loop centreline x ", groove_xl, " .. ", groove_xr,
              "  y ", groove_yf, " .. ", groove_yb));
 

@@ -183,8 +183,15 @@ pattern correct. Validates the `[W]` parameters.
   floor, so nothing bridges. `base_vents = false` drops them.
 - **Corners** 4 to 5 mm (`r_out`). The cavity corner `r_in` is now its own
   2.0 mm parameter instead of `r_out - wall`, so the outside can be
-  restyled without touching board fit. The top edge stays a 1 mm chamfer:
-  a 5 mm round there would break through the wall and roof.
+  restyled without touching board fit.
+- **Top edge rounded** to 5.0 mm (`top_r`, rev 2), the same as the corners,
+  so each lid corner is a sphere. The old 1 mm chamfer came back as
+  `top_r = 0`. A 5 mm round alone breaks through a 2 mm wall, so the cavity's
+  top 3 mm is rounded too, about the same centres, keeping the shell 1.8 to
+  2.0 mm thick over the round. Below that the cavity keeps its 2.0 mm
+  corners, so board fit is unchanged; the header loses at most 0.14 mm of
+  its 0.5 mm roof clearance. The corner bosses are clipped to the cavity so
+  they do not poke out through the round.
 - **Port corners** rounded: `port_r` 1.0 mm on the top corners of each
   through opening (the bottom is open at the split line), `pocket_r`
   2.0 mm on all four corners of each plug pocket, split across base and lid.
@@ -194,6 +201,14 @@ pattern correct. Validates the `[W]` parameters.
   inside the top chamfer, the same margin the front groove has. This fixes
   the front groove running out through the side wall right where the
   corner curve starts. `groove_loop = false` gives straight grooves again.
+- **Groove wrap** (rev 2, `groove_wrap`, supersedes the loop). After seeing
+  the loop, the legs moved off the top: the front and back grooves run
+  across the top, over the rounded edge and down both side walls, where a
+  front-to-back leg at z 14.6 joins them with 3.0 mm corners on the side
+  face. The leg's top edge meets the start of the side round, and its lower
+  edge clears the battery opening by 0.8 mm (`groove_leg_lip`). It is cut as
+  a 0.6 mm skin that follows the outside surface, so depth stays constant
+  over the round.
 
 **Vent grille**, on the CoCo 2 pattern (see `coco2-image.png`): two banks
 of four slots, 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs. Rows
