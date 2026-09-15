@@ -120,6 +120,18 @@ bat_y0 = 15.4;          // [W] 14.4, pulled in 1.0
 bat_y1 = 22.6;          // [W] 23.6, pulled in 1.0
 bat_oh = 5.5;           // [M] was 7.0, then 6.0
 
+// 40-pin header opening (PIZERO-102), cut only in the alternate lid,
+// part="top_header". Centred on the header pin field as drawn in mock_pcb:
+// pins span x 8.07..56.97, y 25.2..28.3. The default is a 2x20 female
+// housing (50.8 x 5.1 mm) with clearance, and it is as long as fits between
+// the two back screw bosses; the echo reports every clearance.
+header_open = (part == "top_header");
+hdr_cx = (8.07 + 56.97)/2;     // [W] pin field centre
+hdr_cy = (25.2 + 28.3)/2;
+hdr_open_w = 51.6;      // opening, left to right
+hdr_open_d = 7.0;       // opening, front to back
+hdr_open_r = 1.0;       // corner radius
+
 run_pos  = [41.0, 21.6];   // [W]
 boot_pos = [41.2, 11.6];   // [W]
 
@@ -578,6 +590,11 @@ module lid() {
         groove_cuts();
         vent_cuts();
 
+        if (header_open)
+            translate([0, 0, split_z + head_room - 1])
+                rrect(hdr_cx - hdr_open_w/2, hdr_cy - hdr_open_d/2,
+                      hdr_open_w, hdr_open_d, top_t + 2, hdr_open_r);
+
         if (buttons_open) for (b = [run_pos, boot_pos])
             translate([b[0], b[1], split_z + head_room - 0.01])
                 cylinder(d = button_hole_d, h = top_t + 0.02);
@@ -673,12 +690,29 @@ else if (groove && groove_loop)
     echo(str("groove loop centreline x ", groove_xl, " .. ", groove_xr,
              "  y ", groove_yf, " .. ", groove_yb));
 
+if (header_open) {
+    hx0 = hdr_cx - hdr_open_w/2;  hx1 = hdr_cx + hdr_open_w/2;
+    hy0 = hdr_cy - hdr_open_d/2;  hy1 = hdr_cy + hdr_open_d/2;
+    // nearest point of the opening to each back boss, less the boss radius
+    boss_clr = min([for (h = holes) if (h[1] > bd/2)
+        let (dx = max(hx0 - h[0], 0, h[0] - hx1),
+             dy = max(hy0 - h[1], 0, h[1] - hy1))
+        sqrt(dx*dx + dy*dy) - boss_d/2]);
+    echo(str("header opening x ", hx0, " .. ", hx1, "  y ", hy0, " .. ", hy1,
+             "  clear of back bosses by ", boss_clr,
+             "  of back inner wall by ", (bd + clr) - hy1,
+             "  of back vent slots by ", hy0 - vent_group_y1,
+             (groove && hy0 < groove_yb + groove_w/2)
+                 ? str("  CUTS the back groove (y ", groove_yb - groove_w/2,
+                       " .. ", groove_yb + groove_w/2, ")") : ""));
+}
+
 _check_button("RUN", run_pos);
 _check_button("BOOT", boot_pos);
 
 if (part == "coupon") coupon_printable();
 else if (part == "base") base_printable();
-else if (part == "top") lid_printable();
+else if (part == "top" || part == "top_header") lid_printable();
 else if (part == "both") {
     // one plate, two free-standing bodies, part_gap of clear air between them
     base_printable();

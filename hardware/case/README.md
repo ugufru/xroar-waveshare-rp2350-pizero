@@ -157,6 +157,24 @@ hardware, and are the most trustworthy of the three.
 Parameters marked `[?]` are still estimates that need calipers on a real
 board: PCB thickness, USB-C and microSD heights, and plug clearances.
 
+## Header lid (draft, PIZERO-102)
+
+```
+openscad -o top_header.stl -D 'part="top_header"' pizero_case.scad
+```
+
+An alternate lid with an opening over the 40-pin header, for a 2x20
+female connector, plugged by a separate printed cover when unused. Same
+base, same screws. The opening is centred on the header pin field and is
+51.6 x 7.0 mm (`hdr_open_w`, `hdr_open_d`), as long as fits between the
+two back screw bosses (0.18 mm clear) and as deep as fits in front of the
+back wall (0.15 mm clear).
+
+**Draft, not for printing yet.** The opening cuts through the back arm of
+the groove loop and leaves only 1.08 mm of roof between it and the back
+row of vent slots. The grille and groove layout for this lid, and the
+opening size (connector type, cover dimensions), are still to be agreed.
+
 ## Port test coupon
 
 ```
