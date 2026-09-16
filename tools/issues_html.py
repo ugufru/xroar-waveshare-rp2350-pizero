@@ -95,6 +95,7 @@ h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
 #q:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chip.th { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg); }
 .morebtn { font-size: .72rem; background: none; color: var(--dim); cursor: pointer;
   border: 1px dashed var(--line); border-radius: 999px; padding: .2rem .55rem; }
 .morebtn:hover { color: var(--fg); }
@@ -168,6 +169,7 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
 <div class="controls">
   <input id="q" type="search" placeholder="Search summaries and descriptions..." autocomplete="off">
   <div class="pills"><span class="label">status</span><span id="f-status"></span></div>
+  <div class="pills"><span class="label">theme</span><span id="f-theme"></span></div>
   <div class="pills"><span class="label">type</span><span id="f-type"></span></div>
   <div class="pills"><span class="label">tag</span><span id="f-tag"></span></div>
   <div class="bar">
@@ -188,13 +190,16 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
   var STATUS_ORDER = ['open', 'in-progress', 'done', 'deferred', 'wontfix'];
   var PRIORITY_ORDER = ['high', 'medium', 'low'];
   var TAG_PILL_LIMIT = 20;   // the rest hide behind a "+N more" toggle
+  // Themes are the coarse grouping: one per issue, from a fixed vocabulary,
+  // unlike the free-form tags. Order is the order they are worked in.
+  var THEME_ORDER = ['trust', 'kit', 'input', 'experience', 'platform', 'storage', 'devices'];
   var LIVE = ['open', 'in-progress'];
   var KEY = 'issues-view:' + location.pathname;
   // Longest alternative first: "jsonl" must win over "json".
   var PATH_RE = /\b((?:[\w.-]+\/)*[\w.-]+\.(?:jsonl|json|md|html|css|js|ts|tsx|jsx|py|rb|go|rs|java|c|h|cpp|sh|toml|ya?ml|cfg|ini|txt|bas|dsk|png))(:\d+(?:-\d+)?)?/g;
 
   var issues = [];
-  var active = { status: [], type: [], tag: [] };
+  var active = { status: [], type: [], tag: [], theme: [] };
   var q = document.getElementById('q');
   var list = document.getElementById('list');
   var count = document.getElementById('count');
@@ -228,6 +233,7 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
     el.dataset.status = status;
     el.dataset.type = type;
     el.dataset.tags = tagsOf(i).join(' ');
+    el.dataset.theme = i.theme || '';
     el.innerHTML =
       '<header><button class="row" aria-expanded="false">' +
       '<span class="id">#' + esc(i.id) + '</span>' +
@@ -236,6 +242,7 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
         '<span class="chip st-' + esc(status) + '">' + esc(status) + '</span>' +
         '<span class="chip pr-' + esc(priority) + '">' + esc(priority) + '</span>' +
         '<span class="chip ty">' + esc(type) + '</span>' +
+        (i.theme ? '<span class="chip th">' + esc(i.theme) + '</span>' : '') +
       '</span><span class="caret" aria-hidden="true"></span></button></header>' +
       '<div class="body" hidden><div class="desc">' +
       markup(i.description || '(no description)') + '</div><footer>' +
@@ -321,6 +328,7 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
       var ok =
         (!active.status.length || active.status.indexOf(el.dataset.status) !== -1) &&
         (!active.type.length || active.type.indexOf(el.dataset.type) !== -1) &&
+        (!active.theme.length || active.theme.indexOf(el.dataset.theme) !== -1) &&
         (!active.tag.length || active.tag.some(function (t) {
           return el.dataset.tags.split(' ').indexOf(t) !== -1;
         })) &&
@@ -356,6 +364,17 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
 
     pills('f-status', 'status', STATUS_ORDER.filter(function (s) { return counts[s]; }), counts);
     pills('f-type', 'type', unique(issues.map(function (i) { return i.type || '?'; })));
+
+    var themeCounts = {};
+    issues.forEach(function (i) {
+      if (i.theme) themeCounts[i.theme] = (themeCounts[i.theme] || 0) + 1;
+    });
+    var themes = THEME_ORDER.filter(function (t) { return themeCounts[t]; })
+      .concat(Object.keys(themeCounts).filter(function (t) {
+        return THEME_ORDER.indexOf(t) === -1;
+      }).sort());
+    document.getElementById('f-theme').parentNode.hidden = !themes.length;
+    pills('f-theme', 'theme', themes, themeCounts);
     // A project can accumulate hundreds of tags, most of them used once.
     // Showing every one buries the results, so lead with the most used and
     // keep the long tail behind a toggle.
@@ -421,7 +440,7 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
 
   q.addEventListener('input', apply);
   document.getElementById('reset').addEventListener('click', function () {
-    active = { status: [], type: [], tag: [] };
+    active = { status: [], type: [], tag: [], theme: [] };
     q.value = '';
     apply();
   });
