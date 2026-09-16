@@ -107,7 +107,11 @@ front_ports = [hdmi, usbc_host, usbc_power];
 // so the card caught on its back edge, and was tall enough for the card to
 // ride up over the 1.32 mm socket and drop inside the case.
 sd_cy      = 16.9;      // [W] socket and card centreline
-sd_front_x = 0.5;       // [W] housing front edge, the card entry side
+sd_front_x = 1.5;       // [M] housing front edge, the card entry side. [W]
+                        // said 0.5, but on the print a latched card came out
+                        // flush with the outer wall (x -2.4), and the tail
+                        // stands 3.90 mm out of the housing, so the housing
+                        // is 1.0 mm further in than the drawing suggested.
 sd_card_w  = 11.0;      // microSD card width
 sd_ch_clr  = 0.3;       // channel clearance per side, across the width
 sd_ch_h    = 1.3;       // channel height above the PCB top: a 1.0 mm card
@@ -127,10 +131,23 @@ sd_housing = [11.55, 11.95, 1.32];   // TF-110 depth, width, height
 sd_y0 = sd_cy - sd_card_w/2 - sd_ch_clr;   // channel edges
 sd_y1 = sd_cy + sd_card_w/2 + sd_ch_clr;
 
-// Thumb dish around the microSD slot, so a card edge can be pinched and
-// pulled. PIZERO-103: lid only, the base half was unnecessary; centred on
-// the channel.
-sd_scoop   = true;
+// Finger relief around the slot mouth (PIZERO-103 rev 2). With the channel
+// right, a card went in and stayed in, but it latches flush with the outer
+// wall and the round dish was too shallow to grip it. This sinks the wall
+// around the mouth by sd_relief_d, in BOTH halves, so that much of the card
+// stands proud with a recess above and below it to pinch. It replaces the
+// dish, keeps the wall 2 mm everywhere else, and leaves the guide block
+// (which is what makes insertion work) untouched. Shortening the whole
+// edge instead would cap out at 1.0 mm and cost channel length.
+sd_relief   = true;
+sd_relief_w = 18.0;     // across the card
+sd_relief_h = 5.0;      // top to bottom, centred on the card
+sd_relief_d = wall - port_frame_t;   // 1.2 mm, as deep as the plug pockets
+                                     // (pocket_d itself is derived later)
+sd_relief_r = 1.5;      // corner radius
+
+// Old thumb dish, superseded by the relief above.
+sd_scoop   = false;
 sd_scoop_r = 10.0;      // dish radius: shallow and wide, not a deep pocket
 sd_scoop_d = 1.2;       // depth into the wall, same as the plug pockets
 sd_scoop_z = sd_ch_h/2; // centre height above the split line
@@ -540,12 +557,26 @@ module sd_channel_cut() {
     zb = split_z - 0.01;
     translate([x0 - 1, sd_cy - w/2, zb])
         cube([sd_front_x - sd_guide_gap - x0 + 1.01, w, sd_ch_h + 0.01]);
+    // flare, measured from whatever face the card meets first
+    fx = x0 + (sd_relief ? sd_relief_d : 0);
     hull() {
-        translate([x0 + sd_flare_d, sd_cy - w/2, zb])
+        translate([fx + sd_flare_d, sd_cy - w/2, zb])
             cube([0.01, w, sd_ch_h + 0.01]);
-        translate([x0 - 0.5, sd_cy - w/2 - sd_flare_w, zb])
+        translate([fx - 0.5, sd_cy - w/2 - sd_flare_w, zb])
             cube([0.01, w + 2*sd_flare_w, sd_ch_h + sd_flare_h + 0.01]);
     }
+}
+
+// Finger relief sunk into the outer wall around the slot mouth. Cut from
+// both halves, so it straddles the split line.
+module sd_relief_cut() {
+    if (sd_relief)
+        translate([x0 - 0.01, sd_cy, split_z + sd_ch_h/2]) rotate([0, 90, 0])
+            linear_extrude(height = sd_relief_d + 0.01)
+                hull() for (dz = [-1, 1], dy = [-1, 1])
+                    translate([dz*(sd_relief_h/2 - sd_relief_r),
+                               dy*(sd_relief_w/2 - sd_relief_r)])
+                        circle(r = sd_relief_r);
 }
 
 // Guide block on the inside wall face, around the channel.
@@ -581,6 +612,7 @@ module base() {
         }
         // relief so a plug overmould clears the base wall
         for (p = front_ports) port_pocket(p, -1, split_z);
+        sd_relief_cut();
         base_vent_cuts();
 
         // screw clearance + countersink from below
@@ -632,6 +664,7 @@ module lid() {
         }
 
         sd_channel_cut();
+        sd_relief_cut();
         sd_scoop_cut();
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
@@ -744,7 +777,11 @@ else if (groove && groove_loop)
 
 echo(str("microSD channel y ", sd_y0, " .. ", sd_y1, ", ", sd_ch_h,
          " mm tall  guide block x ", -clr, " .. ", sd_front_x - sd_guide_gap,
-         "  latched card tail x ", sd_front_x - 3.9, " (outer wall x ", x0, ")"));
+         " (", sd_front_x - sd_guide_gap + clr, " mm long)",
+         "  latched card tail x ", sd_front_x - 3.9, " (outer wall x ", x0,
+         sd_relief ? str(", relief floor x ", x0 + sd_relief_d) : "", ")",
+         "  card stands proud by ",
+         (x0 + (sd_relief ? sd_relief_d : 0)) - (sd_front_x - 3.9)));
 
 if (header_open) {
     hx0 = hdr_cx - hdr_open_w/2;  hx1 = hdr_cx + hdr_open_w/2;

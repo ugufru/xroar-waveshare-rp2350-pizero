@@ -180,9 +180,23 @@ Changes:
 - **Flared mouth** on the outside, 1.2 mm wider each side and 1.2 mm taller
   at the face, narrowing over 1.2 mm (`sd_flare_*`), so a card finds the
   channel by feel.
-- **Thumb dish** now lid only, centred on the channel. The base half is gone.
+Confirmed on the print: a card now goes in easily and stays in. The side
+and bottom support of the guide block is what makes that work, so anything
+later must leave it alone.
 
-A latched card's tail sits at x -3.4, 1.0 mm proud of the outside wall.
+**Rev 2, from that same print:**
+
+- **Socket position corrected.** The card latched flush with the outer
+  wall, and its tail stands 3.90 mm out of the housing, so the housing
+  front is at x 1.5, not the 0.5 the drawing suggested (`sd_front_x`, now
+  `[M]`). The guide block follows it in and is 1.5 mm long instead of 0.5.
+- **Finger relief** replaces the thumb dish: 18 x 5 mm, 1.2 mm deep
+  (`sd_relief_*`), sunk into the outer wall around the mouth and cut from
+  **both** halves. A flush card now stands 1.2 mm proud with a recess above
+  and below it to pinch. Shortening the whole edge instead would have
+  capped at 1.0 mm (the wall is only 2 mm thick) and would have cost
+  channel length; this keeps the wall 2 mm everywhere else.
+- The flare is measured from the relief floor, so the mouth still funnels.
 
 ## Header lid (draft, PIZERO-102)
 
