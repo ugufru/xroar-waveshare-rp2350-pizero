@@ -157,6 +157,27 @@ hardware, and are the most trustworthy of the three.
 Parameters marked `[?]` are still estimates that need calipers on a real
 board: PCB thickness, USB-C and microSD heights, and plug clearances.
 
+## Part versions (PIZERO-105)
+
+Each part carries its own version, engraved 0.5 mm deep on a face that is
+inside the assembled case: readable while the case is apart, invisible once
+it is shut.
+
+| Part | Version | Where |
+|---|---|---|
+| `base.stl` | BASE v9 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
+| `top.stl` | TOP v9 | Roof underside, centred on the two USB ports, in front of the groove loop |
+| `top_header.stl` | TOP-HDR v1 | Same place as the lid |
+
+Set in `ver_base`, `ver_top` and `ver_top_header` in the source. **Bump the
+number whenever that part's geometry changes**, and say what changed here,
+so a printed part in hand maps to a revision without measuring it. The lid
+text is mirrored in the model, because the lid is read cavity-up (its print
+orientation), which is a 180 degree flip about x. `ver_show = false` drops
+the engraving entirely.
+
+v9 is the state of PIZERO-101 rev 8 plus the PIZERO-103 microSD rev 2.
+
 ## microSD fit (PIZERO-103)
 
 Printed cases were unreliable: the card either slid in over the socket and

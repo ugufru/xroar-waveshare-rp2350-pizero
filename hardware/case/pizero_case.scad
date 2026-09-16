@@ -291,6 +291,26 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
                         // band stays base_roof_t, so the case grows by
                         // exactly this much.
 
+/* ---------- part version --------------------------------------------- */
+//
+// Each part carries its own version, engraved on an inside face: the base
+// between the two banks of floor vents, the lid on the roof underside,
+// centred on the two USB ports. Bump the number here when that part's
+// geometry changes, and say what changed in README.md, so a part in hand
+// can be matched to a revision without measuring it.
+//
+//   BASE v9 / TOP v9   PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
+//   TOP-HDR v1         first draft of the 40-pin header lid (PIZERO-102)
+
+ver_show = true;
+ver_base       = "BASE v9";
+ver_top        = "TOP v9";
+ver_top_header = "TOP-HDR v1";
+ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
+ver_d     = 0.5;        // engraving depth
+ver_font  = "Liberation Sans:style=Bold";
+ver_lid_y = 2.2;        // roof underside, in front of the groove loop
+
 $fn = 64;
 
 // The whole point of anchoring rows on the buttons is that a paperclip can
@@ -589,6 +609,29 @@ module sd_guide() {
             cube([x_end - x_in + 0.01, w + 2*sd_guide_side, sd_ch_h + sd_guide_top]);
 }
 
+// Version engraving. The base reads from above, the lid from below (so its
+// text is mirrored in the model to read correctly from inside).
+module ver_base_cut() {
+    if (ver_show && ver_base != "")
+        translate([bw/2, bd/2, floor_t - ver_d])
+            linear_extrude(ver_d + 0.01) rotate([0, 0, 90])
+                text(ver_base, size = ver_size, font = ver_font,
+                     halign = "center", valign = "center");
+}
+
+module ver_lid_cut() {
+    s = header_open ? ver_top_header : ver_top;
+    if (ver_show && s != "")
+        translate([(usbc_host[0] + usbc_power[0])/2, ver_lid_y,
+                   case_h - top_t - 0.01])
+            // The lid is read cavity-up, which is the roof-down print
+            // orientation: a 180 degree flip about x. Pre-flip in y so the
+            // text reads correctly there rather than as a reflection.
+            linear_extrude(ver_d + 0.01) mirror([0, 1, 0])
+                text(s, size = ver_size, font = ver_font,
+                     halign = "center", valign = "center");
+}
+
 module sd_scoop_cut() {
     if (sd_scoop)
         translate([x0 - sd_scoop_r + sd_scoop_d,
@@ -614,6 +657,7 @@ module base() {
         for (p = front_ports) port_pocket(p, -1, split_z);
         sd_relief_cut();
         base_vent_cuts();
+        ver_base_cut();
 
         // screw clearance + countersink from below
         for (h = holes) {
@@ -666,6 +710,7 @@ module lid() {
         sd_channel_cut();
         sd_relief_cut();
         sd_scoop_cut();
+        ver_lid_cut();
         if (bat_open) notch_right(bat_y0, bat_y1, bat_oh);
 
         band_cut();

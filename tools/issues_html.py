@@ -95,6 +95,9 @@ h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
 #q:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.morebtn { font-size: .72rem; background: none; color: var(--dim); cursor: pointer;
+  border: 1px dashed var(--line); border-radius: 999px; padding: .2rem .55rem; }
+.morebtn:hover { color: var(--fg); }
 .pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; align-items: center; }
 .pills .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
   color: var(--dim); margin-right: .15rem; }
@@ -184,6 +187,7 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
 (function () {
   var STATUS_ORDER = ['open', 'in-progress', 'done', 'deferred', 'wontfix'];
   var PRIORITY_ORDER = ['high', 'medium', 'low'];
+  var TAG_PILL_LIMIT = 20;   // the rest hide behind a "+N more" toggle
   var LIVE = ['open', 'in-progress'];
   var KEY = 'issues-view:' + location.pathname;
   // Longest alternative first: "jsonl" must win over "json".
@@ -291,11 +295,17 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
     document.getElementById('roadmap').hidden = false;
   }
 
-  function pills(host, filter, values, counts) {
-    document.getElementById(host).innerHTML = values.map(function (v) {
-      return '<button class="pill" data-filter="' + filter + '" data-value="' + esc(v) + '">' +
+  function pills(host, filter, values, counts, limit) {
+    var hidden = (limit && values.length > limit) ? values.length - limit : 0;
+    document.getElementById(host).innerHTML = values.map(function (v, idx) {
+      var extra = hidden && idx >= limit;
+      return '<button class="pill' + (extra ? ' extra' : '') + '"' +
+        (extra ? ' hidden' : '') +
+        ' data-filter="' + filter + '" data-value="' + esc(v) + '">' +
         esc(v) + (counts ? ' <span class="n">' + counts[v] + '</span>' : '') + '</button>';
-    }).join('');
+    }).join('') + (hidden
+      ? '<button class="morebtn" data-host="' + host + '">+' + hidden + ' more</button>'
+      : '');
   }
 
   function save() {
@@ -346,13 +356,33 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
 
     pills('f-status', 'status', STATUS_ORDER.filter(function (s) { return counts[s]; }), counts);
     pills('f-type', 'type', unique(issues.map(function (i) { return i.type || '?'; })));
-    pills('f-tag', 'tag', unique([].concat.apply([], issues.map(tagsOf))));
+    // A project can accumulate hundreds of tags, most of them used once.
+    // Showing every one buries the results, so lead with the most used and
+    // keep the long tail behind a toggle.
+    var tagCounts = {};
+    issues.forEach(function (i) {
+      tagsOf(i).forEach(function (t) { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+    });
+    var tagNames = Object.keys(tagCounts).sort(function (a, b) {
+      return tagCounts[b] - tagCounts[a] || (a < b ? -1 : a > b ? 1 : 0);
+    });
+    pills('f-tag', 'tag', tagNames, tagCounts, TAG_PILL_LIMIT);
 
     [].forEach.call(document.querySelectorAll('.pill'), function (p) {
       p.addEventListener('click', function () {
         var l = active[p.dataset.filter], i = l.indexOf(p.dataset.value);
         if (i === -1) l.push(p.dataset.value); else l.splice(i, 1);
         apply();
+      });
+    });
+
+    [].forEach.call(document.querySelectorAll('.morebtn'), function (b) {
+      b.addEventListener('click', function () {
+        var host = document.getElementById(b.dataset.host);
+        var extras = host.querySelectorAll('.pill.extra');
+        var show = extras.length && extras[0].hidden;
+        [].forEach.call(extras, function (p) { p.hidden = !show; });
+        b.textContent = show ? 'fewer' : '+' + extras.length + ' more';
       });
     });
 
