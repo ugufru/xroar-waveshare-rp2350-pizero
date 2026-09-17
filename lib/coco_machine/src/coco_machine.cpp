@@ -964,8 +964,40 @@ static void build_alpha_lut() {
     g_alpha_lut_ready = true;
 }
 
+// Pack 8 palette indices into one 32-bit word, low nibble = even pixel.
+// Shared by the alpha/SG4 and RG6 tables (PIZERO-119).
+static inline uint32_t pack8(const uint8_t px[8]) {
+    uint32_t w = 0;
+    for (int i = 0; i < 8; i++)
+        w |= (uint32_t)px[i] << ((i >> 1) * 8 + ((i & 1) ? 4 : 0));
+    return w;
+}
+
+// SG4 semigraphics: a cell is two colour blocks side by side, so 8 packed
+// pixels depend only on the colour (3 bits) and the two block bits. 32 entries
+// covers it. Measured 2026-09-17: an SG4-heavy screen spent 4.88 ms a frame
+// here doing 8 put2 read-modify-writes per cell, which is where the PIZERO-119
+// overrun actually came from. It hid behind the text path because the mode
+// bits read "alpha" either way.
+static uint32_t g_sg4_lut[8][4];
+static bool     g_sg4_lut_ready = false;
+
+static void build_sg4_lut() {
+    for (int color = 0; color < 8; color++) {
+        for (int sg = 0; sg < 4; sg++) {
+            uint8_t left  = (sg & 2) ? (uint8_t)color : (uint8_t)PAL_BLACK;
+            uint8_t right = (sg & 1) ? (uint8_t)color : (uint8_t)PAL_BLACK;
+            uint8_t px[8];
+            for (int bit = 0; bit < 8; bit++) px[bit] = (bit < 4) ? left : right;
+            g_sg4_lut[color][sg] = pack8(px);
+        }
+    }
+    g_sg4_lut_ready = true;
+}
+
 static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
     if (!g_alpha_lut_ready) build_alpha_lut();
+    if (!g_sg4_lut_ready) build_sg4_lut();
     // 32 chars wide × 16 text rows × 12 pixel rows = 192 lines.
     // Each glyph is 8 px wide → 32 chars × 8 = 256 px per line.
     for (int text_row = 0; text_row < 16; text_row++) {
@@ -978,13 +1010,9 @@ static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
                 uint8_t ch = chrow[col];
                 if (ch & 0x80) {
                     // SG4 semigraphics: 2×2 colour block in this cell.
-                    uint8_t color = (ch >> 4) & 7;
+                    // PIZERO-119: one packed store, not 8 read-modify-writes.
                     uint8_t sg = (sub_row < 6) ? (ch >> 2) : ch;
-                    uint8_t left  = (sg & 2) ? color : PAL_BLACK;
-                    uint8_t right = (sg & 1) ? color : PAL_BLACK;
-                    int basepx = col * 8;
-                    for (int bit = 0; bit < 8; bit++)
-                        put2(dst, basepx + bit, (bit < 4) ? left : right);
+                    *(uint32_t *)(dst + col * 4) = g_sg4_lut[(ch >> 4) & 7][sg & 3];
                 } else {
                     // Alpha: 6-bit screen code → T1 font glyph $40-$7F.
                     // Bit 6 = inverse (the iconic black-on-green BASIC look).
@@ -1004,13 +1032,6 @@ static uint32_t g_rg6_lut[256];        // monochrome: bit set -> white
 static uint32_t g_rg6a_lut[256];       // artifact: bit PAIRS -> four colours
 static bool     g_rg6_lut_ready = false;
 static uint8_t  g_rg6a_key = 0xFF;     // c01<<4|c10 the artifact table was built for
-
-static inline uint32_t pack8(const uint8_t px[8]) {
-    uint32_t w = 0;
-    for (int i = 0; i < 8; i++)                     // low nibble = even pixel
-        w |= (uint32_t)px[i] << ((i >> 1) * 8 + ((i & 1) ? 4 : 0));
-    return w;
-}
 
 static void build_rg6_lut() {
     for (int b = 0; b < 256; b++) {
