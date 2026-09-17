@@ -72,6 +72,12 @@ void coco_machine_audio_stats(uint32_t *fill, uint32_t *skips);
  * deliver"; the underrun count alone cannot. */
 void coco_machine_audio_counters(uint32_t *produced, uint32_t *tone);
 
+/* Current VDG mode as raw PIA1-B bits: bit 7 graphics/alpha, bits 6-4 GM,
+ * bit 3 CSS (PIZERO-119). Render cost differs by an order of magnitude
+ * between the alpha, RG6 and general-graphics paths, so a render time is
+ * only meaningful alongside this. */
+uint8_t coco_machine_vdg_mode_bits(void);
+
 /* Pointer to the current VDG buffer — COCO_VDG_W * COCO_VDG_H bytes,
  * one palette index per pixel. Stable for the lifetime of the
  * machine; callers should not free or modify it. */

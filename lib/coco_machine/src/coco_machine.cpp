@@ -89,7 +89,10 @@ struct CocoMachine {
 
     // Nibble-packed: 2 palette indices per byte. Low nibble = even cx,
     // high nibble = odd cx. See coco_vdg_render / coco_boot_blit_vdg_src.
-    uint8_t vdg_buffer[COCO_VDG_H * (COCO_VDG_W / 2)];
+    // alignas(4): the alpha and RG6 renderers write it a 32-bit word at a
+    // time (8 packed pixels per store), which was already assumed before
+    // PIZERO-119 and is now relied on by three paths. Make it explicit.
+    alignas(4) uint8_t vdg_buffer[COCO_VDG_H * (COCO_VDG_W / 2)];
 };
 static_assert((COCO_VDG_W & 1) == 0, "COCO_VDG_W must be even for nibble packing");
 
@@ -993,6 +996,50 @@ static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
     }
 }
 
+// PIZERO-119: the same trick the alpha path already uses, applied to RG6.
+// One source byte becomes 8 packed pixels = one 32-bit store, instead of 8 or
+// 16 read-modify-writes through put2. At 32 bytes x 192 rows that is 6,144
+// stores a frame where the artifact path was doing 49,152 RMWs.
+static uint32_t g_rg6_lut[256];        // monochrome: bit set -> white
+static uint32_t g_rg6a_lut[256];       // artifact: bit PAIRS -> four colours
+static bool     g_rg6_lut_ready = false;
+static uint8_t  g_rg6a_key = 0xFF;     // c01<<4|c10 the artifact table was built for
+
+static inline uint32_t pack8(const uint8_t px[8]) {
+    uint32_t w = 0;
+    for (int i = 0; i < 8; i++)                     // low nibble = even pixel
+        w |= (uint32_t)px[i] << ((i >> 1) * 8 + ((i & 1) ? 4 : 0));
+    return w;
+}
+
+static void build_rg6_lut() {
+    for (int b = 0; b < 256; b++) {
+        uint8_t px[8];
+        for (int bit = 0; bit < 8; bit++)
+            px[bit] = (b & (0x80 >> bit)) ? PAL_WHITE : PAL_BLACK;
+        g_rg6_lut[b] = pack8(px);
+    }
+    g_rg6_lut_ready = true;
+}
+
+static void build_rg6a_lut(uint8_t c01, uint8_t c10) {
+    for (int b = 0; b < 256; b++) {
+        uint8_t px[8];
+        uint8_t v = (uint8_t)b;
+        for (int pair = 0; pair < 4; pair++) {
+            uint8_t bits = (v >> 6) & 3;
+            v <<= 2;
+            uint8_t color = (bits == 0) ? PAL_BLACK
+                          : (bits == 1) ? c01
+                          : (bits == 2) ? c10
+                          : PAL_WHITE;
+            px[pair * 2] = px[pair * 2 + 1] = color;   // one colour clock = 2 px
+        }
+        g_rg6a_lut[b] = pack8(px);
+    }
+    g_rg6a_key = (uint8_t)((c01 << 4) | c10);
+}
+
 static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
     // 32 bytes × 8 bits = 256 pixels per scanline × 192 scanlines.
     if (g_artifact_active) {
@@ -1009,38 +1056,22 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
         const uint8_t c01 = g_artifact_css ? PAL_BLUE   : PAL_ORANGE;
         const uint8_t c10 = g_artifact_css ? PAL_ORANGE : PAL_BLUE;
 #endif
+        if (g_rg6a_key != (uint8_t)((c01 << 4) | c10)) build_rg6a_lut(c01, c10);
         for (int row = 0; row < COCO_VDG_H; row++) {
             const uint8_t *src = &g_m.ram[(base + row * 32) & 0xFFFF];
-            uint8_t *dst = &g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
-            int px = 0;
-            for (int byte = 0; byte < 32; byte++) {
-                uint8_t b = src[byte];
-                for (int pair = 0; pair < 4; pair++) {
-                    uint8_t bits = (b >> 6) & 3;  // leftmost two bits
-                    b <<= 2;
-                    uint8_t color = (bits == 0) ? PAL_BLACK
-                                  : (bits == 1) ? c01
-                                  : (bits == 2) ? c10
-                                  : PAL_WHITE;
-                    put2(dst, px++, color);   // each colour-clock spans
-                    put2(dst, px++, color);   // two mono pixels
-                }
-            }
+            uint32_t *dst = (uint32_t *)&g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
+            for (int byte = 0; byte < 32; byte++)
+                dst[byte] = g_rg6a_lut[src[byte]];
         }
         return;
     }
     // Plain monochrome RG6 (white on black).
+    if (!g_rg6_lut_ready) build_rg6_lut();
     for (int row = 0; row < COCO_VDG_H; row++) {
         const uint8_t *src = &g_m.ram[(base + row * 32) & 0xFFFF];
-        uint8_t *dst = &g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
-        for (int byte = 0; byte < 32; byte++) {
-            uint8_t b = src[byte];
-            for (int bit = 0; bit < 8; bit++) {
-                int px = byte * 8 + bit;
-                uint8_t color = (b & (0x80 >> bit)) ? PAL_WHITE : PAL_BLACK;
-                put2(dst, px, color);
-            }
-        }
+        uint32_t *dst = (uint32_t *)&g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
+        for (int byte = 0; byte < 32; byte++)
+            dst[byte] = g_rg6_lut[src[byte]];
     }
 }
 
@@ -1085,12 +1116,16 @@ static void HOT_FUNC(render_graphics_frame)(uint16_t base, uint8_t gm, bool css)
                 }
             }
         }
+        // PIZERO-119: pack the row ONCE, then copy it for the repeats. This
+        // path repeats each data row 1, 2 or 3 display lines (GM_nLPR), and
+        // it used to re-pack all 256 pixels for every one of them.
+        alignas(4) static uint8_t packed[COCO_VDG_W / 2];
+        for (int x = 0; x < COCO_VDG_W; x += 2)
+            packed[x >> 1] = rowbuf[x] | (rowbuf[x + 1] << 4);
         for (int rep = 0; rep < nlpr; rep++) {
             int disp = drow * nlpr + rep;
             if (disp >= COCO_VDG_H) break;
-            uint8_t *dst = &g_m.vdg_buffer[disp * (COCO_VDG_W / 2)];
-            for (int x = 0; x < COCO_VDG_W; x += 2)
-                dst[x >> 1] = rowbuf[x] | (rowbuf[x + 1] << 4);
+            memcpy(&g_m.vdg_buffer[disp * (COCO_VDG_W / 2)], packed, sizeof packed);
         }
     }
 }
@@ -1109,6 +1144,15 @@ extern "C" void HOT_FUNC(coco_machine_render_frame)(void) {
         // Alpha + semigraphics (SG4 handled per-byte inside).
         render_alpha_frame(base);
     }
+}
+
+// PIZERO-119: which VDG mode is on screen, as the raw PIA1-B mode bits
+// (bit 7 = graphics, bits 6-4 = GM, bit 3 = CSS). Measurements are hard to
+// read without it: the three render paths differ by an order of magnitude in
+// cost, so "render took 4.8 ms" means nothing until you know which one ran.
+extern "C" uint8_t coco_machine_vdg_mode_bits(void) {
+    if (!g_m.pia1) return 0;
+    return (uint8_t)((g_m.pia1->b.out_source & g_m.pia1->b.out_sink) & 0xF8);
 }
 
 extern "C" uint16_t coco_machine_get_pc(void) {

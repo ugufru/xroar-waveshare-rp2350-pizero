@@ -1265,6 +1265,14 @@ void loop() {
         // PIZERO-11b: the lib's own line-state read + debounced connection flag.
         static const char *LS[4] = { "SE0", "J/FS", "K/LS", "SE1" };
         uint8_t ls = usbdiag_line_state();
+        // PIZERO-119: name the render path, since the three differ by an
+        // order of magnitude and a render time alone cannot be read.
+        uint8_t vdg = coco_machine_vdg_mode_bits();
+        char mode[12];
+        if (!(vdg & 0x80)) snprintf(mode, sizeof mode, "alpha");
+        else snprintf(mode, sizeof mode, "gm%u%s", (unsigned)((vdg >> 4) & 7),
+                      (vdg & 0x08) ? "c" : "");
+        Serial.printf("[vdg] mode=%s bits=%02x\r\n", mode, (unsigned)vdg);
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
                       "| freezes=%lu last=%s\r\n",
