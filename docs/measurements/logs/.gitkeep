@@ -1,0 +1,2 @@
+Raw serial logs land here (scripts/soak.py record). Committed selectively:
+keep the log behind any archived record that matters, not every trial run.
