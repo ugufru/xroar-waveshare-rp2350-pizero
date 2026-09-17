@@ -157,6 +157,25 @@ hardware, and are the most trustworthy of the three.
 Parameters marked `[?]` are still estimates that need calipers on a real
 board: PCB thickness, USB-C and microSD heights, and plug clearances.
 
+## Photos
+
+Printed in white PLA, assembled on a real board, 2026-09-16. This is the
+PIZERO-101 rev 8 case with the first PIZERO-103 microSD channel.
+
+| | |
+|---|---|
+| `photos/ports-front.jpg` | The port wall: mini-HDMI and both USB-C, with their rounded plug pockets |
+| `photos/ports-front-angle.jpg` | Same wall, three-quarter, showing the lid/base seam |
+| `photos/closed-top.jpg` | The roof: 1 mm slots and the groove loop that hugs them |
+| `photos/underside-vents-screws.jpg` | The floor vents and the four countersunk screws |
+| `photos/microsd-side.jpg` | The microSD wall |
+| `photos/microsd-card-inserted.jpg` | A card in the slot |
+| `photos/three-quarter-ports.jpg`, `photos/three-quarter-battery-side.jpg`, `photos/standing-front.jpg` | General views, including the battery-connector opening |
+| `photos/in-use-top.jpg`, `photos/in-use-angle.jpg` | Running, with HDMI and USB-C plugged and the power LED glowing through the grille |
+
+Camera originals are not committed (see `.gitignore`); these are 1600 px
+JPEGs, which is enough for documentation and about 4 MB for the set.
+
 ## Part versions (PIZERO-105)
 
 Each part carries its own version, engraved 0.5 mm deep on a face that is

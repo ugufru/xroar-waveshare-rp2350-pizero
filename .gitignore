@@ -13,3 +13,7 @@ build/
 
 # local reference scratch (vendor demo zip + raw downloads; findings are documented in README.md/docs/)
 .ref/
+
+# Camera originals. The keepers live downscaled in hardware/case/photos/;
+# 100 MB of phone PNGs does not belong in history.
+hardware/photos/
