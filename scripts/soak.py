@@ -169,14 +169,27 @@ def cmd_record(args: argparse.Namespace) -> int:
 class Counter:
     """A cumulative board-side counter that resets to zero on reboot.
 
-    Sums the increments across reboots so a 25-hour total is still a total.
+    Two traps this exists to avoid:
+
+    * The board may already be running when logging starts, so the first
+      value is history, not something this run caused. It becomes the
+      baseline and is reported separately. Without this a leftover
+      ``freezes=1`` from an earlier session is read as a freeze during the
+      run, which is exactly what happened on 2026-09-17.
+    * The counter returns to zero when the board reboots, so increments are
+      summed across resets and a 25-hour total stays a total.
     """
 
     def __init__(self) -> None:
-        self.total = 0
-        self.last = 0
+        self.total = 0          # increments observed during this log
+        self.baseline = 0       # value already on the board when logging began
+        self.last: int | None = None
 
     def see(self, value: int) -> None:
+        if self.last is None:
+            self.baseline = value
+            self.last = value
+            return
         if value < self.last:  # counter went backwards: the board restarted
             self.total += value
         else:
@@ -184,7 +197,7 @@ class Counter:
         self.last = value
 
     def reset_for_reboot(self) -> None:
-        self.last = 0
+        self.last = 0 if self.last is not None else None
 
 
 def parse_log(path: str) -> dict:
@@ -332,6 +345,7 @@ def parse_log(path: str) -> dict:
         "goal_4_no_crashing": {
             "freezes": freezes.total,
             "freezes_per_hour": round(freezes.total / hours, 3),
+            "freezes_before_run": freezes.baseline,   # already on the counter
             "freeze_phases": freeze_phases,
             "reboots_seen": reboots,
         },
@@ -386,7 +400,9 @@ def cmd_analyse(args: argparse.Namespace) -> int:
           f"silences {syn['silent_gaps']} (longest {syn['longest_silence_s']}s)")
     crash = g["goal_4_no_crashing"]
     print(f"4 crashes     freezes {crash['freezes']} ({crash['freezes_per_hour']}/h), "
-          f"reboots seen {crash['reboots_seen']}, phases {crash['freeze_phases'] or 'none'}")
+          f"reboots seen {crash['reboots_seen']}, phases {crash['freeze_phases'] or 'none'}"
+          + (f" | counter already at {crash['freezes_before_run']} before this run"
+             if crash["freezes_before_run"] else ""))
     print(f"frame budget  {g['frame_budget_us']}")
     print("5 data loss   not measured here: nothing writes to the card yet "
           "(PIZERO-113 covers it)")

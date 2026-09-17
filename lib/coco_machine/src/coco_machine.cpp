@@ -674,7 +674,11 @@ static volatile uint32_t g_audio_skips = 0;            // reader: overflow catch
 // away from the DAC's resting level, i.e. audible.
 static volatile uint32_t g_audio_produced = 0;
 static volatile uint32_t g_audio_tone = 0;
-#define AUDIO_TONE_EPS 64                              // |sample| above this counts as sound
+static int16_t           g_audio_prev = 0;
+// Sound is CHANGE, not level: the DAC rests well away from zero, so an
+// absolute threshold counts a silent machine as audible (measured on hardware
+// 2026-09-17: tone == prod exactly). Count a sample only when it moves.
+#define AUDIO_TONE_EPS 64                              // sample-to-sample step that counts as sound
 static uint32_t          g_audio_err = 0;              // Bresenham accumulator
 
 // Event-driven, band-limited audio resampler (integrate-and-dump). Rather than
@@ -731,7 +735,9 @@ static inline void audio_emit(int s) {
     __dmb();
     g_audio_w = w + 1;
     g_audio_produced++;
-    if (s > AUDIO_TONE_EPS || s < -AUDIO_TONE_EPS) g_audio_tone++;
+    { int d = (int)(int16_t)s - (int)g_audio_prev;
+      if (d > AUDIO_TONE_EPS || d < -AUDIO_TONE_EPS) g_audio_tone++;
+      g_audio_prev = (int16_t)s; }
 }
 
 // Called per memory access with the access duration in event ticks. Integrates
