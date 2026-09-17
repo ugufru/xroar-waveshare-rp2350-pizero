@@ -668,6 +668,13 @@ static volatile uint32_t g_audio_w = 0;                // monotonic write index
 static volatile uint32_t g_audio_r = 0;                // monotonic read index
 static bool              g_audio_primed = false;       // reader: wait for ~half-full before draining
 static volatile uint32_t g_audio_skips = 0;            // reader: overflow catch-ups (diagnostic)
+// PIZERO-118: an underrun count alone cannot say whether the machine had
+// nothing to play or whether delivery failed. These two say which: `produced`
+// is how many samples the source actually made, `tone` how many of them were
+// away from the DAC's resting level, i.e. audible.
+static volatile uint32_t g_audio_produced = 0;
+static volatile uint32_t g_audio_tone = 0;
+#define AUDIO_TONE_EPS 64                              // |sample| above this counts as sound
 static uint32_t          g_audio_err = 0;              // Bresenham accumulator
 
 // Event-driven, band-limited audio resampler (integrate-and-dump). Rather than
@@ -723,6 +730,8 @@ static inline void audio_emit(int s) {
     g_audio_ring[w & (AUDIO_RING_SAMPLES - 1)] = (int16_t)s;
     __dmb();
     g_audio_w = w + 1;
+    g_audio_produced++;
+    if (s > AUDIO_TONE_EPS || s < -AUDIO_TONE_EPS) g_audio_tone++;
 }
 
 // Called per memory access with the access duration in event ticks. Integrates
@@ -790,6 +799,15 @@ extern "C" uint32_t coco_machine_audio_rate(void) { return COCO_AUDIO_RATE; }
 extern "C" void coco_machine_audio_stats(uint32_t *fill, uint32_t *skips) {
     if (fill)  *fill  = g_audio_w - g_audio_r;
     if (skips) *skips = g_audio_skips;
+}
+
+// PIZERO-118: cumulative samples emitted by the source, and how many of those
+// were audible. Paired with the consumer's underrun count, these separate
+// "the machine was silent" from "the stream was short", which an underrun
+// count on its own cannot do.
+extern "C" void coco_machine_audio_counters(uint32_t *produced, uint32_t *tone) {
+    if (produced) *produced = g_audio_produced;
+    if (tone)     *tone     = g_audio_tone;
 }
 
 // Audio is event-driven from the memory-access path; run the whole budget in one

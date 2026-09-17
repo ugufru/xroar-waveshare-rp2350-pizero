@@ -66,6 +66,11 @@ uint32_t coco_machine_audio_rate(void);
 /* Diagnostic (PIZERO-38/39): current ring fill (samples) + cumulative
  * overflow-skip count, for tuning the streaming HDMI-audio producer/consumer. */
 void coco_machine_audio_stats(uint32_t *fill, uint32_t *skips);
+/* Diagnostic (PIZERO-118): cumulative samples the source has emitted, and how
+ * many of those were audible (away from the DAC's resting level). With the
+ * consumer's underrun count these tell "nothing to play" apart from "failed to
+ * deliver"; the underrun count alone cannot. */
+void coco_machine_audio_counters(uint32_t *produced, uint32_t *tone);
 
 /* Pointer to the current VDG buffer — COCO_VDG_W * COCO_VDG_H bytes,
  * one palette index per pixel. Stable for the lifetime of the

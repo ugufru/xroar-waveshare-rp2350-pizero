@@ -1283,10 +1283,33 @@ void loop() {
 #ifdef HDMI_STREAM_AUDIO
         // PIZERO-38/39 audio-ring health: fill should hover near AUDIO_RING/2 with
         // skips (overflow) and under (underrun) staying ~flat once primed.
-        { uint32_t fill = 0, skips = 0;
+        // PIZERO-118: cumulative counters could not say whether the machine had
+        // nothing to play or whether the stream came up short, so report RATES
+        // and what the source actually produced. prod/s against the nominal
+        // sample rate is the real health number: a steady shortfall means the
+        // consumer is being fed less than it asks for and is holding the last
+        // sample to cover the gap. tone/s says whether any of it was audible.
+        { uint32_t fill = 0, skips = 0, prod = 0, tone = 0;
           coco_machine_audio_stats(&fill, &skips);
-          Serial.printf("[aud] ring fill=%lu skips=%lu under=%lu\r\n",
-                        (unsigned long)fill, (unsigned long)skips, (unsigned long)g_stream_under); }
+          coco_machine_audio_counters(&prod, &tone);
+          static uint32_t prod_p = 0, tone_p = 0, under_p = 0;
+          uint32_t ms = now - last ? now - last : 1;
+          uint32_t dprod  = prod - prod_p, dtone = tone - tone_p;
+          uint32_t dunder = (uint32_t)g_stream_under - under_p;
+          prod_p = prod; tone_p = tone; under_p = (uint32_t)g_stream_under;
+          uint32_t prod_s  = (uint32_t)((uint64_t)dprod  * 1000u / ms);
+          uint32_t tone_s  = (uint32_t)((uint64_t)dtone  * 1000u / ms);
+          uint32_t under_s = (uint32_t)((uint64_t)dunder * 1000u / ms);
+          uint32_t want    = coco_machine_audio_rate();
+          // Tenths of a percent of the nominal rate that never arrived.
+          uint32_t short_x10 = want ? (uint32_t)((uint64_t)under_s * 1000u / want) : 0;
+          Serial.printf("[aud] fill=%lu prod=%lu/s want=%lu/s under=%lu/s short=%lu.%lu%% "
+                        "tone=%lu/s skips=%lu under_total=%lu\r\n",
+                        (unsigned long)fill, (unsigned long)prod_s, (unsigned long)want,
+                        (unsigned long)under_s,
+                        (unsigned long)(short_x10 / 10), (unsigned long)(short_x10 % 10),
+                        (unsigned long)tone_s, (unsigned long)skips,
+                        (unsigned long)g_stream_under); }
 #endif
         frames = 0; last = now;
     }

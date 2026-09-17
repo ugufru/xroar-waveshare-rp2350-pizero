@@ -44,7 +44,14 @@ RE_RUN = re.compile(
     r".*?\bls=(\S+) conn=(\d+).*?\brpts=(\d+) rfail=(\d+) eperr=(\d+)"
     r".*?\bfreezes=(\d+) last=(\S+)"
 )
-RE_AUD = re.compile(r"\[aud\] ring fill=(\d+) skips=(\d+) under=(\d+)")
+# Two shapes, because logs recorded before PIZERO-118 are still worth reading.
+# Old: cumulative counters only, which cannot tell silence from a shortfall.
+RE_AUD_OLD = re.compile(r"\[aud\] ring fill=(\d+) skips=(\d+) under=(\d+)")
+# New: rates, plus what the source actually produced and how much was audible.
+RE_AUD = re.compile(
+    r"\[aud\] fill=(\d+) prod=(\d+)/s want=(\d+)/s under=(\d+)/s short=([\d.]+)% "
+    r"tone=(\d+)/s skips=(\d+) under_total=(\d+)"
+)
 RE_FREEZE = re.compile(r"\[watchdog\] \*\*\* FREEZE RECOVERED \*\*\*.*?in '([^']+)'")
 RE_BOOT = re.compile(r"XRoar on RP2350-PiZero")
 RE_SILENT = re.compile(r"=== SILENT for (\d+)s")
@@ -187,6 +194,9 @@ def parse_log(path: str) -> dict:
     blit: list[int] = []
     aud: list[int] = []
     ring_fill: list[int] = []
+    short_pct: list[float] = []      # % of the nominal rate that never arrived
+    tone_windows = 0                 # windows in which anything audible was produced
+    aud_windows = 0                  # windows carrying the post-PIZERO-118 line
     freezes = Counter()
     skips = Counter()
     under = Counter()
@@ -225,6 +235,17 @@ def parse_log(path: str) -> dict:
                 continue
 
             m = RE_AUD.search(body)
+            if m:
+                aud_windows += 1
+                ring_fill.append(int(m.group(1)))
+                short_pct.append(float(m.group(5)))
+                if int(m.group(6)):
+                    tone_windows += 1
+                skips.see(int(m.group(7)))
+                under.see(int(m.group(8)))
+                continue
+
+            m = RE_AUD_OLD.search(body)
             if m:
                 ring_fill.append(int(m.group(1)))
                 skips.see(int(m.group(2)))
@@ -288,6 +309,18 @@ def parse_log(path: str) -> dict:
             "skips": skips.total,
             "underruns_per_hour": round(under.total / hours, 2),
             "ring_fill": stats(ring_fill),
+            # PIZERO-118. Without these an underrun count is unreadable: a
+            # silent machine and a broken stream produce the same number.
+            "shortfall_pct": {
+                "median": round(statistics.median(short_pct), 2),
+                "max": max(short_pct),
+            }
+            if short_pct
+            else None,
+            "windows_with_shortfall": sum(1 for v in short_pct if v > 0.0),
+            "windows_with_audio": tone_windows,
+            "windows_measured": aud_windows,
+            "telemetry": "rates" if aud_windows else "cumulative-only (pre-PIZERO-118)",
         },
         "goal_3_no_sync_drops": {
             # A dropout shows up as a short window; the count is the honest
@@ -339,8 +372,15 @@ def cmd_analyse(args: argparse.Namespace) -> int:
     print(f"1 uptime      fps {fps['fps']} | in band {fps['in_band_pct']}% "
           f"| bad windows {fps['windows_out_of_band']}")
     snd = g["goal_2_continuous_sound"]
-    print(f"2 sound       underruns {snd['underruns']} ({snd['underruns_per_hour']}/h), "
-          f"skips {snd['skips']}")
+    if snd["shortfall_pct"]:
+        print(f"2 sound       shortfall {snd['shortfall_pct']['median']}% median, "
+              f"{snd['shortfall_pct']['max']}% worst | audible in "
+              f"{snd['windows_with_audio']}/{snd['windows_measured']} windows | "
+              f"skips {snd['skips']}")
+    else:
+        print(f"2 sound       underruns {snd['underruns']} ({snd['underruns_per_hour']}/h), "
+              f"skips {snd['skips']} | {snd['telemetry']}: cannot tell silence "
+              f"from a dropout")
     syn = g["goal_3_no_sync_drops"]
     print(f"3 sync        short windows {syn['short_windows_per_hour']}/h, "
           f"silences {syn['silent_gaps']} (longest {syn['longest_silence_s']}s)")
