@@ -52,7 +52,10 @@ RE_AUD = re.compile(
     r"\[aud\] fill=(\d+) prod=(\d+)/s want=(\d+)/s under=(\d+)/s short=([\d.]+)% "
     r"tone=(\d+)/s skips=(\d+) under_total=(\d+)"
 )
-RE_FREEZE = re.compile(r"\[watchdog\] \*\*\* FREEZE RECOVERED \*\*\*.*?in '([^']+)'")
+RE_FREEZE = re.compile(
+    r"\[watchdog\] \*\*\* FREEZE RECOVERED \*\*\*.*?in '([^']+)'"
+    r".*?~(\d+) frames \(~(\d+)s\)"
+)
 RE_BOOT = re.compile(r"XRoar on RP2350-PiZero")
 RE_SILENT = re.compile(r"=== SILENT for (\d+)s")
 RE_USB_ADD = re.compile(r"\[usb\] device attached")
@@ -215,6 +218,8 @@ def parse_log(path: str) -> dict:
     under = Counter()
     rfail = Counter()
     freeze_phases: list[str] = []
+    freezes_before_log: list[str] = []   # reported at boot, but predating this log
+    session_start: str | None = None     # first telemetry timestamp of this boot
     silent: list[int] = []
     reboots = 0
     usb_add = usb_del = 0
@@ -231,6 +236,7 @@ def parse_log(path: str) -> dict:
 
             if RE_BOOT.search(body):
                 reboots += 1
+                session_start = None
                 for c in (freezes, skips, under, rfail):
                     c.reset_for_reboot()
                 continue
@@ -238,6 +244,8 @@ def parse_log(path: str) -> dict:
             m = RE_RUN.search(body)
             if m:
                 run_lines += 1
+                if session_start is None:
+                    session_start = ts
                 fps.append(int(m.group(1)))
                 cpu.append(int(m.group(2)))
                 render.append(int(m.group(3)))
@@ -267,7 +275,24 @@ def parse_log(path: str) -> dict:
 
             m = RE_FREEZE.search(body)
             if m:
-                freeze_phases.append(m.group(1))
+                # The watchdog reports a freeze AFTER rebooting, so the message
+                # describes the session that just died. If that session had been
+                # up longer than we have been watching, the freeze happened
+                # before this log started and is not ours to count: exactly what
+                # a board power-cycled mid-soak reports at its next boot.
+                uptime_s = int(m.group(3))
+                watched = 0.0
+                if session_start and ts:
+                    fmt = "%H:%M:%S.%f"
+                    d = (dt.datetime.strptime(ts, fmt)
+                         - dt.datetime.strptime(session_start, fmt)).total_seconds()
+                    watched = d + 86400 if d < 0 else d
+                if uptime_s > watched + 5:
+                    freezes_before_log.append(m.group(1))
+                    freezes.reset_for_reboot()   # do not count it as ours
+                    freezes.last = None          # next value is a fresh baseline
+                else:
+                    freeze_phases.append(m.group(1))
                 continue
 
             m = RE_SILENT.search(body)
@@ -346,6 +371,7 @@ def parse_log(path: str) -> dict:
             "freezes": freezes.total,
             "freezes_per_hour": round(freezes.total / hours, 3),
             "freezes_before_run": freezes.baseline,   # already on the counter
+            "freezes_predating_log": freezes_before_log,
             "freeze_phases": freeze_phases,
             "reboots_seen": reboots,
         },
@@ -402,7 +428,10 @@ def cmd_analyse(args: argparse.Namespace) -> int:
     print(f"4 crashes     freezes {crash['freezes']} ({crash['freezes_per_hour']}/h), "
           f"reboots seen {crash['reboots_seen']}, phases {crash['freeze_phases'] or 'none'}"
           + (f" | counter already at {crash['freezes_before_run']} before this run"
-             if crash["freezes_before_run"] else ""))
+             if crash["freezes_before_run"] else "")
+          + (f" | {len(crash['freezes_predating_log'])} reported at boot but "
+             f"predating this log: {crash['freezes_predating_log']}"
+             if crash["freezes_predating_log"] else ""))
     print(f"frame budget  {g['frame_budget_us']}")
     print("5 data loss   not measured here: nothing writes to the card yet "
           "(PIZERO-113 covers it)")
