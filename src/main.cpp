@@ -795,6 +795,31 @@ static inline void wd_phase(uint32_t p)     { watchdog_hw->scratch[1] = p; }
 static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 #endif
 
+
+// PIZERO-92: show a diagnostic on the SCREEN, not just on a serial port nobody
+// has. Every pre-machine failure leaves libdvi running and the framebuffer
+// black, and a monitor that syncs to a black picture looks exactly like dead
+// hardware. We ship no ROMs by design, so a first power-up hits this path.
+//
+// The serial messages stay: they are how WE debug. This adds the half the
+// recipient can see. The idle loop keeps petting the watchdog, so the board
+// does not reboot under the message.
+static void boot_fail_screen(const char *l1, const char *l2, const char *l3,
+                             const char *l4) {
+    coco_boot_card_clear();
+    coco_boot_card_center(5, l1);
+    if (l2) coco_boot_card_center(7, l2);
+    if (l3) coco_boot_card_center(8, l3);
+    if (l4) coco_boot_card_center(10, l4);
+#ifdef HDMI_DATA_ISLAND
+    coco_boot_card_present(g_fb);
+#else
+    coco_boot_card_present(g_fb[0]);
+    coco_boot_card_present(g_fb[1]);
+    g_front = g_fb[0];
+#endif
+}
+
 void setup() {
     Serial.begin(115200);
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
@@ -1062,12 +1087,30 @@ void setup() {
                   FRAME_WIDTH, FRAME_HEIGHT, (unsigned long)(clock_get_hz(clk_sys) / 1000));
     Serial.flush();
 
-    if (!mount_sd()) { Serial.print("SD mount FAILED — no ROMs, idle.\r\n"); return; }
+    if (!mount_sd()) {
+        Serial.print("SD mount FAILED — no ROMs, idle.\r\n");
+        boot_fail_screen("NO SD CARD", "INSERT A FAT32 CARD",
+                         "WITH /COCO/ROMS/BAS12.ROM", NULL);
+        return;
+    }
     if (!coco_boot_load_rom_from_sd(g_coco_rom)) {
-        Serial.print("ROM load FAILED (need /coco/bas12.rom [+extbas11.rom])\r\n"); return;
+        Serial.print("ROM load FAILED (need /coco/roms/bas12.rom [+extbas11.rom])\r\n");
+        // Name the exact file and folder: that IS the fix, and the reader has
+        // no other way to find it out. The resolver prefers /coco/roms/ and
+        // falls back to /coco/ (coco_boot.cpp), so quote the preferred one.
+        boot_fail_screen("NO ROM FOUND", "COPY BAS12.ROM TO",
+                         "/COCO/ROMS/ ON THE SD CARD",
+                         "SEE THE CARD IN THE BOX");
+        return;
     }
     if (!coco_machine_init(g_coco_rom, sizeof(g_coco_rom))) {
-        Serial.print("coco_machine_init failed\r\n"); return;
+        Serial.print("coco_machine_init failed\r\n");
+        // Deliberately different wording from the missing-ROM case: this one
+        // is a real fault, and confusing the two would send someone hunting
+        // for a file that is already there.
+        boot_fail_screen("EMULATOR FAILED TO START", "THE ROM FILE MAY BE",
+                         "DAMAGED OR THE WRONG SIZE", "REPLACE BAS12.ROM");
+        return;
     }
 
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.

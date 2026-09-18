@@ -75,6 +75,14 @@ void coco_boot_blit_vdg_1to1(uint16_t *small_fb);
 void coco_boot_blit_vdg_pizero(uint16_t *fb);
 void coco_boot_blit_vdg_pizero_src(const uint8_t *src, uint16_t *fb);
 
+/* PIZERO-92: a 32x16 text card in the machine's own font and palette, for
+ * diagnostics that must be readable on a TV with no serial console. Costs 512
+ * bytes of character grid; renders straight into the framebuffer. */
+void coco_boot_card_clear(void);
+void coco_boot_card_text(int col, int row, const char *s);
+void coco_boot_card_center(int row, const char *s);
+void coco_boot_card_present(uint16_t *fb);
+
 #ifdef __cplusplus
 }
 #endif

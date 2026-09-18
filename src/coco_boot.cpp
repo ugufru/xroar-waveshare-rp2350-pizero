@@ -504,6 +504,66 @@ extern "C" void HOT_FUNC(coco_boot_blit_vdg_pizero_src)(const uint8_t *src, uint
     }
 }
 
+// ---------------------------------------------------------------------------
+// PIZERO-92: a 32x16 text card, drawn in the machine's own 8x12 font and
+// palette so a diagnostic looks like it came from the CoCo rather than from
+// some other device.
+//
+// Why this exists: every failure before coco_machine_init leaves libdvi
+// running and the framebuffer black, and a monitor that syncs to a black
+// picture is indistinguishable from a dead unit. We ship no ROMs, so EVERY
+// unit fails that way on first power-up by design.
+//
+// 512 bytes of character grid, not a 24 KB VDG buffer: the card is rendered
+// straight into the framebuffer a glyph row at a time. PIZERO-81b can reuse
+// this for the launcher; it is the same 32x16 card with different content.
+
+extern "C" const uint8_t font_6847t1[];   // 128 glyphs x 12 rows
+
+#include "text_card.h"          // card_code / card_center_col, host-tested
+#include "vdg_pack.h"            // vdg_alpha_glyph_index, host-tested
+
+static uint8_t g_card[CARD_ROWS][CARD_COLS];
+
+extern "C" void coco_boot_card_clear(void) {
+    memset(g_card, 0x20, sizeof g_card);   // spaces
+}
+
+extern "C" void coco_boot_card_text(int col, int row, const char *s) {
+    if (!s || row < 0 || row >= CARD_ROWS) return;
+    for (int c = col; c < CARD_COLS && *s; c++, s++)
+        if (c >= 0) g_card[row][c] = card_code(*s);
+}
+
+extern "C" void coco_boot_card_center(int row, const char *s) {
+    if (!s) return;
+    int len = 0;
+    while (s[len]) len++;
+    coco_boot_card_text(card_center_col(len), row, s);
+}
+
+// Render the card into the framebuffer, ink on paper, using the live palette
+// so a recoloured machine recolours the diagnostic too.
+extern "C" void coco_boot_card_present(uint16_t *fb) {
+    const uint16_t *pal = coco_machine_palette();
+    const uint16_t ink = pal[0];      // VDG green
+    const uint16_t paper = pal[8];    // black
+    for (int r = 0; r < CARD_ROWS; r++) {
+        for (int sub = 0; sub < 12; sub++) {
+            int y = r * 12 + sub;
+            if (y >= COCO_VDG_H) break;
+            uint16_t *frow = &fb[(PIZERO_Y0 + y) * PIZERO_FB_W + PIZERO_X0];
+            for (int c = 0; c < CARD_COLS; c++) {
+                // Same fold the alpha renderer uses, from the tested header.
+                uint8_t glyph = font_6847t1[vdg_alpha_glyph_index(g_card[r][c]) * 12 + sub];
+                uint16_t *px = &frow[c * 8];
+                for (int b = 0; b < 8; b++)
+                    px[b] = (glyph & (0x80 >> b)) ? ink : paper;
+            }
+        }
+    }
+}
+
 extern "C" void coco_boot_blit_vdg_pizero(uint16_t *fb) {
     coco_boot_blit_vdg_pizero_src(coco_machine_get_vdg_buffer(), fb);
 }
