@@ -103,6 +103,17 @@ void coco_machine_press_key(uint8_t dscan);
 void coco_machine_release_key(uint8_t dscan);
 void coco_machine_release_all_keys(void);
 
+/* PIZERO-55/85: the 16-entry palette register file the blit reads per pixel.
+ * Writable, so a guest's writes to the GIME registers at $FFB0-$FFBF recolour
+ * the machine live (build with -DGIME_PALETTE), and so the BIOS editor can
+ * later drive the same table. Defaults to the stock VDG colours, so an
+ * untouched machine looks exactly as it did before. */
+const uint16_t *coco_machine_palette(void);
+void coco_machine_palette_reset(void);
+void coco_machine_palette_set(uint8_t idx, uint16_t rgb565);
+uint16_t coco_machine_palette_get(uint8_t idx);
+_Bool coco_machine_palette_written(void);
+
 #ifdef __cplusplus
 }
 #endif

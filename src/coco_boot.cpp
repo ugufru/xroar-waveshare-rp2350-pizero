@@ -484,23 +484,22 @@ extern "C" void coco_boot_blit_vdg_1to1(uint16_t *small_fb) {
 #define PIZERO_X0   ((PIZERO_FB_W - COCO_VDG_W) / 2)  // 32
 #define PIZERO_Y0   ((PIZERO_FB_H - COCO_VDG_H) / 2)  // 24
 
-// Native (non-byte-swapped) twin of g_vdg_rgb565.
-static const uint16_t g_vdg_rgb565_native[16] = {
-    0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
-    0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
-};
+// PIZERO-55/85: the palette is the writable register file owned by
+// coco_machine (it is what sees the guest's writes to $FFB0-$FFBF). The blit
+// hoists the pointer once per frame rather than reloading a global per pixel.
 
 // Only the active 256x192 region is written each frame. The black border is
 // painted once by the caller (memset of g_fb at init) and never changes, so
 // re-clearing it every frame would be ~27K wasted pixel writes per frame.
 extern "C" void HOT_FUNC(coco_boot_blit_vdg_pizero_src)(const uint8_t *src, uint16_t *fb) {
+    const uint16_t *pal = coco_machine_palette();
     for (int cy = 0; cy < COCO_VDG_H; cy++) {
         const uint8_t *srow = &src[cy * (COCO_VDG_W / 2)];
         uint16_t *frow = &fb[(PIZERO_Y0 + cy) * PIZERO_FB_W + PIZERO_X0];
         for (int cx = 0; cx < COCO_VDG_W; cx += 2) {
             uint8_t byte = srow[cx >> 1];           // two pixels packed per byte
-            frow[cx]     = g_vdg_rgb565_native[byte & 0x0F];        // even = low nibble
-            frow[cx + 1] = g_vdg_rgb565_native[(byte >> 4) & 0x0F]; // odd  = high nibble
+            frow[cx]     = pal[byte & 0x0F];        // even = low nibble
+            frow[cx + 1] = pal[(byte >> 4) & 0x0F]; // odd  = high nibble
         }
     }
 }

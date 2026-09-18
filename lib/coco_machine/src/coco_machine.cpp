@@ -17,6 +17,7 @@
 
 #include <Arduino.h>
 #include "vdg_pack.h"
+#include "coco_palette.h"
 #ifdef GIME_TIMER
 #include "gime_timer.h"
 #endif
@@ -101,6 +102,43 @@ struct CocoMachine {
 static_assert((COCO_VDG_W & 1) == 0, "COCO_VDG_W must be even for nibble packing");
 
 static CocoMachine g_m;
+
+// PIZERO-55/85: the palette register file. A real 6847 has no palette at all,
+// but this port already looks every pixel up in a 16-entry table on its way to
+// RGB565, so making that table writable is free per pixel and gives the guest
+// CoCo 3-style control through the GIME registers at $FFB0-$FFBF.
+//
+// Factory = the stock VDG colours, so a machine that never touches $FFB0 looks
+// exactly as it always did. Indices 12-15 are unused by the 6847.
+static const uint16_t g_pal_factory[COCO_PAL_COUNT] = {
+    0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
+    0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
+};
+static coco_palette_t g_pal = {
+    { 0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
+      0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000 },
+    { 0 }, false
+};
+
+// The blit reads this every frame, so a write previews live with no repaint
+// plumbing. Note the render LUTs (g_alpha_lut, the SG4 and RG6 tables) store
+// palette INDICES rather than colours, so a palette write needs no rebuild of
+// them -- the wrinkle PIZERO-26 warned about does not apply to this port.
+extern "C" const uint16_t *coco_machine_palette(void) { return g_pal.rgb565; }
+
+extern "C" void coco_machine_palette_reset(void) {
+    coco_pal_reset(&g_pal, g_pal_factory);
+}
+
+extern "C" void coco_machine_palette_set(uint8_t idx, uint16_t rgb565) {
+    coco_pal_set_rgb565(&g_pal, idx, rgb565);
+}
+
+extern "C" uint16_t coco_machine_palette_get(uint8_t idx) {
+    return coco_pal_get_rgb565(&g_pal, idx);
+}
+
+extern "C" bool coco_machine_palette_written(void) { return g_pal.written; }
 
 #ifdef GIME_TIMER
 // PIZERO-62: the CoCo 3 timer in its real register block, which is unused on a
@@ -469,6 +507,9 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
                  break;
         case 6:  g_m.cpu->D = fdc_io_read(A); break;
         default:
+#ifdef GIME_PALETTE
+                 if (coco_pal_owns(A)) { g_m.cpu->D = coco_pal_read(&g_pal, A); break; }
+#endif
 #ifdef GIME_TIMER
                  { uint8_t gv;
                    if (gime_timer_owns(A) && gime_timer_read(&g_gime, A, &gv)) {
@@ -492,6 +533,9 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
             if (A & 1) g_m.pia_irq_dirty = true;
             audio_update_level();   // DAC / single-bit may have changed -> recache
         }
+#ifdef GIME_PALETTE
+        else if (coco_pal_owns(A)) coco_pal_write(&g_pal, A, g_m.cpu->D);
+#endif
 #ifdef GIME_TIMER
         else if (gime_timer_owns(A)) {
             if (gime_timer_write(&g_gime, A, g_m.cpu->D)) gime_timer_restart();
