@@ -63,6 +63,10 @@ void coco_machine_run_cycles(uint32_t cycles);
  * sink falls behind, so a slow/absent consumer never blocks emulation. */
 size_t coco_machine_audio_read(int16_t *dst, size_t max);
 uint32_t coco_machine_audio_rate(void);
+/* PIZERO-121: the rate the servo is currently asking the producer for. Differs
+ * from the nominal rate by a few parts per million to hold the ring near half
+ * full against the pixel clock it cannot agree with. */
+uint32_t coco_machine_audio_rate_now(void);
 /* Diagnostic (PIZERO-38/39): current ring fill (samples) + cumulative
  * overflow-skip count, for tuning the streaming HDMI-audio producer/consumer. */
 void coco_machine_audio_stats(uint32_t *fill, uint32_t *skips);

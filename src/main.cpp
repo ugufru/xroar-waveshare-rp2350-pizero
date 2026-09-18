@@ -1376,12 +1376,13 @@ void loop() {
           uint32_t tone_s  = (uint32_t)((uint64_t)dtone  * 1000u / ms);
           uint32_t under_s = (uint32_t)((uint64_t)dunder * 1000u / ms);
           uint32_t want    = coco_machine_audio_rate();
+          uint32_t srv     = coco_machine_audio_rate_now();   // PIZERO-121 servo
           // Tenths of a percent of the nominal rate that never arrived.
           uint32_t short_x10 = want ? (uint32_t)((uint64_t)under_s * 1000u / want) : 0;
-          Serial.printf("[aud] fill=%lu prod=%lu/s want=%lu/s under=%lu/s short=%lu.%lu%% "
-                        "tone=%lu/s skips=%lu under_total=%lu\r\n",
+          Serial.printf("[aud] fill=%lu prod=%lu/s want=%lu/s srv=%lu under=%lu/s "
+                        "short=%lu.%lu%% tone=%lu/s skips=%lu under_total=%lu\r\n",
                         (unsigned long)fill, (unsigned long)prod_s, (unsigned long)want,
-                        (unsigned long)under_s,
+                        (unsigned long)srv, (unsigned long)under_s,
                         (unsigned long)(short_x10 / 10), (unsigned long)(short_x10 % 10),
                         (unsigned long)tone_s, (unsigned long)skips,
                         (unsigned long)g_stream_under); }

@@ -49,8 +49,8 @@ RE_RUN = re.compile(
 RE_AUD_OLD = re.compile(r"\[aud\] ring fill=(\d+) skips=(\d+) under=(\d+)")
 # New: rates, plus what the source actually produced and how much was audible.
 RE_AUD = re.compile(
-    r"\[aud\] fill=(\d+) prod=(\d+)/s want=(\d+)/s under=(\d+)/s short=([\d.]+)% "
-    r"tone=(\d+)/s skips=(\d+) under_total=(\d+)"
+    r"\[aud\] fill=(\d+) prod=(\d+)/s want=(\d+)/s(?: srv=(\d+))? under=(\d+)/s "
+    r"short=([\d.]+)% tone=(\d+)/s skips=(\d+) under_total=(\d+)"
 )
 RE_FREEZE = re.compile(
     r"\[watchdog\] \*\*\* FREEZE RECOVERED \*\*\*.*?in '([^']+)'"
@@ -211,6 +211,7 @@ def parse_log(path: str) -> dict:
     aud: list[int] = []
     ring_fill: list[int] = []
     short_pct: list[float] = []      # % of the nominal rate that never arrived
+    servo_rate: list[int] = []       # PIZERO-121 servo's working rate
     tone_windows = 0                 # windows in which anything audible was produced
     aud_windows = 0                  # windows carrying the post-PIZERO-118 line
     freezes = Counter()
@@ -259,11 +260,13 @@ def parse_log(path: str) -> dict:
             if m:
                 aud_windows += 1
                 ring_fill.append(int(m.group(1)))
-                short_pct.append(float(m.group(5)))
-                if int(m.group(6)):
+                if m.group(4):
+                    servo_rate.append(int(m.group(4)))   # PIZERO-121
+                short_pct.append(float(m.group(6)))
+                if int(m.group(7)):
                     tone_windows += 1
-                skips.see(int(m.group(7)))
-                under.see(int(m.group(8)))
+                skips.see(int(m.group(8)))
+                under.see(int(m.group(9)))
                 continue
 
             m = RE_AUD_OLD.search(body)
@@ -359,6 +362,7 @@ def parse_log(path: str) -> dict:
             "windows_with_audio": tone_windows,
             "windows_measured": aud_windows,
             "telemetry": "rates" if aud_windows else "cumulative-only (pre-PIZERO-118)",
+            "servo_rate": stats(servo_rate) if servo_rate else None,
         },
         "goal_3_no_sync_drops": {
             # A dropout shows up as a short window; the count is the honest

@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include "vdg_pack.h"
 #include "coco_palette.h"
+#include "audio_servo.h"
 #ifdef GIME_TIMER
 #include "gime_timer.h"
 #endif
@@ -772,6 +773,12 @@ static int16_t           g_audio_ring[AUDIO_RING_SAMPLES];
 static volatile uint32_t g_audio_w = 0;                // monotonic write index
 static volatile uint32_t g_audio_r = 0;                // monotonic read index
 static bool              g_audio_primed = false;       // reader: wait for ~half-full before draining
+// PIZERO-121: the producer's working rate, nudged once a frame to hold the ring
+// near half full. Nominal is COCO_AUDIO_RATE; the emulated CoCo's clock and the
+// pixel clock are independent and disagree by ~0.02%, so without this the ring
+// drifts to a wall and either repeats or discards samples forever.
+static uint32_t          g_aud_rate = COCO_AUDIO_RATE;
+static uint32_t          g_aud_servo_steps = 0;
 static volatile uint32_t g_audio_skips = 0;            // reader: overflow catch-ups (diagnostic)
 // PIZERO-118: an underrun count alone cannot say whether the machine had
 // nothing to play or whether delivery failed. These two say which: `produced`
@@ -853,10 +860,10 @@ static inline void audio_emit(int s) {
 static inline void audio_integrate(uint32_t ticks) {
     g_aud_acc  += g_dac_level * (int32_t)ticks;
     g_aud_tk   += ticks;
-    g_aud_terr += ticks * COCO_AUDIO_RATE;
+    g_aud_terr += ticks * g_aud_rate;
     if (g_aud_terr >= EVENT_TICK_HZ) {
         g_aud_terr -= EVENT_TICK_HZ;
-        uint32_t over_tk  = g_aud_terr / COCO_AUDIO_RATE;     // ticks of this access past the boundary
+        uint32_t over_tk  = g_aud_terr / g_aud_rate;          // ticks of this access past the boundary
         int32_t  over_val = g_dac_level * (int32_t)over_tk;   // ...belong to the next sample
         int32_t  acc = g_aud_acc - over_val;
         uint32_t tk  = g_aud_tk  - over_tk;
@@ -905,6 +912,11 @@ extern "C" size_t COCO_RAMFUNC coco_machine_audio_read(int16_t *dst, size_t max)
 }
 
 extern "C" uint32_t coco_machine_audio_rate(void) { return COCO_AUDIO_RATE; }
+
+// PIZERO-121: what the servo is actually asking the producer for. Reported in
+// the telemetry so a drifting clock is visible as a rate, not inferred from
+// skips after the fact.
+extern "C" uint32_t coco_machine_audio_rate_now(void) { return g_aud_rate; }
 
 // Diagnostic: current ring fill (samples) and cumulative overflow-skip count.
 extern "C" void coco_machine_audio_stats(uint32_t *fill, uint32_t *skips) {
@@ -956,6 +968,15 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
     // long PLAY over serial): CRB stays 35, no IRQ storm (irq=0, I=0), PC advances
     // and returns to idle. Only bit 0 touched -- CB2/sound-mux + edge bits intact.
     if (g_m.pia0) g_m.pia0->b.control_register |= 0x01;
+
+    // PIZERO-121: one servo step per frame. Only after the reader has primed,
+    // because the ring is legitimately empty before that and correcting on it
+    // would drive the rate to its clamp for no reason.
+    if (g_audio_primed) {
+        g_aud_rate = audio_servo_rate(COCO_AUDIO_RATE,
+                                      g_audio_w - g_audio_r, AUDIO_RING_SAMPLES);
+        g_aud_servo_steps++;
+    }
 
     run_cpu_with_audio(cycles);
 
