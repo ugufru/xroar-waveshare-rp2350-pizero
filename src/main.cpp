@@ -111,6 +111,7 @@ extern "C" {
 }
 
 #include "coco_boot.h"
+#include "boot_messages.h"
 
 extern "C" {
 #include "coco_machine.h"
@@ -804,13 +805,18 @@ static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 // The serial messages stay: they are how WE debug. This adds the half the
 // recipient can see. The idle loop keeps petting the watchdog, so the board
 // does not reboot under the message.
-static void boot_fail_screen(const char *l1, const char *l2, const char *l3,
-                             const char *l4) {
+// A whole page, not a one-liner. We have 32x16 characters and no 64 KB budget
+// to defend, so a failure gets the space to say what happened, what to do
+// about it, and what we actually saw on the card. Three blocks:
+//
+//   title    one line, centred, the headline the reader repeats on the phone
+//   body     what happened and what to do, wrapped
+//   detail   the evidence, so the next person does not have to guess
+static void boot_page(const char *title, const char *body, const char *detail) {
     coco_boot_card_clear();
-    coco_boot_card_center(5, l1);
-    if (l2) coco_boot_card_center(7, l2);
-    if (l3) coco_boot_card_center(8, l3);
-    if (l4) coco_boot_card_center(10, l4);
+    coco_boot_card_center(1, title);
+    int r = coco_boot_card_wrap(2, 4, 28, 7, body);
+    if (detail) coco_boot_card_wrap(2, (r < 12 ? 12 : r + 1), 28, 3, detail);
 #ifdef HDMI_DATA_ISLAND
     coco_boot_card_present(g_fb);
 #else
@@ -1089,18 +1095,25 @@ void setup() {
 
     if (!mount_sd()) {
         Serial.print("SD mount FAILED — no ROMs, idle.\r\n");
-        boot_fail_screen("NO SD CARD", "INSERT A FAT32 CARD",
-                         "WITH /COCO/ROMS/BAS12.ROM", NULL);
+        boot_page(MSG_NOSD_TITLE, MSG_NOSD_BODY, MSG_NOSD_DETAIL);
         return;
     }
     if (!coco_boot_load_rom_from_sd(g_coco_rom)) {
         Serial.print("ROM load FAILED (need /coco/roms/bas12.rom [+extbas11.rom])\r\n");
-        // Name the exact file and folder: that IS the fix, and the reader has
-        // no other way to find it out. The resolver prefers /coco/roms/ and
-        // falls back to /coco/ (coco_boot.cpp), so quote the preferred one.
-        boot_fail_screen("NO ROM FOUND", "COPY BAS12.ROM TO",
-                         "/COCO/ROMS/ ON THE SD CARD",
-                         "SEE THE CARD IN THE BOX");
+        // A present-but-wrong-size ROM is NOT the same problem as a missing
+        // one, and saying "NO ROM FOUND" over a file sitting right there sends
+        // someone hunting for what they already have. The resolver prefers
+        // /coco/roms/ and falls back to flat /coco/, so quote the preferred one.
+        const struct coco_rom_status *rs = coco_boot_rom_status();
+        static char detail[96];
+        if (rs->bas_found) {
+            snprintf(detail, sizeof detail,
+                     "FOUND BAS12.ROM BUT IT IS %lu BYTES. IT MUST BE 8192.",
+                     (unsigned long)rs->bas_bytes);
+            boot_page(MSG_BADROM_TITLE, MSG_BADROM_BODY, detail);
+        } else {
+            boot_page(MSG_NOROM_TITLE, MSG_NOROM_BODY, MSG_NOROM_DETAIL);
+        }
         return;
     }
     if (!coco_machine_init(g_coco_rom, sizeof(g_coco_rom))) {
@@ -1108,9 +1121,20 @@ void setup() {
         // Deliberately different wording from the missing-ROM case: this one
         // is a real fault, and confusing the two would send someone hunting
         // for a file that is already there.
-        boot_fail_screen("EMULATOR FAILED TO START", "THE ROM FILE MAY BE",
-                         "DAMAGED OR THE WRONG SIZE", "REPLACE BAS12.ROM");
+        boot_page(MSG_INIT_TITLE, MSG_INIT_BODY, MSG_INIT_DETAIL);
         return;
+    }
+
+    // PIZERO-92: a missing extbas11.rom is NOT fatal, it just silently costs
+    // Extended and Disk BASIC. Someone who notices DISK commands failing has
+    // no way to connect that to a file they never copied, so say it once, on
+    // the screen, before handing over to the machine.
+    {
+        const struct coco_rom_status *rs = coco_boot_rom_status();
+        if (rs->ecb_bytes != 8192) {
+            boot_page(MSG_CBONLY_TITLE, MSG_CBONLY_BODY, MSG_CBONLY_DETAIL);
+            delay(4000);          // long enough to read, short enough to forgive
+        }
     }
 
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.

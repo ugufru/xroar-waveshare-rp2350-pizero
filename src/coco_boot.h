@@ -82,6 +82,17 @@ void coco_boot_card_clear(void);
 void coco_boot_card_text(int col, int row, const char *s);
 void coco_boot_card_center(int row, const char *s);
 void coco_boot_card_present(uint16_t *fb);
+int  coco_boot_card_wrap(int col, int row, int width, int max_rows, const char *s);
+
+/* PIZERO-92: what the last ROM load actually found, so a diagnostic can tell a
+ * MISSING file from a DAMAGED one. Valid after coco_boot_load_rom_from_sd. */
+struct coco_rom_status {
+    bool     bas_found;      /* bas12.rom resolved on the card */
+    uint32_t bas_bytes;      /* bytes read; 8192 is correct */
+    bool     ecb_found;      /* extbas11.rom resolved */
+    uint32_t ecb_bytes;
+};
+const struct coco_rom_status *coco_boot_rom_status(void);
 
 #ifdef __cplusplus
 }

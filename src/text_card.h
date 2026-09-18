@@ -29,4 +29,30 @@ static inline int card_center_col(int len) {
     return col < 0 ? 0 : col;
 }
 
+// Word wrap for a diagnostic page. Given the rest of the message, returns how
+// many characters belong on this line (breaking at a space where possible, or
+// hard-breaking a word longer than the line) and, through `next`, where the
+// following line starts with leading spaces already skipped.
+//
+// The page is 32 columns on a TV, possibly an old one with overscan eating the
+// edges, so a line that runs off the right is simply lost. Wrapping is not a
+// nicety here.
+static inline int card_wrap_next(const char *s, int width, const char **next) {
+    if (!s || !*s || width <= 0) { if (next) *next = s; return 0; }
+    int i = 0, last_space = -1;
+    while (s[i] && i < width) {
+        if (s[i] == ' ') last_space = i;
+        i++;
+    }
+    if (!s[i]) {                       // the rest fits
+        if (next) *next = s + i;
+        return i;
+    }
+    int len = (last_space > 0) ? last_space : i;   // break at a space if we can
+    const char *n = s + len;
+    while (*n == ' ') n++;             // do not start the next line with a space
+    if (next) *next = n;
+    return len;
+}
+
 #endif  // TEXT_CARD_H

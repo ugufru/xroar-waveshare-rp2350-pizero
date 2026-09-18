@@ -204,16 +204,31 @@ extern "C" bool coco_boot_find_default_dsk(char *out, size_t out_sz) {
     return false;
 }
 
+// PIZERO-92: the caller needs to tell a MISSING ROM from a DAMAGED one, because
+// the advice differs and "NO ROM FOUND" while the file is sitting on the card
+// sends someone hunting for something they already have.
+static struct coco_rom_status g_rom_status;
+
+extern "C" const struct coco_rom_status *coco_boot_rom_status(void) {
+    return &g_rom_status;
+}
+
 extern "C" bool coco_boot_load_rom_from_sd(uint8_t *rom16k) {
     memset(rom16k, 0xFF, 16384);
     char path[80];
     size_t n_ecb = 0, n_bas = 0;
-    if (coco_boot_resolve("rom", "extbas11.rom", path, sizeof(path)))
-        n_ecb = read_rom_file(path, &rom16k[0x0000], 8192);
-    if (coco_boot_resolve("rom", "bas12.rom", path, sizeof(path)))
+    g_rom_status = (struct coco_rom_status){};
+    g_rom_status.bas_found = coco_boot_resolve("rom", "bas12.rom", path, sizeof(path));
+    if (g_rom_status.bas_found)
         n_bas = read_rom_file(path, &rom16k[0x2000], 8192);
+    g_rom_status.bas_bytes = (uint32_t)n_bas;
+    g_rom_status.ecb_found = coco_boot_resolve("rom", "extbas11.rom", path, sizeof(path));
+    if (g_rom_status.ecb_found)
+        n_ecb = read_rom_file(path, &rom16k[0x0000], 8192);
+    g_rom_status.ecb_bytes = (uint32_t)n_ecb;
     if (n_bas != 8192) {
-        Serial.println("[rom] bas12.rom is required (looked in /coco/roms/ then /coco/)");
+        Serial.printf("[rom] bas12.rom %s (looked in /coco/roms/ then /coco/)\\r\\n",
+                      g_rom_status.bas_found ? "is the wrong size" : "is required");
         return false;
     }
     if (n_ecb != 8192) {
@@ -544,6 +559,23 @@ extern "C" void coco_boot_card_center(int row, const char *s) {
 
 // Render the card into the framebuffer, ink on paper, using the live palette
 // so a recoloured machine recolours the diagnostic too.
+// Draw `s` wrapped into the card from `row` down, at most `max_rows` rows.
+// Returns the row after the last one used, so a caller can stack blocks.
+extern "C" int coco_boot_card_wrap(int col, int row, int width, int max_rows,
+                                   const char *s) {
+    if (width <= 0 || width > CARD_COLS - col) width = CARD_COLS - col;
+    int r = row;
+    while (s && *s && r < CARD_ROWS && (r - row) < max_rows) {
+        const char *next = s;
+        int len = card_wrap_next(s, width, &next);
+        for (int i = 0; i < len && (col + i) < CARD_COLS; i++)
+            g_card[r][col + i] = card_code(s[i]);
+        s = next;
+        r++;
+    }
+    return r;
+}
+
 extern "C" void coco_boot_card_present(uint16_t *fb) {
     const uint16_t *pal = coco_machine_palette();
     const uint16_t ink = pal[0];      // VDG green
