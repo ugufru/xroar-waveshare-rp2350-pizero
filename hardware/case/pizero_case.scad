@@ -39,11 +39,13 @@ base_roof_t = 1.8;      // lid roof where there is no recessed band
 clr     = 0.4;          // clearance between PCB edge and inner wall, per side
 
 standoff_h = 2.6;       // PCB underside to floor: clears bottom-side solder
-head_room  = 12.0;      // [M] PCB top to lid roof. The first lid print
+head_room  = 10.0;      // [M] PCB top to lid roof. The first lid print
                         //     fouled, but on the microSD card, not the
-                        //     header, so the height stays at 12.0 and the
-                        //     fix is in the microSD opening below. A 2.54 mm
-                        //     male header stands ~11.5 mm proud of the board.
+                        //     header, and the fix was in the microSD opening
+                        //     below. Was 12.0 on the ~11.5 mm figure for a
+                        //     2.54 mm male header; the header on this board
+                        //     measures 8.34 mm proud, so 10.0 clears it by
+                        //     1.66 mm and takes 2 mm off the case.
 
 r_out = 5.0;            // vertical corner radius, outside (PIZERO-101, was 4)
 r_in  = 2.0;            // inner cavity corner. Fixed rather than r_out - wall,
@@ -299,13 +301,15 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 // geometry changes, and say what changed in README.md, so a part in hand
 // can be matched to a revision without measuring it.
 //
-//   BASE v9 / TOP v9   PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
-//   TOP-HDR v1         first draft of the 40-pin header lid (PIZERO-102)
+//   BASE v9            PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
+//   TOP v10            PIZERO-122: head_room 12.0 to 10.0, so the lid is
+//   TOP-HDR v2         11.8 mm tall and the closed case 18.6. The base is
+//                      untouched, hence still v9.
 
 ver_show = true;
 ver_base       = "BASE v9";
-ver_top        = "TOP v9";
-ver_top_header = "TOP-HDR v1";
+ver_top        = "TOP v10";
+ver_top_header = "TOP-HDR v2";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
 ver_d     = 0.5;        // engraving depth
 ver_font  = "Liberation Sans:style=Bold";

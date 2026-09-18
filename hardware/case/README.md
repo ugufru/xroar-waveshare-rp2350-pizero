@@ -5,7 +5,7 @@ ventilated top of a Tandy Color Computer 2. Confirmed on hardware.
 
 |  |  |
 |---|---|
-| Size | 69.8 x 34.8 x 20.6 mm |
+| Size | 69.8 x 34.8 x 18.6 mm |
 | Parts | `base.stl`, `top.stl` (or `plate.stl` for both at once) |
 | Fasteners | 4 x M2.5 countersunk, 12 mm, self-tapping into the lid |
 | Supports | None |
@@ -45,7 +45,7 @@ on the outer face sized to the plug overmould. The pocket leaves only
 fully instead of bottoming out on a 2 mm wall. Set `plug_pocket = false`
 to drop the pockets if you would rather have a plain flat face.
 
-Current size: 69.8 x 34.8 x 20.6 mm.
+Current size: 69.8 x 34.8 x 18.6 mm.
 
 ## How it was designed
 
@@ -262,7 +262,7 @@ opening size (connector type, cover dimensions), are still to be agreed.
 openscad -o coupon.stl -D 'part="coupon"' pizero_case.scad
 ```
 
-The lid's front wall only, 69.8 x 9.0 x 13.8 mm, with all three port
+The lid's front wall only, 69.8 x 9.0 x 11.8 mm, with all three port
 openings. Roughly ten minutes to print. Sit it on the assembled base and
 try real plugs before committing to a full lid.
 
@@ -272,6 +272,14 @@ try real plugs before committing to a full lid.
 pattern correct. Validates the `[W]` parameters.
 
 **Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
+
+**Lower lid**, 2026-09-18, not yet printed: `head_room` 12.0 to 10.0, so the
+case is 18.6 mm rather than 20.6. The 12.0 came from the ~11.5 mm figure for
+a generic 2.54 mm male header, but the header on this board measures 8.34 mm
+proud of the PCB, leaving 1.66 mm of clearance at 10.0. Nothing else moves:
+the base is unchanged, the screws are still M2.5 x 12 mm with the same 5.2 mm
+of thread engagement (the boss is 10 mm tall against a 7 mm pilot), and the
+microSD fix from revision 2 is untouched.
 
 **Style pass (PIZERO-101)**, rendered 2026-09-14, not yet printed:
 
