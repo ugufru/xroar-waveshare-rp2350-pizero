@@ -16,6 +16,7 @@
  */
 
 #include <Arduino.h>
+#include "vdg_pack.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -925,6 +926,11 @@ extern "C" const uint8_t font_6847t1[];  // 128 chars × 12 rows = 1.5 KB
 #define PAL_MAGENTA     6
 #define PAL_ORANGE      7
 #define PAL_BLACK       8
+// The tests build the same tables from vdg_pack.h, so the two sets of palette
+// constants must not drift apart (PIZERO-109).
+static_assert(PAL_GREEN == VDG_PAL_GREEN && PAL_WHITE == VDG_PAL_WHITE &&
+              PAL_BLUE == VDG_PAL_BLUE && PAL_ORANGE == VDG_PAL_ORANGE,
+              "vdg_pack.h palette indices must match coco_machine.cpp");
 #define PAL_DARK_GREEN  9
 
 // Lines-per-row for each graphics GM (vertical replication). GM bit0
@@ -947,51 +953,18 @@ static inline void put2(uint8_t *dst, int px, uint8_t color) {
 static uint32_t g_alpha_lut[2][256];
 static bool     g_alpha_lut_ready = false;
 
+// PIZERO-109: the table builders live in vdg_pack.h so the native tests can
+// exercise the same code the firmware runs, rather than a copy of it.
 static void build_alpha_lut() {
-    const uint8_t combos[2][2] = { { PAL_GREEN, PAL_BLACK }, { PAL_BLACK, PAL_GREEN } };
-    for (int c = 0; c < 2; c++) {
-        uint8_t ink = combos[c][0], paper = combos[c][1];
-        for (int g = 0; g < 256; g++) {
-            uint32_t word = 0;
-            for (int bit = 0; bit < 8; bit++) {
-                uint8_t color = (g & (0x80 >> bit)) ? ink : paper;
-                int byte = bit >> 1, shift = (bit & 1) ? 4 : 0;   // low nibble = even px
-                word |= (uint32_t)color << (byte * 8 + shift);
-            }
-            g_alpha_lut[c][g] = word;
-        }
-    }
+    vdg_build_alpha_table(g_alpha_lut);
     g_alpha_lut_ready = true;
 }
 
-// Pack 8 palette indices into one 32-bit word, low nibble = even pixel.
-// Shared by the alpha/SG4 and RG6 tables (PIZERO-119).
-static inline uint32_t pack8(const uint8_t px[8]) {
-    uint32_t w = 0;
-    for (int i = 0; i < 8; i++)
-        w |= (uint32_t)px[i] << ((i >> 1) * 8 + ((i & 1) ? 4 : 0));
-    return w;
-}
-
-// SG4 semigraphics: a cell is two colour blocks side by side, so 8 packed
-// pixels depend only on the colour (3 bits) and the two block bits. 32 entries
-// covers it. Measured 2026-09-17: an SG4-heavy screen spent 4.88 ms a frame
-// here doing 8 put2 read-modify-writes per cell, which is where the PIZERO-119
-// overrun actually came from. It hid behind the text path because the mode
-// bits read "alpha" either way.
-static uint32_t g_sg4_lut[8][4];
-static bool     g_sg4_lut_ready = false;
+static vdg_sg4_table_t g_sg4_lut;
+static bool            g_sg4_lut_ready = false;
 
 static void build_sg4_lut() {
-    for (int color = 0; color < 8; color++) {
-        for (int sg = 0; sg < 4; sg++) {
-            uint8_t left  = (sg & 2) ? (uint8_t)color : (uint8_t)PAL_BLACK;
-            uint8_t right = (sg & 1) ? (uint8_t)color : (uint8_t)PAL_BLACK;
-            uint8_t px[8];
-            for (int bit = 0; bit < 8; bit++) px[bit] = (bit < 4) ? left : right;
-            g_sg4_lut[color][sg] = pack8(px);
-        }
-    }
+    vdg_build_sg4_table(g_sg4_lut);
     g_sg4_lut_ready = true;
 }
 
@@ -1034,30 +1007,12 @@ static bool     g_rg6_lut_ready = false;
 static uint8_t  g_rg6a_key = 0xFF;     // c01<<4|c10 the artifact table was built for
 
 static void build_rg6_lut() {
-    for (int b = 0; b < 256; b++) {
-        uint8_t px[8];
-        for (int bit = 0; bit < 8; bit++)
-            px[bit] = (b & (0x80 >> bit)) ? PAL_WHITE : PAL_BLACK;
-        g_rg6_lut[b] = pack8(px);
-    }
+    vdg_build_rg6_mono_table(g_rg6_lut);
     g_rg6_lut_ready = true;
 }
 
 static void build_rg6a_lut(uint8_t c01, uint8_t c10) {
-    for (int b = 0; b < 256; b++) {
-        uint8_t px[8];
-        uint8_t v = (uint8_t)b;
-        for (int pair = 0; pair < 4; pair++) {
-            uint8_t bits = (v >> 6) & 3;
-            v <<= 2;
-            uint8_t color = (bits == 0) ? PAL_BLACK
-                          : (bits == 1) ? c01
-                          : (bits == 2) ? c10
-                          : PAL_WHITE;
-            px[pair * 2] = px[pair * 2 + 1] = color;   // one colour clock = 2 px
-        }
-        g_rg6a_lut[b] = pack8(px);
-    }
+    vdg_build_rg6_artifact_table(g_rg6a_lut, c01, c10);
     g_rg6a_key = (uint8_t)((c01 << 4) | c10);
 }
 
