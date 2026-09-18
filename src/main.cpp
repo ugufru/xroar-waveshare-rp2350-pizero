@@ -854,9 +854,30 @@ void setup() {
                              && watchdog_hw->scratch[4] == USB_REPLUG_MAGIC;
     watchdog_hw->scratch[4] = 0;   // consume the sentinel
 
+    // PIZERO-98: a UF2 flash also reboots THROUGH THE WATCHDOG, so "timer reset
+    // plus a surviving magic" is not enough to call something a freeze. Observed
+    // 2026-09-18 right after a flash: "stuck in 'loop-top' after ~268435456
+    // frames (~51 days)", which is 0x10000000, i.e. uninitialised scratch
+    // reported as a real event. That pollutes soak data, because the analyser
+    // counts these messages.
+    //
+    // So sanity-check the payload as well as the magic: a real freeze carries a
+    // plausible frame count (a week at 60 Hz is 36.3 M) and a phase that is
+    // actually one of ours.
+    bool scratch_sane = watchdog_hw->scratch[2] < 40000000u
+                        && watchdog_hw->scratch[1] <= WP_PACE;
     bool freeze_reboot = (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
                          && watchdog_hw->scratch[0] == WD_MAGIC
+                         && scratch_sane
                          && !usb_replug_reboot;
+    if ((watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
+        && watchdog_hw->scratch[0] == WD_MAGIC && !scratch_sane && !usb_replug_reboot) {
+        Serial.printf("[watchdog] scratch invalid after a timer reset "
+                      "(frames=%lu phase=%lu) -- treating as a fresh start, not a freeze\r\n",
+                      (unsigned long)watchdog_hw->scratch[2],
+                      (unsigned long)watchdog_hw->scratch[1]);
+        watchdog_hw->scratch[3] = 0;   // drop the carried tally too
+    }
     if (usb_replug_reboot) {
         g_freeze_count = watchdog_hw->scratch[3] >> 8;
         if (g_freeze_count > 1000000u) g_freeze_count = 0;
