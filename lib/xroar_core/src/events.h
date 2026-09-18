@@ -121,9 +121,44 @@ inline void event_dispatch_next(struct event_list *list) {
 		free(e);
 }
 
+// PIZERO-33: RUNAWAY GUARD. This loop is the one place in the emulation path
+// that can spin without retiring a CPU cycle: it runs inside the memory hook,
+// so if a dispatched callback re-queues itself at a tick still within this
+// window (a zero or negative interval), the loop never exits, the cycle budget
+// never drains, coco_machine_run_cycles never returns, and core 0 hangs in
+// phase 'emulate' until the watchdog reboots the board. That is what four
+// captured freezes look like, at roughly 0.46/h.
+//
+// The cap turns that hang into a diagnosable event: break out, keep the
+// machine running, and record WHICH callback did it so the next occurrence
+// names the culprit instead of the phase. A normal window dispatches a handful
+// of events, so 4096 is far beyond legitimate use and costs one increment and
+// one compare per dispatch.
+extern unsigned long event_runaway_count;   // times the cap was hit
+extern void *event_runaway_fn;              // the delegate that would not stop
+extern event_ticks event_runaway_tick;      // where it was stuck
+
+#ifndef EVENT_RUNAWAY_MAX
+#define EVENT_RUNAWAY_MAX 4096
+#endif
+
 inline void event_run_queue(struct event_list *list, event_ticks dt) {
 	event_ticks to_time = event_current_tick + dt;
+	unsigned n = 0;
 	while (event_pending(list, to_time)) {
+		if (++n > EVENT_RUNAWAY_MAX) {
+			event_runaway_count++;
+			event_runaway_fn = list->events ? (void *)list->events->delegate.func : 0;
+			event_runaway_tick = list->events ? list->events->at_tick : 0;
+			// Drop the offender rather than the whole queue: everything else
+			// stays scheduled and the machine keeps running.
+			if (list->events) {
+				struct event *e = list->events;
+				list->events = e->next;
+				e->queued = 0;
+			}
+			break;
+		}
 		event_dispatch_next(list);
 	}
 	event_current_tick = to_time;

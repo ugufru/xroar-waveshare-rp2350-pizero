@@ -33,6 +33,11 @@ extern inline void event_run_queue(struct event_list *, event_ticks dt);
 
 event_ticks event_current_tick = 0;
 
+// PIZERO-33 runaway guard state; see events.h.
+unsigned long event_runaway_count = 0;
+void *event_runaway_fn = 0;
+event_ticks event_runaway_tick = 0;
+
 struct event_list *event_list_new(void) {
 	struct event_list *list = xmalloc(sizeof(*list));
 	event_list_init(list);

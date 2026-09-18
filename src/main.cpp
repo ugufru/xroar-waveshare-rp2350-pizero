@@ -112,6 +112,9 @@ extern "C" {
 
 #include "coco_boot.h"
 #include "boot_messages.h"
+extern "C" {
+#include "events.h"   // PIZERO-33 runaway guard counters
+}
 
 extern "C" {
 #include "coco_machine.h"
@@ -1338,6 +1341,14 @@ void loop() {
         uint8_t ls = usbdiag_line_state();
         // PIZERO-119: name the render path, since the three differ by an
         // order of magnitude and a render time alone cannot be read.
+        // PIZERO-33: if the event-queue runaway guard ever trips, say so
+        // loudly and name the callback. This is the suspected cause of the
+        // freezes in phase 'emulate'.
+        if (event_runaway_count) {
+            Serial.printf("[runaway] *** EVENT QUEUE RUNAWAY x%lu *** callback=%p tick=%lu\r\n",
+                          (unsigned long)event_runaway_count,
+                          event_runaway_fn, (unsigned long)event_runaway_tick);
+        }
         uint8_t vdg = coco_machine_vdg_mode_bits();
         char mode[12];
         if (!(vdg & 0x80)) snprintf(mode, sizeof mode, "alpha");
