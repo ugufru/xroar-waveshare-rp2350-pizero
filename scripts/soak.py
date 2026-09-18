@@ -221,6 +221,7 @@ def parse_log(path: str) -> dict:
     freeze_phases: list[str] = []
     freezes_before_log: list[str] = []   # reported at boot, but predating this log
     session_start: str | None = None     # first telemetry timestamp of this boot
+    session_last: str | None = None      # most recent telemetry timestamp
     silent: list[int] = []
     reboots = 0
     usb_add = usb_del = 0
@@ -238,6 +239,7 @@ def parse_log(path: str) -> dict:
             if RE_BOOT.search(body):
                 reboots += 1
                 session_start = None
+                session_last = None
                 for c in (freezes, skips, under, rfail):
                     c.reset_for_reboot()
                 continue
@@ -247,6 +249,7 @@ def parse_log(path: str) -> dict:
                 run_lines += 1
                 if session_start is None:
                     session_start = ts
+                session_last = ts
                 fps.append(int(m.group(1)))
                 cpu.append(int(m.group(2)))
                 render.append(int(m.group(3)))
@@ -283,14 +286,31 @@ def parse_log(path: str) -> dict:
                 # up longer than we have been watching, the freeze happened
                 # before this log started and is not ours to count: exactly what
                 # a board power-cycled mid-soak reports at its next boot.
-                uptime_s = int(m.group(3))
-                watched = 0.0
-                if session_start and ts:
-                    fmt = "%H:%M:%S.%f"
-                    d = (dt.datetime.strptime(ts, fmt)
-                         - dt.datetime.strptime(session_start, fmt)).total_seconds()
-                    watched = d + 86400 if d < 0 else d
-                if uptime_s > watched + 5:
+                # WHOSE FREEZE IS IT? The watchdog reports after rebooting, so
+                # the message describes the session that just died. That
+                # session is ours if we saw it START, i.e. if this is not the
+                # first banner in the log. Only the first one can describe a
+                # session that began before we attached.
+                #
+                # This replaces an uptime comparison that looked reasonable and
+                # was wrong twice over: the message's seconds were computed
+                # with the wrong frame rate, and the value was compared against
+                # a session that had just started rather than the one that
+                # died. It silently reported three real freezes as somebody
+                # else's.
+                # WHOSE FREEZE IS IT? The watchdog reports after rebooting, so
+                # a message describes the session that just died. Only the
+                # FIRST banner in a log can describe a session that began
+                # before we attached, and the board's scratch can also carry a
+                # stale freeze across a power cycle, so that one is flagged as
+                # ambiguous rather than guessed at. Every later one is ours.
+                #
+                # An earlier attempt compared the message's own uptime figure
+                # instead. That was wrong twice: the firmware computed those
+                # seconds with the wrong frame rate, and the comparison was
+                # against the session just starting rather than the one that
+                # died. It reported three real freezes as somebody else's.
+                if reboots <= 1:
                     freezes_before_log.append(m.group(1))
                     freezes.reset_for_reboot()   # do not count it as ours
                     freezes.last = None          # next value is a fresh baseline
@@ -372,10 +392,14 @@ def parse_log(path: str) -> dict:
             "longest_silence_s": max(silent) if silent else 0,
         },
         "goal_4_no_crashing": {
-            "freezes": freezes.total,
-            "freezes_per_hour": round(freezes.total / hours, 3),
+            # Count the watchdog's own messages, not the board counter: the
+            # counter resets on reboot and carries across power cycles, so
+            # arithmetic on it double-counts. One message is one freeze.
+            "freezes": len(freeze_phases),
+            "freezes_per_hour": round(len(freeze_phases) / hours, 3),
+            "freeze_counter_delta": freezes.total,   # cross-check only
             "freezes_before_run": freezes.baseline,   # already on the counter
-            "freezes_predating_log": freezes_before_log,
+            "freezes_ambiguous_first_boot": freezes_before_log,
             "freeze_phases": freeze_phases,
             "reboots_seen": reboots,
         },
@@ -433,9 +457,9 @@ def cmd_analyse(args: argparse.Namespace) -> int:
           f"reboots seen {crash['reboots_seen']}, phases {crash['freeze_phases'] or 'none'}"
           + (f" | counter already at {crash['freezes_before_run']} before this run"
              if crash["freezes_before_run"] else "")
-          + (f" | {len(crash['freezes_predating_log'])} reported at boot but "
-             f"predating this log: {crash['freezes_predating_log']}"
-             if crash["freezes_predating_log"] else ""))
+          + (f" | {len(crash['freezes_ambiguous_first_boot'])} at the first boot, "
+             f"ambiguous: {crash['freezes_ambiguous_first_boot']}"
+             if crash["freezes_ambiguous_first_boot"] else ""))
     print(f"frame budget  {g['frame_budget_us']}")
     print("5 data loss   not measured here: nothing writes to the card yet "
           "(PIZERO-113 covers it)")

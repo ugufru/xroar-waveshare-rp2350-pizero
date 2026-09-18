@@ -869,7 +869,11 @@ void setup() {
         Serial.printf("[watchdog] *** FREEZE RECOVERED *** core 0 was stuck in '%s' after ~%lu frames (~%lus); freeze #%lu this session -> auto-rebooted\r\n",
                       wd_phase_name(g_last_freeze_phase),
                       (unsigned long)watchdog_hw->scratch[2],
-                      (unsigned long)(watchdog_hw->scratch[2] / 52u),
+                      // PIZERO-98: frames/52 was left over from the off-spec
+                      // ~52 Hz build; at 60 Hz it overstates uptime by 15%,
+                      // which is enough to make a freeze look like it belongs
+                      // to a different session.
+                      (unsigned long)(watchdog_hw->scratch[2] / 60u),
                       (unsigned long)g_freeze_count);
         Serial.flush();
     } else {
