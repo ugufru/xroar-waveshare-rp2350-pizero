@@ -17,6 +17,9 @@
 
 #include <Arduino.h>
 #include "vdg_pack.h"
+#ifdef GIME_TIMER
+#include "gime_timer.h"
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -98,6 +101,35 @@ struct CocoMachine {
 static_assert((COCO_VDG_W & 1) == 0, "COCO_VDG_W must be even for nibble packing");
 
 static CocoMachine g_m;
+
+#ifdef GIME_TIMER
+// PIZERO-62: the CoCo 3 timer in its real register block, which is unused on a
+// CoCo 2. Scheduling rides the existing event queue, so an idle timer costs
+// nothing: the memory-access fast path already skips the queue when nothing is
+// due, and a stopped timer is simply not queued.
+static gime_timer_t  g_gime;
+static struct event  g_gime_event;
+static bool          g_gime_event_ready = false;
+
+static void gime_timer_restart(void);
+
+static void gime_timer_expired(void *) {
+    uint8_t lines = gime_timer_fire(&g_gime);
+    if (lines) g_m.pia_irq_dirty = true;   // force the IRQ/FIRQ re-OR below
+    gime_timer_restart();                  // auto-reload, as the GIME does
+}
+
+static void gime_timer_restart(void) {
+    if (!g_gime_event_ready) {
+        event_init(&g_gime_event, MACHINE_EVENT_LIST,
+                   DELEGATE_AS0(void, gime_timer_expired, NULL));
+        g_gime_event_ready = true;
+    }
+    if (event_queued(&g_gime_event)) event_dequeue(&g_gime_event);
+    uint32_t dt = gime_timer_interval(&g_gime);
+    if (dt) event_queue_dt(&g_gime_event, (int)dt);
+}
+#endif
 
 // - - - bus -------------------------------------------------------
 
@@ -436,7 +468,18 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
                  if ((A & 1) == 0) g_m.pia_irq_dirty = true;
                  break;
         case 6:  g_m.cpu->D = fdc_io_read(A); break;
-        default: g_m.cpu->D = 0xFF; break;
+        default:
+#ifdef GIME_TIMER
+                 { uint8_t gv;
+                   if (gime_timer_owns(A) && gime_timer_read(&g_gime, A, &gv)) {
+                       g_m.cpu->D = gv;
+                       // Reading the enable registers acknowledges, which can
+                       // drop the line.
+                       g_m.pia_irq_dirty = true;
+                       break;
+                   } }
+#endif
+                 g_m.cpu->D = 0xFF; break;
         }
     } else {
         // Real CoCo writes route by raw address — S=7 covers SAM regs +
@@ -449,6 +492,12 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
             if (A & 1) g_m.pia_irq_dirty = true;
             audio_update_level();   // DAC / single-bit may have changed -> recache
         }
+#ifdef GIME_TIMER
+        else if (gime_timer_owns(A)) {
+            if (gime_timer_write(&g_gime, A, g_m.cpu->D)) gime_timer_restart();
+            g_m.pia_irq_dirty = true;
+        }
+#endif
         else if ((A & 0xFFE0) == 0xFF40) fdc_io_write(A, g_m.cpu->D);  // cart I/O
         else if (A < 0x8000)             g_m.ram[A] = g_m.cpu->D;
         else if (g_m.sam_ty && A < 0xFF00) g_m.ram[A] = g_m.cpu->D;  // all-RAM mode
@@ -482,8 +531,16 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
 #endif
 
     if (g_m.pia_irq_dirty) {
+#ifdef GIME_TIMER
+        // PIZERO-62: the timer shares the 6809's two lines with the PIAs, as
+        // it does on a CoCo 3. An unacknowledged status holds its line high.
+        uint8_t gl = gime_timer_lines(&g_gime);
+        MC6809_IRQ_SET(g_m.cpu,  g_m.pia0->a.irq || g_m.pia0->b.irq || (gl & GIME_LINE_IRQ));
+        MC6809_FIRQ_SET(g_m.cpu, g_m.pia1->a.irq || g_m.pia1->b.irq || (gl & GIME_LINE_FIRQ));
+#else
         MC6809_IRQ_SET(g_m.cpu,  g_m.pia0->a.irq || g_m.pia0->b.irq);
         MC6809_FIRQ_SET(g_m.cpu, g_m.pia1->a.irq || g_m.pia1->b.irq);
+#endif
         g_m.pia_irq_dirty = false;
     }
 
@@ -882,6 +939,9 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
 extern "C" void coco_machine_install_cart(const uint8_t *rom8k) {
     g_m.cart_rom = rom8k;
     g_m.cart_toggle_remaining = 88950;
+#ifdef GIME_TIMER
+    gime_timer_reset(&g_gime);          // PIZERO-62: stopped until a guest programs it
+#endif
     g_m.cart_cb1_level = true;
 }
 
