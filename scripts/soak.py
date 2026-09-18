@@ -223,6 +223,8 @@ def parse_log(path: str) -> dict:
     session_start: str | None = None     # first telemetry timestamp of this boot
     session_last: str | None = None      # most recent telemetry timestamp
     silent: list[int] = []
+    gaps: list[float] = []               # host-side losses: sleep, suspend, a busy Mac
+    last_ts: str | None = None
     reboots = 0
     usb_add = usb_del = 0
     first_ts = last_ts = None
@@ -234,6 +236,17 @@ def parse_log(path: str) -> dict:
             ts, body = (m.group(1), m.group(2)) if m else (None, raw.strip())
             if ts:
                 first_ts = first_ts or ts
+                # A gap means WE stopped listening, not that the board stopped:
+                # a sleeping laptop loses telemetry the board still emitted.
+                # Rates must be per hour OBSERVED, or they are understated.
+                if last_ts:
+                    fmt = "%H:%M:%S.%f"
+                    d = (dt.datetime.strptime(ts, fmt)
+                         - dt.datetime.strptime(last_ts, fmt)).total_seconds()
+                    if d < 0:
+                        d += 86400
+                    if d > 5.0:
+                        gaps.append(d)
                 last_ts = ts
 
             if RE_BOOT.search(body):
@@ -338,7 +351,9 @@ def parse_log(path: str) -> dict:
         return secs + 86400 if secs < 0 else secs  # ran past midnight
 
     duration = span_seconds()
-    hours = duration / 3600 or 1e-9
+    lost = sum(gaps)
+    observed = max(duration - lost, 1e-9)
+    hours = observed / 3600      # per-hour rates are per hour WATCHED
     lo, hi = FPS_TARGET - FPS_BAND, FPS_TARGET + FPS_BAND
     bad = [v for v in fps if not lo <= v <= hi]
 
@@ -355,6 +370,9 @@ def parse_log(path: str) -> dict:
     return {
         "duration_s": round(duration, 1),
         "duration_h": round(duration / 3600, 2),
+        "observed_h": round(observed / 3600, 2),
+        "lost_h": round(lost / 3600, 2),
+        "gaps": len(gaps),
         "windows": len(fps),
         "run_lines": run_lines,
         "goal_1_uptime_60hz": {
@@ -397,7 +415,10 @@ def parse_log(path: str) -> dict:
             # arithmetic on it double-counts. One message is one freeze.
             "freezes": len(freeze_phases),
             "freezes_per_hour": round(len(freeze_phases) / hours, 3),
-            "freeze_counter_delta": freezes.total,   # cross-check only
+            # Cross-check, and a LOWER BOUND on what the messages missed: a
+            # freeze inside a host-side gap leaves no message but still moves
+            # the board's counter.
+            "freeze_counter_delta": freezes.total,
             "freezes_before_run": freezes.baseline,   # already on the counter
             "freezes_ambiguous_first_boot": freezes_before_log,
             "freeze_phases": freeze_phases,
@@ -435,7 +456,10 @@ def cmd_analyse(args: argparse.Namespace) -> int:
     }
 
     g = metrics
-    print(f"duration      {g['duration_h']} h ({g['windows']} telemetry windows)")
+    print(f"duration      {g['duration_h']} h wall clock, {g['observed_h']} h observed"
+          + (f" ({g['gaps']} gaps, {g['lost_h']} h lost: the HOST stopped listening,"
+             f" the board did not stop running)" if g["gaps"] else "")
+          + f" | {g['windows']} telemetry windows")
     fps = g["goal_1_uptime_60hz"]
     print(f"1 uptime      fps {fps['fps']} | in band {fps['in_band_pct']}% "
           f"| bad windows {fps['windows_out_of_band']}")
@@ -457,6 +481,8 @@ def cmd_analyse(args: argparse.Namespace) -> int:
           f"reboots seen {crash['reboots_seen']}, phases {crash['freeze_phases'] or 'none'}"
           + (f" | counter already at {crash['freezes_before_run']} before this run"
              if crash["freezes_before_run"] else "")
+          + (f" | board counter moved {crash['freeze_counter_delta']}"
+             if crash["freeze_counter_delta"] != len(crash["freeze_phases"]) else "")
           + (f" | {len(crash['freezes_ambiguous_first_boot'])} at the first boot, "
              f"ambiguous: {crash['freezes_ambiguous_first_boot']}"
              if crash["freezes_ambiguous_first_boot"] else ""))
