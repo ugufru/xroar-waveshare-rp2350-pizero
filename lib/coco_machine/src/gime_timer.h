@@ -49,9 +49,15 @@
 #define GIME_TICKS_FAST   4u
 #define GIME_TICKS_SLOW   910u
 
-// Period bias. The 1986 GIME reloads at count+1, the 1987 part at count+2.
-// UNVERIFIED against silicon by us; it matters for the tempo of music written
-// against one revision, so it is a build option rather than a silent choice.
+// Period bias, i.e. how many extra ticks a reload actually takes. CORRECTED
+// 2026-09-18 against ~/github/coco/coco-guides/coco3-intro.md, which is the
+// in-tree authority there and says: a count of 1 behaves as 3 on the 1986 part
+// and as 2 on the 1987, so roughly +2 on the 1986 and +1 on the 1987. An
+// earlier comment here had those the wrong way round.
+//
+// The default of 2 therefore emulates the 1986 part. It matters: music written
+// against one revision plays at the wrong tempo on the other, which is exactly
+// why this is a visible build option rather than a hidden constant.
 #ifndef GIME_PERIOD_BIAS
 #define GIME_PERIOD_BIAS  2
 #endif
@@ -88,9 +94,15 @@ static inline bool gime_timer_owns(uint16_t addr) {
     return addr >= GIME_REG_INIT0 && addr <= GIME_REG_TMRL;
 }
 
-// Interval between firings, in event ticks. Zero means the timer is stopped: a
-// reload of 0 disables it on real hardware, and so does having neither IRQ nor
-// FIRQ enabled for the timer, which lets us skip queueing the event at all.
+// Interval between firings, in event ticks. Zero means the timer is stopped,
+// which here covers both a zero reload and having neither IRQ nor FIRQ enabled
+// for the timer; either way we skip queueing the event at all.
+// DELIBERATE DEVIATION FROM HARDWARE: a zero reload re-asserts the interrupt
+// immediately on a real GIME (the root of the "Arkanoid sound bug"). Here it
+// stops the timer instead, because a timer firing every tick would wedge the
+// emulator rather than reproduce anything useful. Recorded so nobody
+// "corrects" it into a hang, and so a guest depending on the real behaviour is
+// a known, explainable failure.
 static inline uint32_t gime_timer_interval(gime_timer_t *t) {
     if (t->reload == 0) return 0;
     if (!((t->irq_enable | t->firq_enable) & GIME_INT_TMR)) return 0;
