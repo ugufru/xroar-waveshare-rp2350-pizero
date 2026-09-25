@@ -1,6 +1,6 @@
 # Case retrospective
 
-A record of how the printed case got from nothing to TOP v12 / BASE v9,
+A record of how the printed case got from nothing to TOP v12 / BASE v10,
 what went wrong along the way, and what we now do differently because of
 it. It covers PIZERO-94 through PIZERO-124, 2026-09-11 to 2026-09-25.
 
@@ -11,7 +11,7 @@ about the process and the failures, so the same mistakes are not made twice.
 
 | Part | Version | State |
 |---|---|---|
-| `base.stl` | BASE v9 | Confirmed on hardware. Unchanged since PIZERO-103 rev 2. |
+| `base.stl` | BASE v10 | Rendered, not yet printed (PIZERO-96 countersink). BASE v9 is confirmed on hardware and stays in use. |
 | `top.stl` | TOP v12 | Confirmed on hardware (PIZERO-123, PIZERO-124). microSD, engraving and button access all confirmed on this print. |
 | `top_header.stl` | TOP-HDR v4 | Draft, never printed (PIZERO-102). |
 
@@ -153,8 +153,10 @@ so and ask, rather than picking one.
 PIZERO-96 (the countersink is a 72.5 degree cone, not 90) was found on
 day two and deliberately not fixed, because it would change a base that
 was confirmed on hardware. The base has not changed since, so it is still
-open. That was reasonable at the time, but it means a known defect ships
-in every base.
+open. That was reasonable at the time, but it meant a known defect
+shipped in every base. Fixed in the model on 2026-09-25 as BASE v10
+(`screw_head_h` 1.5 to 1.1, measured at 90.0 degrees on the mesh), to be
+picked up by the next base print.
 
 **Lesson:** hold small base fixes for the next base reprint, but track
 them together so the reprint picks them all up.
@@ -164,7 +166,7 @@ them together so the reprint picks them all up.
 | Issue | What |
 |---|---|
 | PIZERO-102 | Header lid is a draft; opening size not agreed. |
-| PIZERO-96 | Countersink angle; fold into the next base reprint. |
+| PIZERO-96 | Countersink fixed in BASE v10; confirm on the next base print. |
 | PIZERO-97 | `[?]` dimensions still unmeasured. |
 
 ## Working rules this produced

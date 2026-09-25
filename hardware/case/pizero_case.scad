@@ -70,7 +70,9 @@ coupon_depth = 9.0;     // depth of the port test coupon, front wall only
 
 screw_clear_d = 2.8;    // M2.5 shank clearance
 screw_head_d  = 5.0;    // M2.5 countersunk head
-screw_head_h  = 1.5;    // countersink depth
+screw_head_h  = 1.1;    // countersink depth. PIZERO-96: was 1.5, a 72.5 degree
+                        // cone that seated a DIN 965 head on its rim only.
+                        // 1.1 over the 5.0 -> 2.8 taper is a true 90 degrees.
 boss_d        = 6.0;    // lid boss outside diameter
 pilot_depth   = 7.0;    // threaded depth in the lid boss
 pilot_d       = 2.2;    // self-tapping pilot for M2.5 into PLA/PETG.
@@ -323,12 +325,14 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 // can be matched to a revision without measuring it.
 //
 //   BASE v9            PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
+//   BASE v10           PIZERO-96: countersinks 90 degrees (screw_head_h
+//                      1.5 to 1.1). Base only.
 //   TOP v12            PIZERO-124: bosses webbed into the corner walls
-//   TOP-HDR v4         and the pilot opened 2.1 to 2.2. Lid only, hence
-//                      still BASE v9. (v11/v3: PIZERO-123 pocket tops.)
+//   TOP-HDR v4         and the pilot opened 2.1 to 2.2. (v11/v3:
+//                      PIZERO-123 pocket tops.)
 
 ver_show = true;
-ver_base       = "BASE v9";
+ver_base       = "BASE v10";
 ver_top        = "TOP v12";
 ver_top_header = "TOP-HDR v4";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this

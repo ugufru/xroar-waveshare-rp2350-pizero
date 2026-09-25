@@ -187,7 +187,7 @@ it is shut.
 
 | Part | Version | Where |
 |---|---|---|
-| `base.stl` | BASE v9 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
+| `base.stl` | BASE v10 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
 | `top.stl` | TOP v12 | Roof underside, centred on the two USB ports, in front of the groove loop |
 | `top_header.stl` | TOP-HDR v4 | Same place as the lid |
 
@@ -202,6 +202,7 @@ v9 is the state of PIZERO-101 rev 8 plus the PIZERO-103 microSD rev 2.
 TOP v10 and TOP-HDR v2 are the PIZERO-122 lid, 2 mm lower. TOP v11 and
 TOP-HDR v3 are the PIZERO-123 microSD relief; the base is still v9.
 TOP v12 and TOP-HDR v4 are the PIZERO-124 boss webs and 2.2 mm pilot.
+BASE v10 is the PIZERO-96 countersink, a true 90 degrees (was 72.5).
 
 ## microSD fit (PIZERO-103)
 
