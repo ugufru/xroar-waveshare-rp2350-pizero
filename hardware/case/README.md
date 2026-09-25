@@ -286,6 +286,9 @@ try real plugs before committing to a full lid.
 (PIZERO-122), one shared top edge for the plug pockets and microSD relief
 (PIZERO-123), and screw bosses webbed into the corners with a 2.2 mm pilot
 (PIZERO-124), after two TOP v11 bosses snapped off.
+On the same print the microSD card inserts and ejects well (PIZERO-103),
+the engraved version is legible (PIZERO-105), and RUN and BOOT can be
+pressed through the vent slots with a very thin screwdriver (PIZERO-104).
 
 **Base**, printed 2026-09-11: board seats without force, walls rigid, hole
 pattern correct. Validates the `[W]` parameters.

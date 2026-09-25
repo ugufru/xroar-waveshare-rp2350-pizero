@@ -12,7 +12,7 @@ about the process and the failures, so the same mistakes are not made twice.
 | Part | Version | State |
 |---|---|---|
 | `base.stl` | BASE v9 | Confirmed on hardware. Unchanged since PIZERO-103 rev 2. |
-| `top.stl` | TOP v12 | Confirmed on hardware (PIZERO-123, PIZERO-124). |
+| `top.stl` | TOP v12 | Confirmed on hardware (PIZERO-123, PIZERO-124). microSD, engraving and button access all confirmed on this print. |
 | `top_header.stl` | TOP-HDR v4 | Draft, never printed (PIZERO-102). |
 
 69.8 x 34.8 x 18.6 mm, four M2.5 x 12 countersunk screws, no supports.
@@ -163,9 +163,6 @@ them together so the reprint picks them all up.
 
 | Issue | What |
 |---|---|
-| PIZERO-103 | Confirm on hardware that a card ejects reliably from the rev 2 relief. |
-| PIZERO-104 | Paperclip access to RUN and BOOT through the 1 mm slots is untested. |
-| PIZERO-105 | The photo above shows TOP v11 legible; needs the user's confirmation to close. |
 | PIZERO-102 | Header lid is a draft; opening size not agreed. |
 | PIZERO-96 | Countersink angle; fold into the next base reprint. |
 | PIZERO-97 | `[?]` dimensions still unmeasured. |
