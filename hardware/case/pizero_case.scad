@@ -143,7 +143,9 @@ sd_y1 = sd_cy + sd_card_w/2 + sd_ch_clr;
 // edge instead would cap out at 1.0 mm and cost channel length.
 sd_relief   = true;
 sd_relief_w = 18.0;     // across the card
-sd_relief_h = 5.0;      // top to bottom, centred on the card
+// PIZERO-123: as tall as the plug pockets (7.6 mm, was 5.0), so every port
+// opening shares one height and there is more to pinch above and below.
+sd_relief_h = hdmi[4] + 2*plug_clr;   // top to bottom, centred on the card
 sd_relief_d = wall - port_frame_t;   // 1.2 mm, as deep as the plug pockets
                                      // (pocket_d itself is derived later)
 sd_relief_r = 1.5;      // corner radius
@@ -301,15 +303,14 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 // geometry changes, and say what changed in README.md, so a part in hand
 // can be matched to a revision without measuring it.
 //
-//   BASE v9            PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
-//   TOP v10            PIZERO-122: head_room 12.0 to 10.0, so the lid is
-//   TOP-HDR v2         11.8 mm tall and the closed case 18.6. The base is
-//                      untouched, hence still v9.
+//   BASE v10           PIZERO-123: microSD finger relief 5.0 to 7.6 mm
+//   TOP v11            tall, matching the plug pockets. The relief is cut
+//   TOP-HDR v3         from both halves, so all three parts move.
 
 ver_show = true;
-ver_base       = "BASE v9";
-ver_top        = "TOP v10";
-ver_top_header = "TOP-HDR v2";
+ver_base       = "BASE v10";
+ver_top        = "TOP v11";
+ver_top_header = "TOP-HDR v3";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
 ver_d     = 0.5;        // engraving depth
 ver_font  = "Liberation Sans:style=Bold";

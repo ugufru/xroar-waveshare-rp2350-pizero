@@ -184,9 +184,9 @@ it is shut.
 
 | Part | Version | Where |
 |---|---|---|
-| `base.stl` | BASE v9 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
-| `top.stl` | TOP v9 | Roof underside, centred on the two USB ports, in front of the groove loop |
-| `top_header.stl` | TOP-HDR v1 | Same place as the lid |
+| `base.stl` | BASE v10 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
+| `top.stl` | TOP v11 | Roof underside, centred on the two USB ports, in front of the groove loop |
+| `top_header.stl` | TOP-HDR v3 | Same place as the lid |
 
 Set in `ver_base`, `ver_top` and `ver_top_header` in the source. **Bump the
 number whenever that part's geometry changes**, and say what changed here,
@@ -196,6 +196,8 @@ orientation), which is a 180 degree flip about x. `ver_show = false` drops
 the engraving entirely.
 
 v9 is the state of PIZERO-101 rev 8 plus the PIZERO-103 microSD rev 2.
+TOP v10 and TOP-HDR v2 are the PIZERO-122 lid, 2 mm lower. BASE v10,
+TOP v11 and TOP-HDR v3 are the PIZERO-123 microSD relief, 7.6 mm tall.
 
 ## microSD fit (PIZERO-103)
 
@@ -237,6 +239,11 @@ later must leave it alone.
   capped at 1.0 mm (the wall is only 2 mm thick) and would have cost
   channel length; this keeps the wall 2 mm everywhere else.
 - The flare is measured from the relief floor, so the mouth still funnels.
+
+**PIZERO-123:** the relief is now 18 x 7.6 mm, the same height as the
+HDMI and USB-C plug pockets, so every port opening shares one height and
+there is more room above and below the card to pinch it. `sd_relief_h` is
+derived from the plug pocket, so it follows the pockets if they change.
 
 ## Header lid (draft, PIZERO-102)
 
