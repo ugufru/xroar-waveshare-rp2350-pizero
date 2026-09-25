@@ -240,12 +240,13 @@ later must leave it alone.
   channel length; this keeps the wall 2 mm everywhere else.
 - The flare is measured from the relief floor, so the mouth still funnels.
 
-**PIZERO-123:** the relief's top edge now lines up with the top of the
-HDMI plug pocket, its neighbour on that corner (5.30 mm above the split,
-was 3.15), so the relief is 18 x 7.15 mm and there is more room above the
-card to pinch it. The bottom edge does not move, so the base is unchanged.
-Both edges are derived (`sd_relief_z0`, `sd_relief_z1`), so the top
-follows the HDMI pocket if it changes.
+**PIZERO-123:** every opening on the case now shares one top edge,
+5.45 mm above the split: the three plug pockets and the microSD relief.
+That height is `pocket_top_z`, the highest any pocket needs (the USB-C
+ones). The HDMI pocket's top rises 0.15 mm to meet it, which only adds
+plug clearance, and the relief's top rises from 3.15 to 5.45, so it is
+18 x 7.3 mm with more room above the card to pinch it. Only tops move,
+never bottoms, so the base is unchanged.
 
 ## Header lid (draft, PIZERO-102)
 

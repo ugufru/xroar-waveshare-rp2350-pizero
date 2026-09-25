@@ -100,6 +100,11 @@ hdmi = [12.35, 12.1, 3.0, 15.5, 7.0];   // [W] centre, [M] 3.0 body height
 usbc_host  = [39.1, 9.6, 3.3, 12.5, 7.0];   // PIO-USB host port (keyboard)
 usbc_power = [53.6, 9.6, 3.3, 12.5, 7.0];   // power / programming port
 front_ports = [hdmi, usbc_host, usbc_power];
+// PIZERO-123: every plug pocket, and the microSD relief, shares one top
+// edge, the highest any pocket needs (the USB-C pockets, 5.45 mm above the
+// split). Only tops are raised to it; no bottom edge moves, so the base is
+// untouched and the HDMI pocket just gains 0.15 mm of headroom.
+pocket_top_z = max([for (p = front_ports) p[2]/2 + (p[4] + 2*plug_clr)/2]);
 
 // microSD (PIZERO-103). The socket is a XunPu TF-110 (schematic J1):
 // housing 11.95 wide x 11.55 deep x 1.32 tall, the 11.00 mm card centred in
@@ -143,13 +148,13 @@ sd_y1 = sd_cy + sd_card_w/2 + sd_ch_clr;
 // edge instead would cap out at 1.0 mm and cost channel length.
 sd_relief   = true;
 sd_relief_w = 18.0;     // across the card
-// PIZERO-123: the top edge lines up with the top of the HDMI plug pocket,
-// its neighbour on that corner. The bottom edge stays where rev 2 put it
-// (5.0 mm centred on the card), so the base is unchanged; only the lid
-// part of the relief grows. Heights are above the split line.
-sd_relief_z0 = sd_ch_h/2 - 5.0/2;               // -1.85, bottom, in the base
-sd_relief_z1 = hdmi[2]/2 + (hdmi[4] + 2*plug_clr)/2;   // 5.30, HDMI pocket top
-sd_relief_h  = sd_relief_z1 - sd_relief_z0;     // 7.15
+// PIZERO-123: the top edge lines up with the plug pockets (pocket_top_z).
+// The bottom edge stays where rev 2 put it (5.0 mm centred on the card), so
+// the base is unchanged; only the lid part of the relief grows. Heights
+// are above the split line.
+sd_relief_z0 = sd_ch_h/2 - 5.0/2;   // -1.85, bottom, in the base
+sd_relief_z1 = pocket_top_z;        // 5.45, shared pocket top
+sd_relief_h  = sd_relief_z1 - sd_relief_z0;   // 7.30
 sd_relief_d = wall - port_frame_t;   // 1.2 mm, as deep as the plug pockets
                                      // (pocket_d itself is derived later)
 sd_relief_r = 1.5;      // corner radius
@@ -308,9 +313,9 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 // can be matched to a revision without measuring it.
 //
 //   BASE v9            PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
-//   TOP v11            PIZERO-123: the microSD relief top rises to line up
-//   TOP-HDR v3         with the HDMI plug pocket. Its bottom edge, in the
-//                      base, does not move, hence still BASE v9.
+//   TOP v11            PIZERO-123: the HDMI pocket and microSD relief tops
+//   TOP-HDR v3         rise to line up with the USB-C pockets. No bottom
+//                      edge moves, hence still BASE v9.
 
 ver_show = true;
 ver_base       = "BASE v9";
@@ -445,9 +450,11 @@ module port_pocket(p, z_lo, z_hi) {
     w  = p[3] + 2*plug_clr;
     h  = p[4] + 2*plug_clr;
     cz = split_z + p[2]/2;               // plug is centred on the socket
-    if (plug_pocket && min(z_hi, cz + h/2) > max(z_lo, cz - h/2))
+    zb = cz - h/2;
+    zt = split_z + pocket_top_z;         // shared top edge (PIZERO-123)
+    if (plug_pocket && min(z_hi, zt) > max(z_lo, zb))
         z_slab(z_lo, z_hi)
-            xz_rrect(p[0], w, cz - h/2, cz + h/2, y0 - 0.01, pocket_d + 0.01,
+            xz_rrect(p[0], w, zb, zt, y0 - 0.01, pocket_d + 0.01,
                      pocket_r, true);
 }
 
