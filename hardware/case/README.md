@@ -27,8 +27,9 @@ Then drop the board into the base, sit the lid on top, and drive four
 M2.5 x 12 mm countersunk screws up through the underside. They pass through
 the floor and the board's own mounting holes and thread straight into the
 plastic bosses in the lid, so one set of screws clamps the board and closes
-the case. No inserts or nuts needed; 12 mm gives 5.2 mm of thread engagement
-with 1.8 mm to spare before bottoming out.
+the case. No inserts or nuts needed; with the head seated 0.66 mm below
+the underside (BASE v11), 12 mm gives 5.9 mm of thread engagement with
+1.1 mm to spare before bottoming out.
 
 ## Design
 
@@ -187,7 +188,7 @@ it is shut.
 
 | Part | Version | Where |
 |---|---|---|
-| `base.stl` | BASE v10 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
+| `base.stl` | BASE v11 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
 | `top.stl` | TOP v13 | Roof underside, centred on the two USB ports, in front of the groove loop |
 | `top_header.stl` | TOP-HDR v5 | Same place as the lid |
 
@@ -203,6 +204,7 @@ TOP v10 and TOP-HDR v2 are the PIZERO-122 lid, 2 mm lower. TOP v11 and
 TOP-HDR v3 are the PIZERO-123 microSD relief; the base is still v9.
 TOP v12 and TOP-HDR v4 are the PIZERO-124 boss webs and 2.2 mm pilot.
 BASE v10 is the PIZERO-96 countersink, a true 90 degrees (was 72.5).
+BASE v11 sinks that countersink 0.5 mm deeper (PIZERO-127).
 TOP v13 and TOP-HDR v5 are the PIZERO-126 RUN and BOOT guide funnels.
 
 ## microSD fit (PIZERO-103)
@@ -303,8 +305,13 @@ try real plugs before committing to a full lid.
 **TOP v13**, rendered 2026-09-25, not yet printed: RUN and BOOT guide
 funnels (PIZERO-126). Otherwise identical to TOP v12.
 
-**BASE v10**, rendered 2026-09-25, printing: 90 degree countersinks
-(PIZERO-96). The v9 base is confirmed on hardware and fine to keep using.
+**BASE v11**, rendered 2026-09-25, not yet printed: the same 90 degree
+countersink sunk 0.5 mm deeper by a straight recess at the face, so the
+head sits 0.66 mm in (PIZERO-127).
+
+**BASE v10**, printed 2026-09-25: the 90 degree countersinks (PIZERO-96)
+made the screws go together much more smoothly, but the heads stood just
+proud enough in the last turns to scrape a desk.
 
 **TOP v12**, printed 2026-09-25 and confirmed working: the lower lid
 (PIZERO-122), one shared top edge for the plug pockets and microSD relief

@@ -73,6 +73,12 @@ screw_head_d  = 5.0;    // M2.5 countersunk head
 screw_head_h  = 1.1;    // countersink depth. PIZERO-96: was 1.5, a 72.5 degree
                         // cone that seated a DIN 965 head on its rim only.
                         // 1.1 over the 5.0 -> 2.8 taper is a true 90 degrees.
+// PIZERO-127: on BASE v10 the heads seated nicely on the 90 degree cone
+// but stood just proud enough to scrape a desk. A short straight recess at
+// the face, as wide as the cone mouth, sinks the same cone this much deeper,
+// so the seat is unchanged and the head sits further in. First-layer
+// squish also narrows the mouth, which this absorbs.
+screw_head_recess = 0.5;
 boss_d        = 6.0;    // lid boss outside diameter
 pilot_depth   = 7.0;    // threaded depth in the lid boss
 pilot_d       = 2.2;    // self-tapping pilot for M2.5 into PLA/PETG.
@@ -345,9 +351,11 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 //                      PIZERO-123 pocket tops.)
 //   TOP v13            PIZERO-126: guide funnels under the RUN and BOOT
 //   TOP-HDR v5         slots. Lid only.
+//   BASE v11           PIZERO-127: countersinks sunk 0.5 mm deeper by a
+//                      straight recess at the face. Base only.
 
 ver_show = true;
-ver_base       = "BASE v10";
+ver_base       = "BASE v11";
 ver_top        = "TOP v13";
 ver_top_header = "TOP-HDR v5";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
@@ -735,6 +743,8 @@ module base() {
             translate([h[0], h[1], -1])
                 cylinder(d = screw_clear_d, h = base_h + 2);
             translate([h[0], h[1], -0.01])
+                cylinder(d = screw_head_d, h = screw_head_recess + 0.02);
+            translate([h[0], h[1], screw_head_recess])
                 cylinder(d1 = screw_head_d, d2 = screw_clear_d, h = screw_head_h);
         }
     }

@@ -1,6 +1,6 @@
 # Case retrospective
 
-A record of how the printed case got from nothing to TOP v13 / BASE v10,
+A record of how the printed case got from nothing to TOP v13 / BASE v11,
 what went wrong along the way, and what we now do differently because of
 it. It covers PIZERO-94 through PIZERO-124, 2026-09-11 to 2026-09-25.
 
@@ -11,7 +11,7 @@ about the process and the failures, so the same mistakes are not made twice.
 
 | Part | Version | State |
 |---|---|---|
-| `base.stl` | BASE v10 | Rendered, not yet printed (PIZERO-96 countersink). BASE v9 is confirmed on hardware and stays in use. |
+| `base.stl` | BASE v11 | Rendered, not yet printed (PIZERO-127 deeper countersink). BASE v10 printed; its 90 degree seat works but sits too shallow. |
 | `top.stl` | TOP v13 | Rendered, not yet printed (PIZERO-126 button guides). TOP v12 is confirmed on hardware (PIZERO-123, PIZERO-124), including microSD, engraving and button access. |
 | `top_header.stl` | TOP-HDR v5 | Draft, never printed (PIZERO-102). |
 
@@ -155,18 +155,25 @@ day two and deliberately not fixed, because it would change a base that
 was confirmed on hardware. The base has not changed since, so it is still
 open. That was reasonable at the time, but it meant a known defect
 shipped in every base. Fixed in the model on 2026-09-25 as BASE v10
-(`screw_head_h` 1.5 to 1.1, measured at 90.0 degrees on the mesh), to be
-picked up by the next base print.
+(`screw_head_h` 1.5 to 1.1, measured at 90.0 degrees on the mesh), and
+printed the same day. The screws went together much more smoothly, but
+the heads now stood just proud enough to scrape a desk. The old steep cone
+was deeper and very tight, most likely letting each head bite its way in,
+which hid how little margin a nominally flush seat has once squish at the
+first layer narrows the mouth. BASE v11
+(PIZERO-127) keeps the 90 degree cone and sinks it 0.5 mm deeper.
 
 **Lesson:** hold small base fixes for the next base reprint, but track
-them together so the reprint picks them all up.
+them together so the reprint picks them all up. And when fixing a seat's
+shape, check where the head ends up, not just the angle.
 
 ## Still open
 
 | Issue | What |
 |---|---|
 | PIZERO-102 | Header lid is a draft; opening size not agreed. |
-| PIZERO-96 | Countersink fixed in BASE v10; confirm on the next base print. |
+| PIZERO-127 | Countersink 0.5 mm deeper in BASE v11; confirm the heads sit below the surface. |
+| PIZERO-126 | Print TOP v13 and confirm the RUN and BOOT guides. |
 | PIZERO-97 | `[?]` dimensions still unmeasured. |
 
 ## Working rules this produced
