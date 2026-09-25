@@ -143,9 +143,13 @@ sd_y1 = sd_cy + sd_card_w/2 + sd_ch_clr;
 // edge instead would cap out at 1.0 mm and cost channel length.
 sd_relief   = true;
 sd_relief_w = 18.0;     // across the card
-// PIZERO-123: as tall as the plug pockets (7.6 mm, was 5.0), so every port
-// opening shares one height and there is more to pinch above and below.
-sd_relief_h = hdmi[4] + 2*plug_clr;   // top to bottom, centred on the card
+// PIZERO-123: the top edge lines up with the top of the HDMI plug pocket,
+// its neighbour on that corner. The bottom edge stays where rev 2 put it
+// (5.0 mm centred on the card), so the base is unchanged; only the lid
+// part of the relief grows. Heights are above the split line.
+sd_relief_z0 = sd_ch_h/2 - 5.0/2;               // -1.85, bottom, in the base
+sd_relief_z1 = hdmi[2]/2 + (hdmi[4] + 2*plug_clr)/2;   // 5.30, HDMI pocket top
+sd_relief_h  = sd_relief_z1 - sd_relief_z0;     // 7.15
 sd_relief_d = wall - port_frame_t;   // 1.2 mm, as deep as the plug pockets
                                      // (pocket_d itself is derived later)
 sd_relief_r = 1.5;      // corner radius
@@ -303,12 +307,13 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 // geometry changes, and say what changed in README.md, so a part in hand
 // can be matched to a revision without measuring it.
 //
-//   BASE v10           PIZERO-123: microSD finger relief 5.0 to 7.6 mm
-//   TOP v11            tall, matching the plug pockets. The relief is cut
-//   TOP-HDR v3         from both halves, so all three parts move.
+//   BASE v9            PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
+//   TOP v11            PIZERO-123: the microSD relief top rises to line up
+//   TOP-HDR v3         with the HDMI plug pocket. Its bottom edge, in the
+//                      base, does not move, hence still BASE v9.
 
 ver_show = true;
-ver_base       = "BASE v10";
+ver_base       = "BASE v9";
 ver_top        = "TOP v11";
 ver_top_header = "TOP-HDR v3";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
@@ -596,7 +601,7 @@ module sd_channel_cut() {
 // both halves, so it straddles the split line.
 module sd_relief_cut() {
     if (sd_relief)
-        translate([x0 - 0.01, sd_cy, split_z + sd_ch_h/2]) rotate([0, 90, 0])
+        translate([x0 - 0.01, sd_cy, split_z + (sd_relief_z0 + sd_relief_z1)/2]) rotate([0, 90, 0])
             linear_extrude(height = sd_relief_d + 0.01)
                 hull() for (dz = [-1, 1], dy = [-1, 1])
                     translate([dz*(sd_relief_h/2 - sd_relief_r),
