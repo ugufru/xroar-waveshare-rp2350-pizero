@@ -282,12 +282,17 @@ try real plugs before committing to a full lid.
 
 ## Status
 
+**TOP v12**, printed 2026-09-25 and confirmed working: the lower lid
+(PIZERO-122), one shared top edge for the plug pockets and microSD relief
+(PIZERO-123), and screw bosses webbed into the corners with a 2.2 mm pilot
+(PIZERO-124), after two TOP v11 bosses snapped off.
+
 **Base**, printed 2026-09-11: board seats without force, walls rigid, hole
 pattern correct. Validates the `[W]` parameters.
 
 **Lid**, second print confirmed 2026-09-11: fits and closes cleanly.
 
-**Lower lid**, 2026-09-18, not yet printed: `head_room` 12.0 to 10.0, so the
+**Lower lid**, 2026-09-18, confirmed on the TOP v12 print 2026-09-25: `head_room` 12.0 to 10.0, so the
 case is 18.6 mm rather than 20.6. The 12.0 came from the ~11.5 mm figure for
 a generic 2.54 mm male header, but the header on this board measures 8.34 mm
 proud of the PCB, leaving 1.66 mm of clearance at 10.0. Nothing else moves:
@@ -295,7 +300,7 @@ the base is unchanged, the screws are still M2.5 x 12 mm with the same 5.2 mm
 of thread engagement (the boss is 10 mm tall against a 7 mm pilot), and the
 microSD fix from revision 2 is untouched.
 
-**Style pass (PIZERO-101)**, rendered 2026-09-14, not yet printed:
+**Style pass (PIZERO-101)**, rendered 2026-09-14, printed and confirmed 2026-09-16:
 
 - **Floor vents** in the base: the lid's slot (3.0 mm, 3.0 mm rib, 6.0 mm
   pitch, rounded ends) turned to run front to back. Two banks of four with

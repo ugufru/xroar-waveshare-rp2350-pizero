@@ -12,7 +12,7 @@ about the process and the failures, so the same mistakes are not made twice.
 | Part | Version | State |
 |---|---|---|
 | `base.stl` | BASE v9 | Confirmed on hardware. Unchanged since PIZERO-103 rev 2. |
-| `top.stl` | TOP v12 | Rendered, not yet printed (PIZERO-124 boss webs). |
+| `top.stl` | TOP v12 | Confirmed on hardware (PIZERO-123, PIZERO-124). |
 | `top_header.stl` | TOP-HDR v4 | Draft, never printed (PIZERO-102). |
 
 69.8 x 34.8 x 18.6 mm, four M2.5 x 12 countersunk screws, no supports.
@@ -32,7 +32,7 @@ about the process and the failures, so the same mistakes are not made twice.
 | 09-17 | | Photos of the printed v9 case committed. |
 | 09-18 | PIZERO-122 | Lid 2 mm lower: the header measures 8.34 mm, not the quoted 11.5. |
 | 09-25 | PIZERO-123 | All plug pockets and the microSD relief share one top edge. Took three attempts. |
-| 09-25 | PIZERO-124 | Two lid screw bosses snapped off. Bosses webbed into the corners, pilot opened. |
+| 09-25 | PIZERO-124 | Two lid screw bosses snapped off. Bosses webbed into the corners, pilot opened. TOP v12 printed the same day and worked. |
 
 ## What worked
 
@@ -120,8 +120,9 @@ the earlier lids were assembled gently.
 
 **Fix (TOP v12):** a web fills each corner between the boss and its two
 walls, from 1 mm above the PCB up to the roof, and the pilot opens to
-2.2 mm. Not yet printed. If it is not enough, the next steps are a flared
-root where the boss meets the roof, and printing with 4 or more walls.
+2.2 mm. Printed the same day and confirmed working, so the fallbacks (a
+flared root where the boss meets the roof, 4 or more slicer walls) were
+not needed.
 
 **Lesson:** a vertical feature in a roof-down part is held together only
 by layer adhesion. Tie it into a wall wherever there is one to tie into.
@@ -162,8 +163,6 @@ them together so the reprint picks them all up.
 
 | Issue | What |
 |---|---|
-| PIZERO-124 | Print TOP v12 and confirm the bosses survive repeated assembly. |
-| PIZERO-123 | Print and confirm the pocket tops line up and the card is easier to grip. |
 | PIZERO-103 | Confirm on hardware that a card ejects reliably from the rev 2 relief. |
 | PIZERO-104 | Paperclip access to RUN and BOOT through the 1 mm slots is untested. |
 | PIZERO-105 | The photo above shows TOP v11 legible; needs the user's confirmation to close. |
