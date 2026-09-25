@@ -302,12 +302,16 @@ try real plugs before committing to a full lid.
 
 ## Status
 
-**TOP v13**, rendered 2026-09-25, not yet printed: RUN and BOOT guide
-funnels (PIZERO-126). Otherwise identical to TOP v12.
+**TOP v13 + BASE v11**, printed 2026-09-25 and confirmed working: the
+current set.
 
-**BASE v11**, rendered 2026-09-25, not yet printed: the same 90 degree
-countersink sunk 0.5 mm deeper by a straight recess at the face, so the
-head sits 0.66 mm in (PIZERO-127).
+- **TOP v13:** RUN and BOOT guide funnels (PIZERO-126). Both buttons are
+  pressed through the slots with a thin wire (a Christmas ornament hook).
+  Otherwise identical to TOP v12.
+- **BASE v11:** the same 90 degree countersink sunk 0.5 mm deeper by a
+  straight recess at the face (PIZERO-127). The screw heads sit recessed
+  and no longer scrape.
+- Both engraved versions read correctly.
 
 **BASE v10**, printed 2026-09-25: the 90 degree countersinks (PIZERO-96)
 made the screws go together much more smoothly, but the heads stood just

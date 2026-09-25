@@ -11,8 +11,8 @@ about the process and the failures, so the same mistakes are not made twice.
 
 | Part | Version | State |
 |---|---|---|
-| `base.stl` | BASE v11 | Rendered, not yet printed (PIZERO-127 deeper countersink). BASE v10 printed; its 90 degree seat works but sits too shallow. |
-| `top.stl` | TOP v13 | Rendered, not yet printed (PIZERO-126 button guides). TOP v12 is confirmed on hardware (PIZERO-123, PIZERO-124), including microSD, engraving and button access. |
+| `base.stl` | BASE v11 | Confirmed on hardware (PIZERO-127): screw heads recessed on the 90 degree seat. |
+| `top.stl` | TOP v13 | Confirmed on hardware (PIZERO-126): RUN and BOOT reached with a thin wire through hidden guides. Carries every lid fix since TOP v11. |
 | `top_header.stl` | TOP-HDR v5 | Draft, never printed (PIZERO-102). |
 
 69.8 x 34.8 x 18.6 mm, four M2.5 x 12 countersunk screws, no supports.
@@ -172,8 +172,6 @@ shape, check where the head ends up, not just the angle.
 | Issue | What |
 |---|---|
 | PIZERO-102 | Header lid is a draft; opening size not agreed. |
-| PIZERO-127 | Countersink 0.5 mm deeper in BASE v11; confirm the heads sit below the surface. |
-| PIZERO-126 | Print TOP v13 and confirm the RUN and BOOT guides. |
 | PIZERO-97 | `[?]` dimensions still unmeasured. |
 
 ## Working rules this produced

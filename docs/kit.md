@@ -83,7 +83,7 @@ estimates rather than quotes. Fill in real numbers when ordering.
 
 2. **Fit the case** (§5). Nothing needs opening by hand, but still check every
    port physically before closing it: both Type-C, mini-HDMI, microSD, and
-   **BOOT button access** with a very thin screwdriver through the top vents. BOOT is the
+   **BOOT button access** with a thin wire (an ornament hook works) through the top vents. BOOT is the
    recovery path when a flash goes wrong, so confirm you can actually reach it
    on the first unit rather than discovering otherwise on the tenth.
 
@@ -169,12 +169,13 @@ batch.
 BOM entirely. That was always the argument for publishing a design, and it now
 holds.
 
-**BOOT and RUN are reachable** through the vent slots on the top, with a very
-thin screwdriver (confirmed on hardware, PIZERO-104). No disassembly, which
-matters because BOOT is the recovery path when a flash goes wrong (§3). It is
-fiddlier than a dedicated hole: the slots are 1 mm wide, though each button sits
-almost exactly under one. Try it once before packing a unit so you know the
-feel of it.
+**BOOT and RUN are reachable** through the vent slots on the top, with a thin
+wire such as a Christmas ornament hook, or a very thin screwdriver (confirmed on
+hardware, PIZERO-104 and PIZERO-126). No disassembly, which matters because BOOT
+is the recovery path when a flash goes wrong (§3). From TOP v13 a hidden funnel
+under each of those two slots steers the tool onto the button: slide it along
+the slot until it drops in, then push. Try it once before packing a unit so you
+know the feel of it.
 
 **Two things the case does not do yet**, both open if wanted:
 
