@@ -14,6 +14,8 @@ ventilated top of a Tandy Color Computer 2. Confirmed on hardware.
 
 - `pizero_case.scad` is the only source. Every dimension is a named parameter.
 - The STLs are rendered from it. Do not edit them by hand.
+- [RETROSPECTIVE.md](RETROSPECTIVE.md) records what went wrong so far and
+  the working rules it produced.
 
 ## Printing it
 
@@ -167,6 +169,7 @@ PIZERO-101 rev 8 case with the first PIZERO-103 microSD channel.
 | `photos/ports-front.jpg` | The port wall: mini-HDMI and both USB-C, with their rounded plug pockets |
 | `photos/ports-front-angle.jpg` | Same wall, three-quarter, showing the lid/base seam |
 | `photos/closed-top.jpg` | The roof: 1 mm slots and the groove loop that hugs them |
+| `photos/lid-v11-bosses-snapped.jpg` | TOP v11 with two screw boss tips snapped off (PIZERO-124) |
 | `photos/underside-vents-screws.jpg` | The floor vents and the four countersunk screws |
 | `photos/microsd-side.jpg` | The microSD wall |
 | `photos/microsd-card-inserted.jpg` | A card in the slot |
