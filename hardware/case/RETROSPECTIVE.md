@@ -1,6 +1,6 @@
 # Case retrospective
 
-A record of how the printed case got from nothing to TOP v12 / BASE v10,
+A record of how the printed case got from nothing to TOP v13 / BASE v10,
 what went wrong along the way, and what we now do differently because of
 it. It covers PIZERO-94 through PIZERO-124, 2026-09-11 to 2026-09-25.
 
@@ -12,8 +12,8 @@ about the process and the failures, so the same mistakes are not made twice.
 | Part | Version | State |
 |---|---|---|
 | `base.stl` | BASE v10 | Rendered, not yet printed (PIZERO-96 countersink). BASE v9 is confirmed on hardware and stays in use. |
-| `top.stl` | TOP v12 | Confirmed on hardware (PIZERO-123, PIZERO-124). microSD, engraving and button access all confirmed on this print. |
-| `top_header.stl` | TOP-HDR v4 | Draft, never printed (PIZERO-102). |
+| `top.stl` | TOP v13 | Rendered, not yet printed (PIZERO-126 button guides). TOP v12 is confirmed on hardware (PIZERO-123, PIZERO-124), including microSD, engraving and button access. |
+| `top_header.stl` | TOP-HDR v5 | Draft, never printed (PIZERO-102). |
 
 69.8 x 34.8 x 18.6 mm, four M2.5 x 12 countersunk screws, no supports.
 34 commits touch `hardware/case/` so far.

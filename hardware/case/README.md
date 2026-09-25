@@ -188,8 +188,8 @@ it is shut.
 | Part | Version | Where |
 |---|---|---|
 | `base.stl` | BASE v10 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
-| `top.stl` | TOP v12 | Roof underside, centred on the two USB ports, in front of the groove loop |
-| `top_header.stl` | TOP-HDR v4 | Same place as the lid |
+| `top.stl` | TOP v13 | Roof underside, centred on the two USB ports, in front of the groove loop |
+| `top_header.stl` | TOP-HDR v5 | Same place as the lid |
 
 Set in `ver_base`, `ver_top` and `ver_top_header` in the source. **Bump the
 number whenever that part's geometry changes**, and say what changed here,
@@ -203,6 +203,7 @@ TOP v10 and TOP-HDR v2 are the PIZERO-122 lid, 2 mm lower. TOP v11 and
 TOP-HDR v3 are the PIZERO-123 microSD relief; the base is still v9.
 TOP v12 and TOP-HDR v4 are the PIZERO-124 boss webs and 2.2 mm pilot.
 BASE v10 is the PIZERO-96 countersink, a true 90 degrees (was 72.5).
+TOP v13 and TOP-HDR v5 are the PIZERO-126 RUN and BOOT guide funnels.
 
 ## microSD fit (PIZERO-103)
 
@@ -253,6 +254,22 @@ plug clearance, and the relief's top rises from 3.15 to 5.45, so it is
 18 x 7.3 mm with more room above the card to pinch it. Only tops move,
 never bottoms, so the base is unchanged.
 
+## RUN and BOOT guides (PIZERO-126)
+
+Under the two roof slots that sit over RUN and BOOT, a funnel hangs from
+the roof underside: an 8 mm mouth along the slot, narrowing to a 2 mm hole
+just above the button. Slide a thin tool along the slot until it drops in,
+then push; the funnel steers it onto the button. Nothing shows from
+outside, and the grille is unchanged.
+
+The button top was measured 7.0 mm below the outside of the roof
+(`btn_top_meas`, `[M]`), so it stands 4.8 mm above the PCB. Each funnel
+stops `btn_guide_clr` (0.5 mm) above that, so it is 4.7 mm tall and cannot
+press the button with the lid on. A straight line down through the slot
+onto each button is clear in the rendered mesh; 3.2 mm along the slot, it
+meets the funnel wall 1.25 mm below the roof. Roof-down, each funnel is a
+small pyramid on the first layers, so it needs no supports.
+
 ## Header lid (draft, PIZERO-102)
 
 ```
@@ -282,6 +299,12 @@ openings. Roughly ten minutes to print. Sit it on the assembled base and
 try real plugs before committing to a full lid.
 
 ## Status
+
+**TOP v13**, rendered 2026-09-25, not yet printed: RUN and BOOT guide
+funnels (PIZERO-126). Otherwise identical to TOP v12.
+
+**BASE v10**, rendered 2026-09-25, printing: 90 degree countersinks
+(PIZERO-96). The v9 base is confirmed on hardware and fine to keep using.
 
 **TOP v12**, printed 2026-09-25 and confirmed working: the lower lid
 (PIZERO-122), one shared top edge for the plug pockets and microSD relief

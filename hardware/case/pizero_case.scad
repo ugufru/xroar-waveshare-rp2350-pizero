@@ -208,6 +208,19 @@ boot_pos = [41.2, 11.6];   // [W]
 buttons_open = false;
 button_hole_d = 3.0;
 
+// Button guides (PIZERO-126). A funnel hangs from the roof underside below
+// each of the two button slots: a long mouth under the slot narrowing to a
+// round hole just above the button. Slide a thin tool along the slot until
+// it drops in, push, and the funnel steers it onto the plunger. Nothing
+// shows from outside; the roof and grille are unchanged. Roof-down, each
+// funnel grows off the first layers like a pyramid, so no supports.
+btn_guide       = true;
+btn_top_meas    = 7.0;  // [M] case top (outside) down to the button top
+btn_guide_clr   = 0.5;  // clear space between the funnel and the button
+btn_guide_len   = 8.0;  // mouth length along the slot, at the roof
+btn_guide_hole  = 2.0;  // bottom hole diameter, and the mouth width
+btn_guide_wall  = 1.0;  // funnel wall thickness
+
 /* ---------- roof vents ------------------------------------------------ */
 //
 // The CoCo 2 had no fan, just slots cut across the top. Same idea here.
@@ -330,11 +343,13 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 //   TOP v12            PIZERO-124: bosses webbed into the corner walls
 //   TOP-HDR v4         and the pilot opened 2.1 to 2.2. (v11/v3:
 //                      PIZERO-123 pocket tops.)
+//   TOP v13            PIZERO-126: guide funnels under the RUN and BOOT
+//   TOP-HDR v5         slots. Lid only.
 
 ver_show = true;
 ver_base       = "BASE v10";
-ver_top        = "TOP v12";
-ver_top_header = "TOP-HDR v4";
+ver_top        = "TOP v13";
+ver_top_header = "TOP-HDR v5";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
 ver_d     = 0.5;        // engraving depth
 ver_font  = "Liberation Sans:style=Bold";
@@ -640,6 +655,31 @@ module sd_guide() {
             cube([x_end - x_in + 0.01, w + 2*sd_guide_side, sd_ch_h + sd_guide_top]);
 }
 
+// Button guide funnel (PIZERO-126), solid when g is the wall thickness and
+// the bore when g is 0. Heights above the split line: the button top is
+// derived from the outside measurement, the funnel stops btn_guide_clr
+// above it and runs up to the roof underside.
+btn_top_z = lid_h - btn_top_meas;                    // 4.8
+btn_guide_z0 = btn_top_z + btn_guide_clr;            // funnel bottom
+module btn_funnel(p, g, ext = 0) {
+    zb = split_z + btn_guide_z0 - ext;
+    zt = split_z + head_room + ext;
+    d  = btn_guide_hole + 2*g;
+    hull() {
+        translate([p[0], p[1], zb]) cylinder(d = d, h = 0.01);
+        for (dx = [-1, 1])
+            translate([p[0] + dx*(btn_guide_len/2 - btn_guide_hole/2), p[1], zt - 0.01])
+                cylinder(d = d, h = 0.01);
+    }
+}
+module btn_guides()    { if (btn_guide) for (b = [run_pos, boot_pos]) btn_funnel(b, btn_guide_wall); }
+module btn_guide_cut() { if (btn_guide) for (b = [run_pos, boot_pos]) btn_funnel(b, 0, 0.02); }
+if (btn_guide)
+    echo(str("button guides: funnel ", head_room - btn_guide_z0, " mm tall, ",
+             btn_guide_clr, " mm above the button top at ", btn_top_z,
+             " (roof underside at ", head_room, ")"));
+assert(!btn_guide || btn_guide_z0 < head_room - 1, "button guide has no room");
+
 // Version engraving. The base reads from above, the lid from below (so its
 // text is mirrored in the model to read correctly from inside).
 module ver_base_cut() {
@@ -738,10 +778,12 @@ module lid() {
                 translate([0, 0, split_z]) lid_cavity(head_room);
             }
             sd_guide();
+            btn_guides();
         }
         for (h = holes)
             translate([h[0], h[1], split_z - 0.01])
                 cylinder(d = pilot_d, h = pilot_depth + 0.01);
+        btn_guide_cut();
 
         for (p = front_ports) {
             port_through(p, split_z, case_h);
