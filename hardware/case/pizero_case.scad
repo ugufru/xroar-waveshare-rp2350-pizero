@@ -73,8 +73,18 @@ screw_head_d  = 5.0;    // M2.5 countersunk head
 screw_head_h  = 1.5;    // countersink depth
 boss_d        = 6.0;    // lid boss outside diameter
 pilot_depth   = 7.0;    // threaded depth in the lid boss
-pilot_d       = 2.1;    // self-tapping pilot for M2.5 into PLA/PETG
+pilot_d       = 2.2;    // self-tapping pilot for M2.5 into PLA/PETG.
+                        // PIZERO-124: was 2.1; the tighter hole wedged
+                        // the thin boss wall apart before any other load.
                         // -> use M2.5 x 12 mm countersunk screws
+// PIZERO-124: two lid bosses snapped off at the tip, cleanly along a layer.
+// Each was a free-standing 6 mm column 0.9 mm clear of both corner walls,
+// printed roof-down so every layer line runs across it. The web fills the
+// corner between boss and walls, so the boss is part of the corner rather
+// than a column standing in it. It stops boss_web_gap above the PCB in case
+// anything sits near the board corners; the boss tip itself is unchanged.
+boss_web     = true;
+boss_web_gap = 1.0;     // clear space between the web and the PCB top
 
 /* ---------- connectors ----------------------------------------------- */
 //
@@ -313,14 +323,14 @@ band_depth   = 2.0;     // how far below the top surface. The roof under the
 // can be matched to a revision without measuring it.
 //
 //   BASE v9            PIZERO-101 rev 8 + the PIZERO-103 microSD rev 2
-//   TOP v11            PIZERO-123: the HDMI pocket and microSD relief tops
-//   TOP-HDR v3         rise to line up with the USB-C pockets. No bottom
-//                      edge moves, hence still BASE v9.
+//   TOP v12            PIZERO-124: bosses webbed into the corner walls
+//   TOP-HDR v4         and the pilot opened 2.1 to 2.2. Lid only, hence
+//                      still BASE v9. (v11/v3: PIZERO-123 pocket tops.)
 
 ver_show = true;
 ver_base       = "BASE v9";
-ver_top        = "TOP v11";
-ver_top_header = "TOP-HDR v3";
+ver_top        = "TOP v12";
+ver_top_header = "TOP-HDR v4";
 ver_size  = 3.0;        // font size; glyphs are ~0.7 of this
 ver_d     = 0.5;        // engraving depth
 ver_font  = "Liberation Sans:style=Bold";
@@ -711,6 +721,16 @@ module lid() {
                 for (h = holes)
                     translate([h[0], h[1], split_z])
                         cylinder(d = boss_d, h = head_room);
+                translate([0, 0, split_z]) lid_cavity(head_room);
+            }
+            // PIZERO-124: tie each boss into its corner (see boss_web)
+            if (boss_web) intersection() {
+                for (h = holes) {
+                    cx = h[0] < bw/2 ? x0 : h[0];
+                    cy = h[1] < bd/2 ? y0 : h[1];
+                    translate([cx, cy, split_z + boss_web_gap])
+                        cube([hole_in - x0, hole_in - y0, head_room]);
+                }
                 translate([0, 0, split_z]) lid_cavity(head_room);
             }
             sd_guide();

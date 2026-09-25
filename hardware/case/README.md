@@ -143,7 +143,7 @@ flipped roof down, so the roof is the first layer, the walls grow upward,
 and every port opening stays open to the air. No supports.
 
 Fasteners: 4 x M2.5 countersunk, 12 mm, self-tapping into the lid bosses
-(2.1 mm pilot).
+(2.2 mm pilot, PIZERO-124; was 2.1).
 
 ## Dimension provenance
 
@@ -185,8 +185,8 @@ it is shut.
 | Part | Version | Where |
 |---|---|---|
 | `base.stl` | BASE v9 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
-| `top.stl` | TOP v11 | Roof underside, centred on the two USB ports, in front of the groove loop |
-| `top_header.stl` | TOP-HDR v3 | Same place as the lid |
+| `top.stl` | TOP v12 | Roof underside, centred on the two USB ports, in front of the groove loop |
+| `top_header.stl` | TOP-HDR v4 | Same place as the lid |
 
 Set in `ver_base`, `ver_top` and `ver_top_header` in the source. **Bump the
 number whenever that part's geometry changes**, and say what changed here,
@@ -198,6 +198,7 @@ the engraving entirely.
 v9 is the state of PIZERO-101 rev 8 plus the PIZERO-103 microSD rev 2.
 TOP v10 and TOP-HDR v2 are the PIZERO-122 lid, 2 mm lower. TOP v11 and
 TOP-HDR v3 are the PIZERO-123 microSD relief; the base is still v9.
+TOP v12 and TOP-HDR v4 are the PIZERO-124 boss webs and 2.2 mm pilot.
 
 ## microSD fit (PIZERO-103)
 
