@@ -20,6 +20,7 @@
 #include "pico/multicore.h"
 #include "hardware/watchdog.h"
 #include "hardware/structs/watchdog.h"
+#include "hardware/structs/powman.h"
 
 extern "C" {
 #include "dvi.h"
@@ -780,6 +781,7 @@ static void audio_encode_frame(void) {
 // re-enumeration (device unplugged) so setup() reports it as a replug, not a freeze.
 #define USB_REPLUG_MAGIC 0x51D15C09u
 enum { WP_NONE = 0, WP_SETUP, WP_LOOP, WP_USB, WP_KBD, WP_EMU, WP_RENDER, WP_BLIT, WP_AUDIO, WP_PACE };
+static bool g_run_button_reset = false;    // PIZERO-116: this boot came from RUN
 static uint32_t g_freeze_count = 0;        // persistent across reboots (from scratch[3])
 static uint32_t g_last_freeze_phase = WP_NONE;
 static const char *wd_phase_name(uint32_t p) {
@@ -837,6 +839,14 @@ void setup() {
     while (!Serial && (millis() - t0) < 4000) delay(50);
     delay(200);  // a little extra room after the host attaches
     Serial.print("\r\nXRoar on RP2350-PiZero (PIZERO-09)\r\n");
+    // PIZERO-116: RUN is a hardware reset, so the press itself is invisible;
+    // POWMAN records it as the cause of THIS reset (HAD_RUN_LOW, read-only,
+    // reflects the last reset only). Watchdog reboots, flashes and power-on
+    // set other bits. The raw value is printed to check that on hardware.
+    uint32_t chip_reset = powman_hw->chip_reset;
+    g_run_button_reset = (chip_reset & POWMAN_CHIP_RESET_HAD_RUN_LOW_BITS) != 0;
+    Serial.printf("[boot] chip_reset=0x%08lx%s\r\n", (unsigned long)chip_reset,
+                  g_run_button_reset ? " (RUN button)" : "");
     Serial.flush();
 
 #ifndef WATCHDOG_DISABLE
@@ -1175,6 +1185,17 @@ void setup() {
     (void)autorun; (void)path;
 #else
     bool have_autorun = coco_boot_load_autorun(&autorun);
+
+    // PIZERO-116: a RUN press is a cold start straight to the BASIC prompt.
+    // Ignore autorun.txt entirely, so boot takes exactly the path a card
+    // without one takes: Disk BASIC, the default disk attached, nothing
+    // typed. Say so on screen, but only when there was something to skip.
+    if (g_run_button_reset && have_autorun) {
+        Serial.print("[autorun] skipped: RUN button reset (PIZERO-116)\r\n");
+        boot_page(MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL);
+        delay(2500);
+        have_autorun = false;
+    }
 
     bool direct = have_autorun && autorun.direct_name[0]
                   && coco_boot_resolve("bin", autorun.direct_name, path, sizeof(path));

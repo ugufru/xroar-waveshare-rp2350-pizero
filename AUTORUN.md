@@ -204,7 +204,16 @@ the SD from any host OS works regardless of casing.
 When `autorun.txt` is doing a kiosk-style autorun, can the user abort
 to drop into BASIC and explore?
 
-**Proposed:**
+**Implemented (PIZERO-116): press the RUN button.** RUN restarts the
+board, and a restart that came from RUN ignores `autorun.txt` entirely:
+the machine comes up exactly as it would with no `autorun.txt` on the
+card (Disk BASIC, the default disk mounted, nothing typed). When there was
+an `autorun.txt` to skip, an "AUTORUN SKIPPED" page shows for a couple of
+seconds first. Switching the power off and on runs AUTORUN again as usual.
+In the printed case, RUN is reached through the vent slots with a thin
+wire.
+
+**Earlier proposal, not implemented:**
 
 - During the ~12 s boot warmup (before autotype starts), holding any
   key over the serial console aborts the autorun and lands at OK prompt.
@@ -258,6 +267,7 @@ Boot
  │   └─ Missing → display "ROMS NOT FOUND" help screen and halt
  │
  ├─ Parse /coco/autorun.txt  (if present)
+ │   └─ Restarted by the RUN button → ignore it (show "AUTORUN SKIPPED")
  │
  ├─ @DIRECT mode? ──► load .bin into RAM, jump, done
  │
