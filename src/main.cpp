@@ -1650,6 +1650,11 @@ void loop() {
                       (vdg & 0x08) ? "c" : "");
         Serial.printf("[vdg] mode=%s bits=%02x sam=%u\r\n", mode, (unsigned)vdg,
                       (unsigned)coco_machine_sam_v());
+        // PIZERO-143: only while a program is using the GMC's sound chip.
+        if (coco_machine_cart_csg_writes())
+            Serial.printf("[csg] writes=%lu dropped=%lu\r\n",
+                          (unsigned long)coco_machine_cart_csg_writes(),
+                          (unsigned long)coco_machine_cart_csg_dropped());
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
                       "| freezes=%lu last=%s\r\n",

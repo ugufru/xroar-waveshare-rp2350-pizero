@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include "vdg_pack.h"
 #include "cart_gmc.h"          // PIZERO-142, host-tested
+#include "csg_sn76489.h"       // PIZERO-143, host-tested
 #include "coco_palette.h"
 #include "audio_servo.h"
 #ifdef GIME_TIMER
@@ -53,7 +54,7 @@ struct CocoMachine {
     const uint8_t *cart_base = nullptr;
     uint32_t cart_len = 0;
     bool     cart_banked = false;
-    uint32_t csg_writes = 0;             // SN76489 writes, not yet emulated
+    uint32_t csg_writes = 0;             // bytes written to the SN76489 (PIZERO-143)
     int32_t cart_toggle_remaining = 0;   // 6809 cycles until next CART pulse
     bool    cart_cb1_level = true;
 
@@ -439,6 +440,20 @@ static uint32_t prof_last_log_ms  = 0;
 static inline void audio_update_level(void);
 static inline void audio_integrate(uint32_t ticks);
 
+// PIZERO-143: the Games Master Cartridge's SN76489. Written from the bus
+// (odd $FF40-$FF5F with a banked cart in), rendered at each audio sample in
+// audio_integrate, both on core 0, so a write lands between samples exactly
+// where the program made it. Idle, and costing nothing, until first written.
+static struct sn76489 g_csg;
+static bool     g_csg_active = false;
+static uint32_t g_csg_last_write = 0;
+static uint32_t g_csg_dropped = 0;       // writes inside the chip's ready gap
+
+static void csg_reset(void) {
+    sn_reset(&g_csg);
+    g_csg_active = false;
+}
+
 extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     (void)sptr;
     g_m.total_mem_cycles++;
@@ -570,7 +585,17 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
             if (!g_m.cart_banked) fdc_io_write(A, g_m.cpu->D);
             else if (gmc_is_bank_register(A))                            // PIZERO-142
                 g_m.cart_rom = g_m.cart_base + gmc_bank_offset(g_m.cpu->D, g_m.cart_len);
-            else g_m.csg_writes++;
+            else {                                                       // PIZERO-143
+                g_m.csg_writes++;
+                uint32_t now = (uint32_t)event_current_tick;
+                if (sn_ready(g_csg_last_write, now)) {
+                    sn_write(&g_csg, g_m.cpu->D);
+                    g_csg_last_write = now;
+                    g_csg_active = true;
+                } else {
+                    g_csg_dropped++;
+                }
+            }
         }
         else if (A < 0x8000)             g_m.ram[A] = g_m.cpu->D;
         else if (g_m.sam_ty && A < 0xFF00) g_m.ram[A] = g_m.cpu->D;  // all-RAM mode
@@ -896,6 +921,7 @@ static inline void audio_integrate(uint32_t ticks) {
         int32_t  acc = g_aud_acc - over_val;
         uint32_t tk  = g_aud_tk  - over_tk;
         int s = tk ? (int)(acc / (int32_t)tk) : g_dac_level;
+        if (g_csg_active) s += sn_render(&g_csg, tk);   // PIZERO-143: GMC sound
         audio_emit(s);
         g_aud_acc = over_val;
         g_aud_tk  = over_tk;
@@ -1034,6 +1060,7 @@ extern "C" void coco_machine_install_cart(const uint8_t *rom8k) {
 }
 
 extern "C" void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len) {
+    csg_reset();                         // PIZERO-143: the chip leaves with its cart
     g_m.cart_banked = false;
     g_m.cart_base = rom;
     g_m.cart_len = len;
@@ -1054,9 +1081,11 @@ extern "C" void coco_machine_install_cart_banked(const uint8_t *rom, uint32_t le
     g_m.cart_base = rom;
     g_m.cart_len = len;
     g_m.csg_writes = 0;
+    g_csg_dropped = 0;
 }
 
 extern "C" uint32_t coco_machine_cart_csg_writes(void) { return g_m.csg_writes; }
+extern "C" uint32_t coco_machine_cart_csg_dropped(void) { return g_csg_dropped; }
 
 // PIZERO-81d: a power-on restart without a power cycle, for launching from
 // the F12 overlay. Ported from the Fruit Jam port's coco_machine_cold_reset
@@ -1094,6 +1123,7 @@ extern "C" void coco_machine_cold_reset(void) {
     g_m.cart_toggle_remaining = 88950;
     g_m.cart_cb1_level = true;
     if (g_m.cart_banked) g_m.cart_rom = g_m.cart_base;   // PIZERO-142: bank 0
+    csg_reset();                                          // PIZERO-143: silent at power-on
     g_m.cpu->reset(g_m.cpu);
 }
 
