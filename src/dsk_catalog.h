@@ -11,8 +11,8 @@
 //
 // Rules, most of them learned by the Fruit Jam port (src/coco/coco_main.cpp
 // scan_dsk_dir):
-//   * by kind: *.dsk; *.bin; *.rom or *.ccc (not the machine's own ROMs:
-//     bas*, extbas*, coco3*). Case-insensitive; directories and dotfiles
+//   * by kind: *.dsk; *.bin; *.ccc (the cartridge extension; .rom is left
+//     to the machine's own ROMs). Case-insensitive; directories and dotfiles
 //     skipped, which includes the macOS "._NAME.DSK" AppleDouble files
 //   * a name too long to store is SKIPPED, not truncated, because a truncated
 //     name cannot be opened again (FRUITJAM-103); the count is kept so the
@@ -72,12 +72,7 @@ static inline bool cat_accepts(int kind, const char *fname, bool is_dir) {
     switch (kind) {
     case CAT_DSK: return strcasecmp(ext, ".dsk") == 0;
     case CAT_BIN: return strcasecmp(ext, ".bin") == 0;
-    case CAT_CART:
-        if (strcasecmp(ext, ".rom") != 0 && strcasecmp(ext, ".ccc") != 0) return false;
-        // The machine's own ROMs share the folder and the extension but are
-        // not cartridges. disk11.rom stays: it is the Disk BASIC cartridge.
-        return strncasecmp(fname, "bas", 3) != 0 && strncasecmp(fname, "extbas", 6) != 0
-            && strncasecmp(fname, "coco3", 5) != 0;
+    case CAT_CART: return strcasecmp(ext, ".ccc") == 0;
     default: return false;
     }
 }

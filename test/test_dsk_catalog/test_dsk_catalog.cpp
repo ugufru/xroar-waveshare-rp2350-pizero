@@ -113,14 +113,13 @@ static void test_display_name_drops_the_extension_and_clips(void) {
 static void test_bin_and_cart_lists(void) {
     TEST_ASSERT_TRUE(cat_accepts(CAT_BIN, "GAME.BIN", false));
     TEST_ASSERT_FALSE(cat_accepts(CAT_BIN, "GAME.DSK", false));
-    TEST_ASSERT_TRUE(cat_accepts(CAT_CART, "POLARIS.ROM", false));
+    // Cartridges are .ccc. The .rom files beside them are the machine's own
+    // ROMs (bas12, extbas11, disk11) and are never listed.
+    TEST_ASSERT_TRUE(cat_accepts(CAT_CART, "POLARIS.CCC", false));
     TEST_ASSERT_TRUE(cat_accepts(CAT_CART, "pooyan.ccc", false));
-    TEST_ASSERT_TRUE(cat_accepts(CAT_CART, "disk11.rom", false));   // Disk BASIC is a cart
-    // The machine's own ROMs live beside the carts but are not carts.
+    TEST_ASSERT_FALSE(cat_accepts(CAT_CART, "disk11.rom", false));
     TEST_ASSERT_FALSE(cat_accepts(CAT_CART, "bas12.rom", false));
-    TEST_ASSERT_FALSE(cat_accepts(CAT_CART, "EXTBAS11.ROM", false));
-    TEST_ASSERT_FALSE(cat_accepts(CAT_CART, "coco3.rom", false));
-    TEST_ASSERT_FALSE(cat_accepts(CAT_CART, "._POLARIS.ROM", false));
+    TEST_ASSERT_FALSE(cat_accepts(CAT_CART, "._POLARIS.CCC", false));
 
     char p[96];
     dsk_cat_clear(&cat, CAT_BIN);
@@ -132,9 +131,9 @@ static void test_bin_and_cart_lists(void) {
     TEST_ASSERT_EQUAL_STRING("0:/coco/OTHER.BIN", p);
     dsk_cat_clear(&cat, CAT_CART);
     TEST_ASSERT_FALSE(dsk_cat_add(&cat, "GAME.DSK", false, DSK_DIR_DSK));  // wrong kind
-    dsk_cat_add(&cat, "POLARIS.ROM", false, DSK_DIR_DSK);
+    dsk_cat_add(&cat, "POLARIS.CCC", false, DSK_DIR_DSK);
     TEST_ASSERT_TRUE(dsk_cat_path(&cat, 0, p, sizeof p));
-    TEST_ASSERT_EQUAL_STRING("0:/coco/roms/POLARIS.ROM", p);
+    TEST_ASSERT_EQUAL_STRING("0:/coco/roms/POLARIS.CCC", p);
     char name[32];
     dsk_cat_display_name("POOYAN.CCC", name, 27);
     TEST_ASSERT_EQUAL_STRING("POOYAN", name);
