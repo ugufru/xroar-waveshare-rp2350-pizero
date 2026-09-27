@@ -196,17 +196,51 @@ static int rows_needed(const char *s, int width) {
     return rows;
 }
 static void test_overlay_words_fit_and_print(void) {
-    TEST_ASSERT_TRUE(strlen(OVL_TITLE) <= CARD_COLS);
-    TEST_ASSERT_TRUE(strlen(OVL_LEGEND) <= CARD_COLS);
-    TEST_ASSERT_TRUE(strlen(OVL_EMPTY_1) <= CARD_COLS);
-    TEST_ASSERT_TRUE(rows_needed(OVL_EMPTY_2, 28) <= 4);   // drawn wrapped, 4 rows
+    const char *one_line[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART,
+                               OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART };
+    for (unsigned i = 0; i < sizeof one_line / sizeof one_line[0]; i++)
+        TEST_ASSERT_TRUE_MESSAGE(strlen(one_line[i]) <= CARD_COLS, one_line[i]);
+    const char *wrapped[] = { OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART };
+    for (unsigned i = 0; i < 3; i++)                       // drawn at 28 wide, 6 rows
+        TEST_ASSERT_TRUE_MESSAGE(rows_needed(wrapped[i], 28) <= 6, wrapped[i]);
     char skipped[64];
     snprintf(skipped, sizeof skipped, OVL_SKIPPED, 128);  // worst case
     TEST_ASSERT_TRUE(strlen(skipped) <= CARD_COLS);
-    const char *all[] = { OVL_TITLE, OVL_LEGEND, OVL_EMPTY_1, OVL_EMPTY_2, skipped };
+    const char *all[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART,
+                          OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART,
+                          OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART, skipped };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++)
         for (const char *p = all[i]; *p; p++)
             TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
+}
+
+static void test_left_right_switch_list_and_enter_launches(void) {
+    open_with(3);
+    struct ovk_result r = press(HK_RIGHT);
+    TEST_ASSERT_EQUAL_UINT8(OVK_KIND, r.action);
+    TEST_ASSERT_EQUAL_INT8(+1, r.drive);
+    TEST_ASSERT_EQUAL_UINT8(OVK_NONE, press(HK_RIGHT).action);   // held
+    none();
+    r = press(HK_LEFT);
+    TEST_ASSERT_EQUAL_UINT8(OVK_KIND, r.action);
+    TEST_ASSERT_EQUAL_INT8(-1, r.drive);
+    none();
+    TEST_ASSERT_EQUAL_UINT8(OVK_LAUNCH, press(0x28).action);    // ENTER
+    TEST_ASSERT_TRUE(s.open);            // the overlay decides whether to close
+    none();
+    TEST_ASSERT_EQUAL_UINT8(OVK_LAUNCH, press(HK_KP_ENTER).action);
+    none();
+    // Closed, ENTER and the arrows are the CoCo's own keys.
+    press(HK_ESC); none();
+    TEST_ASSERT_FALSE(press(0x28).swallow);
+    TEST_ASSERT_FALSE(press(HK_LEFT).swallow);
+}
+
+static void test_enter_on_an_empty_list_does_nothing(void) {
+    open_with(0);
+    TEST_ASSERT_EQUAL_UINT8(OVK_NONE, press(0x28).action);
+    none();
+    TEST_ASSERT_EQUAL_UINT8(OVK_KIND, press(HK_RIGHT).action);   // can still switch
 }
 
 int main(void) {
@@ -225,5 +259,7 @@ int main(void) {
     RUN_TEST(test_rescan_keeps_selection_in_range);
     RUN_TEST(test_window_follows_selection);
     RUN_TEST(test_overlay_words_fit_and_print);
+    RUN_TEST(test_left_right_switch_list_and_enter_launches);
+    RUN_TEST(test_enter_on_an_empty_list_does_nothing);
     return UNITY_END();
 }

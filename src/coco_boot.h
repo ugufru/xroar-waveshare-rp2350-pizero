@@ -25,10 +25,10 @@ bool coco_boot_resolve(const char *subdir, const char *name,
 // Fills `out` with the full path on success.
 bool coco_boot_find_default_dsk(char *out, size_t out_sz);
 
-// PIZERO-81a: rebuild the disk catalogue the F12 overlay lists (rules in
-// dsk_catalog.h). Returns the number of images listed.
+// PIZERO-81a/136: rebuild the list the F12 overlay shows, for one kind
+// (enum cat_kind in dsk_catalog.h). Returns the number of entries listed.
 struct dsk_catalog;
-int coco_boot_rescan_dsk(void);
+int coco_boot_rescan(int kind);
 const struct dsk_catalog *coco_boot_dsk_catalog(void);
 
 // Parsed autorun.txt. Bare-name fields (cart_name etc.) are "" if the

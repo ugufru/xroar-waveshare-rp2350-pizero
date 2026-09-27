@@ -1016,6 +1016,43 @@ extern "C" void coco_machine_install_cart(const uint8_t *rom8k) {
     g_m.cart_cb1_level = true;
 }
 
+// PIZERO-81d: a power-on restart without a power cycle, for launching from
+// the F12 overlay. Ported from the Fruit Jam port's coco_machine_cold_reset
+// (FRUITJAM-69), whose reasoning holds here too:
+//   * RAM is zeroed, so Color BASIC's warm-start flag cannot match and the
+//     ROM takes the cold path: banner, RAM clear, no old program left.
+//   * The SAM must be reset. A program that left it in all-RAM mode (TY,
+//     $FFDF) would otherwise map $A000-$BFFF to the RAM just zeroed; the
+//     reset vector still comes from ROM, so the CPU would jump into ROM
+//     space and execute zeros, forever. The real SAM's RESET clears this.
+//   * The PIAs are left alone: they do not gate ROM visibility, BASIC
+//     programs them during init, and mc6821_reset() would clobber the
+//     in_source/preread hookups coco_machine_init installs after it.
+// The cartridge, the disk reader and the mounted drives are kept: the
+// caller has just chosen them. Our own additions go back to power-on state
+// too: the palette, the GIME timer and the FDC's registers.
+extern "C" void coco_machine_cold_reset(void) {
+    if (!g_m.cpu) return;
+    coco_machine_release_all_keys();
+    memset(g_m.ram, 0, 64 * 1024);
+    g_m.sam->reset(g_m.sam);
+    g_m.sam_ty = false;
+    g_m.sam_f  = 0;
+    coco_machine_palette_reset();
+#ifdef GIME_TIMER
+    gime_timer_reset(&g_gime);
+#endif
+    g_m.fdc_status = 0x04;
+    g_m.fdc_track = g_m.fdc_sector = g_m.fdc_data = g_m.fdc_command = 0;
+    g_m.fdc_latch = 0;
+    g_m.fdc_drive = 0;
+    g_m.fdc_busy = false;
+    g_m.fdc_buf_pos = g_m.fdc_buf_len = 0;
+    g_m.cart_toggle_remaining = 88950;
+    g_m.cart_cb1_level = true;
+    g_m.cpu->reset(g_m.cpu);
+}
+
 extern "C" const uint8_t *coco_machine_get_vdg_buffer(void) {
     return g_m.vdg_buffer;
 }

@@ -1,4 +1,8 @@
-// dsk_catalog.h — the list of disk images the F12 overlay offers (PIZERO-81a).
+// dsk_catalog.h: the lists the F12 overlay offers (PIZERO-81a, PIZERO-136).
+//
+// One list at a time, of one kind: disk images (DSK), machine-language
+// programs (BIN) or cartridge ROMs (CART). Left/right in the overlay switch
+// kind and rescan, so only one list is ever held in RAM.
 //
 // Pure logic, no FatFs: which directory entries count as a disk image, how
 // the list is ordered and capped, and how an entry turns back into a path.
@@ -7,13 +11,15 @@
 //
 // Rules, most of them learned by the Fruit Jam port (src/coco/coco_main.cpp
 // scan_dsk_dir):
-//   * only *.dsk, case-insensitive; directories and dotfiles skipped, which
-//     includes the macOS "._NAME.DSK" AppleDouble files that look like disks
+//   * by kind: *.dsk; *.bin; *.rom or *.ccc (not the machine's own ROMs:
+//     bas*, extbas*, coco3*). Case-insensitive; directories and dotfiles
+//     skipped, which includes the macOS "._NAME.DSK" AppleDouble files
 //   * a name too long to store is SKIPPED, not truncated, because a truncated
 //     name cannot be opened again (FRUITJAM-103); the count is kept so the
 //     overlay can say so rather than silently hide a file
-//   * /coco/dsk is searched before /coco, matching coco_boot_resolve, and a
-//     name found in both is listed once, from /coco/dsk
+//   * the kind's own folder (/coco/dsk, /coco/bin, /coco/roms) is searched
+//     before /coco, matching coco_boot_resolve, and a name found in both is
+//     listed once, from the kind's folder
 //   * sorted case-insensitively, capped at DSK_CAT_MAX
 
 #ifndef DSK_CATALOG_H
@@ -27,7 +33,14 @@
 #define DSK_CAT_MAX      128
 #define DSK_NAME_MAX     64     // bytes including the terminator
 
-enum { DSK_DIR_DSK = 0, DSK_DIR_ROOT = 1 };   // /coco/dsk, /coco
+enum cat_kind { CAT_DSK = 0, CAT_BIN, CAT_CART, CAT_KINDS };
+enum { DSK_DIR_DSK = 0, DSK_DIR_ROOT = 1 };   // the kind's folder, then /coco
+
+// The kind's own folder; dir DSK_DIR_ROOT is always /coco.
+static inline const char *cat_kind_dir(int kind) {
+    return kind == CAT_BIN ? "0:/coco/bin" : kind == CAT_CART ? "0:/coco/roms"
+                                                              : "0:/coco/dsk";
+}
 
 struct dsk_entry {
     char    name[DSK_NAME_MAX];
@@ -35,25 +48,42 @@ struct dsk_entry {
 };
 
 struct dsk_catalog {
+    int kind;                    // enum cat_kind
     struct dsk_entry e[DSK_CAT_MAX];
     int n;
     int skipped_long;            // names that did not fit DSK_NAME_MAX
     int skipped_full;            // images beyond DSK_CAT_MAX
 };
 
-static inline void dsk_cat_clear(struct dsk_catalog *c) {
+static inline void dsk_cat_clear(struct dsk_catalog *c, int kind) {
+    c->kind = kind;
     c->n = 0;
     c->skipped_long = 0;
     c->skipped_full = 0;
 }
 
-// Does this directory entry name a disk image? Length is judged separately
-// by dsk_cat_add, so an over-long image is counted rather than ignored.
-static inline bool dsk_cat_is_image(const char *fname, bool is_dir) {
+// Does this directory entry belong in a list of this kind? Length is judged
+// separately by dsk_cat_add, so an over-long name is counted, not ignored.
+static inline bool cat_accepts(int kind, const char *fname, bool is_dir) {
     if (!fname || !fname[0] || is_dir) return false;
     if (fname[0] == '.') return false;
     const char *ext = strrchr(fname, '.');
-    return ext && ext != fname && strcasecmp(ext, ".dsk") == 0;
+    if (!ext || ext == fname) return false;
+    switch (kind) {
+    case CAT_DSK: return strcasecmp(ext, ".dsk") == 0;
+    case CAT_BIN: return strcasecmp(ext, ".bin") == 0;
+    case CAT_CART:
+        if (strcasecmp(ext, ".rom") != 0 && strcasecmp(ext, ".ccc") != 0) return false;
+        // The machine's own ROMs share the folder and the extension but are
+        // not cartridges. disk11.rom stays: it is the Disk BASIC cartridge.
+        return strncasecmp(fname, "bas", 3) != 0 && strncasecmp(fname, "extbas", 6) != 0
+            && strncasecmp(fname, "coco3", 5) != 0;
+    default: return false;
+    }
+}
+
+static inline bool dsk_cat_is_image(const char *fname, bool is_dir) {
+    return cat_accepts(CAT_DSK, fname, is_dir);
 }
 
 static inline int dsk_cat_find_name(const struct dsk_catalog *c, const char *name) {
@@ -66,7 +96,7 @@ static inline int dsk_cat_find_name(const struct dsk_catalog *c, const char *nam
 // before /coco so the duplicate rule keeps the /coco/dsk copy.
 static inline bool dsk_cat_add(struct dsk_catalog *c, const char *fname,
                                bool is_dir, uint8_t dir) {
-    if (!dsk_cat_is_image(fname, is_dir)) return false;
+    if (!cat_accepts(c->kind, fname, is_dir)) return false;
     if (strlen(fname) >= DSK_NAME_MAX) { c->skipped_long++; return false; }
     if (dsk_cat_find_name(c, fname) >= 0) return false;
     if (c->n >= DSK_CAT_MAX) { c->skipped_full++; return false; }
@@ -93,8 +123,8 @@ static inline void dsk_cat_sort(struct dsk_catalog *c) {
 static inline bool dsk_cat_path(const struct dsk_catalog *c, int i,
                                 char *out, size_t out_sz) {
     if (i < 0 || i >= c->n || !out) return false;
-    int len = snprintf(out, out_sz, c->e[i].dir == DSK_DIR_DSK
-                                        ? "0:/coco/dsk/%s" : "0:/coco/%s",
+    int len = snprintf(out, out_sz, "%s/%s",
+                       c->e[i].dir == DSK_DIR_DSK ? cat_kind_dir(c->kind) : "0:/coco",
                        c->e[i].name);
     return len > 0 && (size_t)len < out_sz;
 }
@@ -109,13 +139,13 @@ static inline int dsk_cat_find_path(const struct dsk_catalog *c, const char *pat
     return -1;
 }
 
-// The name as the overlay shows it: every entry is a .dsk, so the extension
-// is dropped to leave more of the name on a 32-column screen. Clipped to
-// `width` characters.
+// The name as the overlay shows it: the list's kind already says what the
+// files are, so the extension is dropped to leave more of the name on a
+// 32-column screen. Clipped to `width` characters.
 static inline void dsk_cat_display_name(const char *name, char *out, int width) {
     int len = (int)strlen(name);
     const char *ext = strrchr(name, '.');
-    if (ext && strcasecmp(ext, ".dsk") == 0) len = (int)(ext - name);
+    if (ext && ext != name) len = (int)(ext - name);
     if (len > width) len = width;
     memcpy(out, name, (size_t)len);
     out[len] = '\0';

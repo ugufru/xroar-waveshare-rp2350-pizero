@@ -1,4 +1,4 @@
-// overlay_keys.h — what the keyboard does to the F12 disk overlay
+// overlay_keys.h: what the keyboard does to the F12 disk overlay
 // (PIZERO-81c, PIZERO-114). Pure logic, host-tested: fed the 6 keycodes of
 // each USB HID boot report, it says whether the report belongs to the
 // overlay (and so must never reach the CoCo) and what it asks for.
@@ -14,8 +14,9 @@
 //     (FRUITJAM-68: otherwise the ESC that closed it arrives as a BREAK).
 //
 // Keys while open: Up/Down move (wrapping), PgUp/PgDn/Home/End jump
-// (clamped), 0-3 toggle the highlighted disk in that drive, F12 or ESC
-// close. Held Up/Down repeat.
+// (clamped), Left/Right switch list (disks, programs, cartridges), ENTER
+// starts the highlighted entry, 0-3 toggle the highlighted disk in that
+// drive, F12 or ESC close. Held Up/Down repeat.
 
 #ifndef OVERLAY_KEYS_H
 #define OVERLAY_KEYS_H
@@ -26,21 +27,31 @@
 // HID usage codes (keyboard page)
 #define HK_1      0x1E   // 1..9 are 0x1E..0x26, 0 is 0x27
 #define HK_0      0x27
+#define HK_ENTER  0x28
 #define HK_ESC    0x29
 #define HK_F12    0x45
 #define HK_HOME   0x4A
 #define HK_PGUP   0x4B
 #define HK_END    0x4D
 #define HK_PGDN   0x4E
+#define HK_RIGHT  0x4F
+#define HK_LEFT   0x50
 #define HK_DOWN   0x51
 #define HK_UP     0x52
+#define HK_KP_ENTER 0x58
 
 // The overlay's fixed words, here so the host test can check they fit the
 // 32-column card and use only characters the 6847 can draw.
-#define OVL_TITLE        "DISK DRIVES"
-#define OVL_LEGEND       "0-3 DRIVE  ARROWS MOVE  ESC EXIT"
-#define OVL_EMPTY_1      "NO DISK IMAGES FOUND."
-#define OVL_EMPTY_2      "PUT .DSK FILES IN /COCO/DSK ON THE SD CARD."
+// One set per list, indexed by enum cat_kind (DSK, BIN, CART).
+#define OVL_TITLE_DSK    "< DISKS >"
+#define OVL_TITLE_BIN    "< PROGRAMS >"
+#define OVL_TITLE_CART   "< CARTRIDGES >"
+#define OVL_LEGEND_DSK   "0-3 DRIVE  ENTER BOOT  <> TYPE"
+#define OVL_LEGEND_BIN   "ENTER RUN  <> TYPE  ESC EXIT"
+#define OVL_LEGEND_CART  "ENTER START  <> TYPE  ESC EXIT"
+#define OVL_EMPTY_DSK    "NO DISK IMAGES FOUND. PUT .DSK FILES IN /COCO/DSK ON THE SD CARD."
+#define OVL_EMPTY_BIN    "NO PROGRAMS FOUND. PUT .BIN FILES IN /COCO/BIN ON THE SD CARD."
+#define OVL_EMPTY_CART   "NO CARTRIDGES FOUND. PUT 8K .ROM OR .CCC FILES IN /COCO/ROMS ON THE SD CARD."
 #define OVL_SKIPPED      "%d NAME(S) TOO LONG, NOT SHOWN"
 
 #define OVK_ROWS          14   // list rows on screen: one page
@@ -53,11 +64,13 @@ enum ovk_action {
     OVK_CLOSE,       // caller: copy this report into its previous-codes, resume
     OVK_MOVED,       // selection changed: redraw
     OVK_DRIVE,       // toggle the highlighted disk in drive `drive`
+    OVK_KIND,        // switch list: `drive` holds the direction, -1 or +1
+    OVK_LAUNCH,      // ENTER: start the highlighted entry
 };
 
 struct ovk_result {
     uint8_t action;
-    int8_t  drive;       // for OVK_DRIVE, 0-3
+    int8_t  drive;       // OVK_DRIVE: 0-3; OVK_KIND: -1 or +1
     bool    swallow;     // true: this report must not reach the CoCo
 };
 
@@ -143,6 +156,11 @@ static inline struct ovk_result ovk_report(struct ovk_state *s,
         ovk_step(s, +OVK_ROWS, false);
     } else if (ovk_newly(s, codes, HK_PGUP)) {
         ovk_step(s, -OVK_ROWS, false);
+    } else if (ovk_newly(s, codes, HK_LEFT) || ovk_newly(s, codes, HK_RIGHT)) {
+        r.action = OVK_KIND;
+        r.drive = ovk_newly(s, codes, HK_RIGHT) ? +1 : -1;
+    } else if (ovk_newly(s, codes, HK_ENTER) || ovk_newly(s, codes, HK_KP_ENTER)) {
+        if (s->n > 0) r.action = OVK_LAUNCH;
     } else if (ovk_newly(s, codes, HK_HOME)) {
         s->sel = 0;
     } else if (ovk_newly(s, codes, HK_END)) {

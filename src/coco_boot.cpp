@@ -205,10 +205,11 @@ extern "C" bool coco_boot_find_default_dsk(char *out, size_t out_sz) {
     return false;
 }
 
-// PIZERO-81a: the disk catalogue the F12 overlay lists. The rules (what
-// counts, order, cap, duplicates) are in dsk_catalog.h and tested on the
-// host; this is only the FatFs walk. /coco/dsk first, then /coco, so a name
-// in both is listed from /coco/dsk, as coco_boot_resolve would find it.
+// PIZERO-81a/136: the list the F12 overlay shows, of one kind at a time
+// (disks, programs or cartridges). The rules (what counts, order, cap,
+// duplicates) are in dsk_catalog.h and tested on the host; this is only the
+// FatFs walk. The kind's folder first, then /coco, so a name in both is
+// listed from the kind's folder, as coco_boot_resolve would find it.
 static struct dsk_catalog g_dsk_cat;
 
 static void cat_scan_dir(const char *dir, uint8_t which) {
@@ -222,9 +223,9 @@ static void cat_scan_dir(const char *dir, uint8_t which) {
     f_closedir(&d);
 }
 
-extern "C" int coco_boot_rescan_dsk(void) {
-    dsk_cat_clear(&g_dsk_cat);
-    cat_scan_dir("0:/coco/dsk", DSK_DIR_DSK);
+extern "C" int coco_boot_rescan(int kind) {
+    dsk_cat_clear(&g_dsk_cat, kind);
+    cat_scan_dir(cat_kind_dir(kind), DSK_DIR_DSK);
     cat_scan_dir("0:/coco", DSK_DIR_ROOT);
     dsk_cat_sort(&g_dsk_cat);
     return g_dsk_cat.n;

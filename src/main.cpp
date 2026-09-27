@@ -114,6 +114,7 @@ extern "C" {
 #include "coco_boot.h"
 #include "dsk_catalog.h"   // PIZERO-81a
 #include "disk_overlay.h"  // PIZERO-81/114: F12 disk drives overlay
+#include "rsdos_dir.h"     // PIZERO-81d: find the program to run on a disk
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -874,6 +875,122 @@ static void boot_page(const char *title, const char *body, const char *detail) {
     present_card();
 }
 
+// ---- Launching from the F12 overlay (PIZERO-81d, PIZERO-136) --------------
+// The overlay asks through overlay_launch_request() while it is still open,
+// so anything that can be checked up front (a missing disk11.rom, a cart of
+// the wrong size, a .bin that is not LOADM format) is reported on its status
+// line and the running program is left alone. Once accepted, the overlay
+// closes and loop() performs the launch before its next frame.
+//
+//   DISK  that disk into drive 0 (other drives kept), Disk BASIC, cold boot,
+//         then type RUN"X" or LOADM"X":EXEC for the disk's first program.
+//   BIN   no cartridge, cold boot, let BASIC settle, load and jump: the same
+//         as @DIRECT at power-on.
+//   CART  install it, cold boot; the cart FIRQ takes the machine to $C000.
+static int  g_launch_kind = -1;          // -1 = nothing pending
+static char g_launch_path[96];
+static char g_launch_cmd[32];            // the autotype command for DISK
+static int  g_bin_settle = 0;            // frames until a pending BIN is loaded
+
+static void noop_loadm_cb(uint16_t, const uint8_t *, uint16_t, void *) {}
+
+static bool overlay_launch_request(int kind, const char *path, char *msg, size_t msg_sz) {
+    if (strlen(path) >= sizeof g_launch_path) return false;
+    FILINFO fi;
+    switch (kind) {
+    case CAT_DSK: {
+        char rom[80];
+        if (!coco_boot_resolve("rom", "disk11.rom", rom, sizeof rom)) {
+            snprintf(msg, msg_sz, "NEEDS DISK11.ROM");
+            return false;
+        }
+        break;
+    }
+    case CAT_BIN: {
+        uint16_t entry = 0;
+        if (!coco_boot_parse_loadm(path, noop_loadm_cb, nullptr, &entry)) {
+            snprintf(msg, msg_sz, "NOT A LOADM PROGRAM");
+            return false;
+        }
+        break;
+    }
+    case CAT_CART:
+        if (f_stat(path, &fi) != FR_OK) { snprintf(msg, msg_sz, "CANNOT OPEN IT"); return false; }
+        if (fi.fsize == 16384)          { snprintf(msg, msg_sz, "16K CARTS NOT YET SUPPORTED"); return false; }
+        if (fi.fsize != 8192)           { snprintf(msg, msg_sz, "NOT AN 8K CARTRIDGE"); return false; }
+        break;
+    default:
+        return false;
+    }
+    g_launch_kind = kind;
+    strcpy(g_launch_path, path);
+    return true;
+}
+
+// The first runnable program on drive 0, as the command that starts it.
+static bool disk_run_command(char *out, size_t out_sz) {
+    uint8_t sec[256];
+    char name[9];
+    int type = 0;
+    for (int s = RSDOS_DIR_FIRST_SEC; s <= RSDOS_DIR_LAST_SEC; s++) {
+        if (coco_boot_disk_read_sector(0, RSDOS_DIR_TRACK, (unsigned)s, sec) != 0) return false;
+        int r = rsdos_scan_sector(sec, name, &type);
+        if (r < 0) return false;
+        if (r > 0) return rsdos_run_command(name, type, out, out_sz) > 0;
+    }
+    return false;
+}
+
+static void perform_launch(void) {
+    int kind = g_launch_kind;
+    g_launch_kind = -1;
+    g_autotype = nullptr;                         // drop anything still queued
+    g_bin_settle = 0;
+    Serial.printf("[launch] %s %s\r\n",
+                  kind == CAT_DSK ? "disk" : kind == CAT_BIN ? "program" : "cart",
+                  g_launch_path);
+    switch (kind) {
+    case CAT_DSK:
+        if (!coco_boot_mount_drive(0, g_launch_path)) return;
+        if (!coco_boot_load_cart_named("disk11.rom", g_cart_rom)) return;
+        coco_machine_install_cart(g_cart_rom);
+        coco_machine_install_disk_reader(coco_boot_disk_read_sector);
+        coco_machine_cold_reset();
+        if (disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
+            g_autotype = g_launch_cmd;
+            g_autotype_warmup = 180;              // same wait as autorun.txt
+            Serial.printf("[launch] will type %s\n", g_launch_cmd);
+        } else {
+            Serial.print("[launch] no program on the disk: BASIC prompt\r\n");
+        }
+        break;
+    case CAT_BIN:
+        coco_machine_install_cart(nullptr);
+        coco_machine_cold_reset();
+        g_bin_settle = 30;                        // as at power-on: PIA DDRs settle
+        break;
+    case CAT_CART: {
+        char name[64];
+        const char *slash = strrchr(g_launch_path, '/');
+        snprintf(name, sizeof name, "%s", slash ? slash + 1 : g_launch_path);
+        if (!coco_boot_load_cart_named(name, g_cart_rom)) return;
+        coco_machine_install_cart(g_cart_rom);
+        coco_machine_cold_reset();
+        break;
+    }
+    }
+}
+
+// A pending BIN, once BASIC has had its settling frames.
+static void bin_settle_tick(void) {
+    if (g_bin_settle <= 0 || --g_bin_settle > 0) return;
+    uint16_t entry = 0;
+    if (coco_boot_parse_loadm(g_launch_path, loadm_write_cb, nullptr, &entry)) {
+        Serial.printf("[launch] jump $%04X\r\n", entry);
+        coco_machine_jump(entry);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
@@ -1221,7 +1338,7 @@ void setup() {
     // PIZERO-81a: the disk catalogue the F12 overlay lists, dumped once so it
     // can be checked over serial before anything is drawn.
     {
-        int n = coco_boot_rescan_dsk();
+        int n = coco_boot_rescan(CAT_DSK);
         const struct dsk_catalog *cat = coco_boot_dsk_catalog();
         Serial.printf("[dsk] %d image(s)", n);
         if (cat->skipped_long) Serial.printf(", %d skipped (name too long)", cat->skipped_long);
@@ -1284,7 +1401,7 @@ void setup() {
         }
     }
 #endif // AUDIO_WAV_DUMP
-    disk_overlay_init(present_card);   // PIZERO-81: F12 disk drives overlay
+    disk_overlay_init(present_card, overlay_launch_request);   // PIZERO-81: F12 overlay
     g_machine_running = true;
     Serial.print("[main] coco_machine running\r\n");
 #ifdef AUDIO_WAV_DUMP
@@ -1388,6 +1505,8 @@ void loop() {
         disk_overlay_frame(g_frame_count);
         d = micros();
     } else {
+    if (g_launch_kind >= 0) perform_launch();     // PIZERO-81d: chosen in the overlay
+    bin_settle_tick();
     wd_phase(WP_KBD);
     pump_keyboard();
     a = micros();

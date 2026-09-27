@@ -29,6 +29,10 @@ _Bool coco_machine_init(const uint8_t *rom, size_t rom_len);
  * FIRQ pulse so autobooting carts (DECB) jump to $C000 on next reset. */
 void coco_machine_install_cart(const uint8_t *rom8k);
 
+/* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,
+ * SAM reset), keeping the installed cartridge, disk reader and drives. */
+void coco_machine_cold_reset(void);
+
 /* Floppy disk callback. drive/track/sector identify the requested sector.
  * Write 256 bytes into `out256`. Return 0 on success, COCO_DISK_NOT_READY
  * for an empty drive, or any other non-zero value for an error (record not
