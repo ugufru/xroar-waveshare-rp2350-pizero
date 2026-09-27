@@ -86,7 +86,7 @@ power-on.
 ### `@CART filename.ccc` (or `.rom`)
 Install this cartridge ROM at `$C000`. Searched in `/coco/cart/` first, then
 `/coco/roms/`, then `/coco/`; a name without an extension gets `.CCC` in
-`/coco/cart/` (PIZERO-136). Cartridges must be 8 KB.
+`/coco/cart/` (PIZERO-136). Cartridges may be 2, 4, 8 or 16 KB (PIZERO-139).
 
 If absent: the loader installs `/coco/roms/disk11.rom` (or `/coco/disk11.rom`)
 if found. If neither exists, the cart is empty (Color BASIC only — no

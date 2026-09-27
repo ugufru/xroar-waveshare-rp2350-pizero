@@ -146,4 +146,10 @@ static inline void dsk_cat_display_name(const char *name, char *out, int width) 
     out[len] = '\0';
 }
 
+// PIZERO-139: a cartridge image the machine can map: 2, 4, 8 or 16 KB, and
+// no bigger than the build's cartridge buffer.
+static inline bool cat_cart_size_ok(unsigned long size, unsigned long max) {
+    return (size == 2048 || size == 4096 || size == 8192 || size == 16384) && size <= max;
+}
+
 #endif  // DSK_CATALOG_H

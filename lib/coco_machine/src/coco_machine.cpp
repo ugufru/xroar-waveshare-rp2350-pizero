@@ -45,7 +45,8 @@ struct CocoMachine {
     uint8_t *ram = nullptr;
     const uint8_t *rom = nullptr;
     size_t rom_len = 0;
-    const uint8_t *cart_rom = nullptr;   // 8 KB at $C000, NULL = no cart
+    const uint8_t *cart_rom = nullptr;   // at $C000, NULL = no cart
+    uint16_t cart_mask = 0x1FFF;         // PIZERO-139: size - 1, so a small cart repeats
     int32_t cart_toggle_remaining = 0;   // 6809 cycles until next CART pulse
     bool    cart_cb1_level = true;
 
@@ -503,8 +504,9 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         case 0:  g_m.cpu->D = g_m.ram[A]; break;
         case 1:
         case 2:  g_m.cpu->D = g_m.rom[A & 0x3FFF]; break;
-        case 3:  // Cartridge ROM at $C000-$DFFF (mirrored to $E000-$FDFF)
-            g_m.cpu->D = g_m.cart_rom ? g_m.cart_rom[A & 0x1FFF] : 0xFF;
+        case 3:  // Cartridge ROM, $C000-$FEFF. A cart smaller than the window
+                 // repeats through it, as real ones do (PIZERO-139).
+            g_m.cpu->D = g_m.cart_rom ? g_m.cart_rom[A & g_m.cart_mask] : 0xFF;
             break;
         case 4:  g_m.cpu->D = mc6821_read(g_m.pia0, A);
                  if ((A & 1) == 0) g_m.pia_irq_dirty = true;  // PADR/PBDR read may clear IRQ
@@ -1008,7 +1010,12 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
 }
 
 extern "C" void coco_machine_install_cart(const uint8_t *rom8k) {
-    g_m.cart_rom = rom8k;
+    coco_machine_install_cart_sized(rom8k, 8192);
+}
+
+extern "C" void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len) {
+    g_m.cart_rom = rom;
+    g_m.cart_mask = (uint16_t)((len >= 2048 && len <= 16384) ? len - 1 : 0x1FFF);
     g_m.cart_toggle_remaining = 88950;
 #ifdef GIME_TIMER
     gime_timer_reset(&g_gime);          // PIZERO-62: stopped until a guest programs it

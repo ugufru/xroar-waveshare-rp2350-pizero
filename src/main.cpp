@@ -419,7 +419,14 @@ static void hid_keyboard_apply(const uint8_t *report) {
 
 // ---- ROM/boot (same flow as the AMOLED port) -----------------------------
 static uint8_t g_coco_rom[16384];
-static uint8_t g_cart_rom[8192];
+// PIZERO-139: room for a 16 KB cartridge. The double-buffered builds have
+// no RAM to spare (two framebuffers), so they keep the old 8 KB limit.
+#ifdef HDMI_DATA_ISLAND
+#define COCO_CART_MAX 16384
+#else
+#define COCO_CART_MAX 8192
+#endif
+static uint8_t g_cart_rom[COCO_CART_MAX];
 
 static bool mount_sd() {
     static FATFS fs;
@@ -916,8 +923,12 @@ static bool overlay_launch_request(int kind, const char *path, char *msg, size_t
     }
     case CAT_CART:
         if (f_stat(path, &fi) != FR_OK) { snprintf(msg, msg_sz, "CANNOT OPEN IT"); return false; }
-        if (fi.fsize == 16384)          { snprintf(msg, msg_sz, "16K CARTS NOT YET SUPPORTED"); return false; }
-        if (fi.fsize != 8192)           { snprintf(msg, msg_sz, "NOT AN 8K CARTRIDGE"); return false; }
+        if (!cat_cart_size_ok((unsigned long)fi.fsize, COCO_CART_MAX)) {
+            snprintf(msg, msg_sz, cat_cart_size_ok((unsigned long)fi.fsize, 16384)
+                                      ? "16K CARTS NOT IN THIS BUILD"
+                                      : "NOT A 2/4/8/16K CARTRIDGE");
+            return false;
+        }
         break;
     default:
         return false;
@@ -950,10 +961,11 @@ static void perform_launch(void) {
                   kind == CAT_DSK ? "disk" : kind == CAT_BIN ? "program" : "cart",
                   g_launch_path);
     switch (kind) {
-    case CAT_DSK:
+    case CAT_DSK: {
         if (!coco_boot_mount_drive(0, g_launch_path)) return;
-        if (!coco_boot_load_cart_named("disk11.rom", g_cart_rom)) return;
-        coco_machine_install_cart(g_cart_rom);
+        uint32_t len = 0;
+        if (!coco_boot_load_cart_named("disk11.rom", g_cart_rom, COCO_CART_MAX, &len)) return;
+        coco_machine_install_cart_sized(g_cart_rom, len);
         coco_machine_install_disk_reader(coco_boot_disk_read_sector);
         coco_machine_cold_reset();
         if (disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
@@ -964,14 +976,16 @@ static void perform_launch(void) {
             Serial.print("[launch] no program on the disk: BASIC prompt\r\n");
         }
         break;
+    }
     case CAT_BIN:
         coco_machine_install_cart(nullptr);
         coco_machine_cold_reset();
         g_bin_settle = 30;                        // as at power-on: PIA DDRs settle
         break;
     case CAT_CART: {
-        if (!coco_boot_load_cart_path(g_launch_path, g_cart_rom)) return;
-        coco_machine_install_cart(g_cart_rom);
+        uint32_t len = 0;
+        if (!coco_boot_load_cart_path(g_launch_path, g_cart_rom, COCO_CART_MAX, &len)) return;
+        coco_machine_install_cart_sized(g_cart_rom, len);
         coco_machine_cold_reset();
         break;
     }
@@ -1379,8 +1393,9 @@ void setup() {
         }
     } else {
         const char *cart = (have_autorun && autorun.cart_name[0]) ? autorun.cart_name : "disk11.rom";
-        if (coco_boot_load_cart_named(cart, g_cart_rom)) {
-            coco_machine_install_cart(g_cart_rom);
+        uint32_t cart_len = 0;
+        if (coco_boot_load_cart_named(cart, g_cart_rom, COCO_CART_MAX, &cart_len)) {
+            coco_machine_install_cart_sized(g_cart_rom, cart_len);
             bool dsk = have_autorun && autorun.disk_name[0]
                        ? (coco_boot_resolve("dsk", autorun.disk_name, path, sizeof(path))
                           && coco_boot_attach_dsk(path))

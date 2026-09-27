@@ -139,6 +139,18 @@ static void test_bin_and_cart_lists(void) {
     TEST_ASSERT_EQUAL_STRING("POOYAN", name);
 }
 
+static void test_cartridge_sizes(void) {
+    // The window is $C000-$FEFF; 2, 4, 8 and 16 KB carts map, repeating.
+    TEST_ASSERT_TRUE(cat_cart_size_ok(2048, 16384));
+    TEST_ASSERT_TRUE(cat_cart_size_ok(4096, 16384));
+    TEST_ASSERT_TRUE(cat_cart_size_ok(8192, 16384));
+    TEST_ASSERT_TRUE(cat_cart_size_ok(16384, 16384));
+    TEST_ASSERT_FALSE(cat_cart_size_ok(16384, 8192));    // the 8 KB builds
+    TEST_ASSERT_FALSE(cat_cart_size_ok(32768, 32768));   // bank-switched: not mapped
+    TEST_ASSERT_FALSE(cat_cart_size_ok(8000, 16384));    // not a power of two
+    TEST_ASSERT_FALSE(cat_cart_size_ok(0, 16384));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_only_dsk_files_count);
@@ -150,5 +162,6 @@ int main(void) {
     RUN_TEST(test_paths_round_trip);
     RUN_TEST(test_display_name_drops_the_extension_and_clips);
     RUN_TEST(test_bin_and_cart_lists);
+    RUN_TEST(test_cartridge_sizes);
     return UNITY_END();
 }

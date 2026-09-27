@@ -69,7 +69,7 @@ same HDMI cable**. Only joystick input remains open.
 4. **F12 for disks, programs and cartridges.** Press **F12** to pause the
    machine and open a list over it. **Left/Right** switch between three lists:
    **disks** (`.dsk` in `/coco/dsk`), **programs** (`.bin` in `/coco/bin`) and
-   **cartridges** (8 KB `.ccc` in `/coco/cart`); each also looks in
+   **cartridges** (2 to 16 KB `.ccc` in `/coco/cart`); each also looks in
    `/coco`. **Up/Down**, **PgUp/PgDn** and **Home/End** move. **ESC** or
    **F12** go back to the running program untouched.
    - *Disks:* **0** to **3** put the highlighted disk in that drive, or take it

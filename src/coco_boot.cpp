@@ -278,25 +278,32 @@ extern "C" bool coco_boot_load_rom_from_sd(uint8_t *rom16k) {
 // PIZERO-136: cartridges (.ccc) live in /coco/cart, so that is searched
 // first; the machine's own cartridge ROM (disk11.rom) is found in /coco/roms
 // as before, and a card with everything in /coco still works.
-extern "C" bool coco_boot_load_cart_named(const char *name, uint8_t *cart8k) {
+extern "C" bool coco_boot_load_cart_named(const char *name, uint8_t *buf,
+                                          uint32_t max, uint32_t *len) {
     char path[80];
     if (!coco_boot_resolve("cart", name, path, sizeof(path)) &&
         !coco_boot_resolve("rom", name, path, sizeof(path))) {
-        memset(cart8k, 0xFF, 8192);
         Serial.printf("[cart] %s not found\n", name);
         return false;
     }
-    return coco_boot_load_cart_path(path, cart8k);
+    return coco_boot_load_cart_path(path, buf, max, len);
 }
 
-// Load an 8 KB cartridge from an exact path (the overlay's choice).
-extern "C" bool coco_boot_load_cart_path(const char *path, uint8_t *cart8k) {
-    memset(cart8k, 0xFF, 8192);
-    size_t n = read_rom_file(path, cart8k, 8192);
-    if (n != 8192) {
-        Serial.printf("[cart] %s load failed (got %u bytes)\n", path, (unsigned)n);
+// Load a cartridge from an exact path (the overlay's choice). PIZERO-139:
+// any size the machine can map (2, 4, 8 or 16 KB) that fits the buffer. The
+// buffer is only touched once the size is known to be good, so a refused
+// file leaves the installed cartridge intact.
+extern "C" bool coco_boot_load_cart_path(const char *path, uint8_t *buf,
+                                         uint32_t max, uint32_t *len) {
+    FILINFO fi;
+    if (f_stat(path, &fi) != FR_OK || !cat_cart_size_ok((unsigned long)fi.fsize, max)) {
+        Serial.printf("[cart] %s: not a 2/4/8/16 KB cart that fits %lu bytes\n",
+                      path, (unsigned long)max);
         return false;
     }
+    size_t n = read_rom_file(path, buf, (size_t)fi.fsize);
+    if (n != fi.fsize) return false;
+    if (len) *len = (uint32_t)n;
     return true;
 }
 

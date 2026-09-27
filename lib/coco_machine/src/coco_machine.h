@@ -29,6 +29,11 @@ _Bool coco_machine_init(const uint8_t *rom, size_t rom_len);
  * FIRQ pulse so autobooting carts (DECB) jump to $C000 on next reset. */
 void coco_machine_install_cart(const uint8_t *rom8k);
 
+/* PIZERO-139: install a cartridge of `len` bytes (2, 4, 8 or 16 KB, a power
+ * of two). It is repeated through $C000-$FEFF, as a real cart that does not
+ * decode the upper address lines is. */
+void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len);
+
 /* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,
  * SAM reset), keeping the installed cartridge, disk reader and drives. */
 void coco_machine_cold_reset(void);

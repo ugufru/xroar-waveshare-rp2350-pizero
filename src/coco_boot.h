@@ -52,8 +52,10 @@ bool coco_boot_load_rom_from_sd(uint8_t *rom16k);
 
 // Cart ROM loader. `name` is a bare filename; tried under /coco/rom/
 // then /coco/. Pass "disk11.rom" for default Disk BASIC.
-bool coco_boot_load_cart_named(const char *name, uint8_t *cart8k);
-bool coco_boot_load_cart_path(const char *path, uint8_t *cart8k);   // PIZERO-136
+// Cartridge loaders (PIZERO-136/139): /coco/cart, /coco/roms, /coco for a
+// name; any 2/4/8/16 KB image no bigger than `max`. *len gets the size.
+bool coco_boot_load_cart_named(const char *name, uint8_t *buf, uint32_t max, uint32_t *len);
+bool coco_boot_load_cart_path(const char *path, uint8_t *buf, uint32_t max, uint32_t *len);
 
 // Disk attach. `path` is the full resolved FatFs path (use
 // coco_boot_resolve("dsk", name, ...) to build it).
