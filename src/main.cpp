@@ -1598,7 +1598,8 @@ void loop() {
         if (!(vdg & 0x80)) snprintf(mode, sizeof mode, "alpha");
         else snprintf(mode, sizeof mode, "gm%u%s", (unsigned)((vdg >> 4) & 7),
                       (vdg & 0x08) ? "c" : "");
-        Serial.printf("[vdg] mode=%s bits=%02x\r\n", mode, (unsigned)vdg);
+        Serial.printf("[vdg] mode=%s bits=%02x sam=%u\r\n", mode, (unsigned)vdg,
+                      (unsigned)coco_machine_sam_v());
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
                       "| freezes=%lu last=%s\r\n",

@@ -156,6 +156,36 @@ static inline uint16_t vdg_display_base(uint16_t sam_f, bool sam_f_written) {
 // Display lines per data row, by GM (must match GM_nLPR in coco_machine.cpp).
 static const uint8_t VDG_GM_NLPR[8] = { 3, 3, 3, 2, 2, 1, 1, 1 };
 
+// Row geometry comes from the SAM, not the VDG. On a CoCo the SAM generates
+// the video addresses: its V mode says how many bytes lie between data rows
+// and how many display lines repeat each row. The VDG only decides how a
+// byte becomes pixels. They normally agree, but a program may pair them
+// differently: Popcorn sets the VDG to GM5 (one line per row) with the SAM in
+// V3 (two lines per row) for double-height pixels, and drawing from the VDG
+// mode alone showed its game in the top half of the screen only.
+//
+//   SAM V      1    2    3    4    5    6        (0 = text, 7 = DMA)
+//   stride    16   32   16   32   16   32   bytes between data rows
+//   lines      3    3    2    2    1    1   display lines per data row
+static const uint8_t VDG_SAM_STRIDE[8] = { 32, 16, 32, 16, 32, 16, 32, 0 };
+static const uint8_t VDG_SAM_LINES[8]  = { 12,  3,  3,  2,  2,  1,  1, 0 };
+
+static inline int vdg_gm_bytes_per_row(uint8_t gm);
+
+// Row geometry for graphics mode `gm` (0-7) under SAM mode `sam_v`: the
+// SAM's when it is in a graphics mode (1-6), else the VDG mode's own.
+static inline void vdg_gfx_geometry(uint8_t gm, unsigned sam_v, int *stride, int *lines) {
+    if (sam_v >= 1 && sam_v <= 6) {
+        *stride = VDG_SAM_STRIDE[sam_v];
+        *lines  = VDG_SAM_LINES[sam_v];
+    } else if (gm == 7) {
+        *stride = 32; *lines = 1;                   // RG6
+    } else {
+        *stride = vdg_gm_bytes_per_row(gm);
+        *lines  = VDG_GM_NLPR[gm];
+    }
+}
+
 static inline int vdg_gm_bytes_per_row(uint8_t gm) {
     return (gm == 2 || gm == 4 || gm == 6) ? 32 : 16;
 }
@@ -207,25 +237,26 @@ static inline void vdg_gm_lut_build(struct vdg_gm_lut *t, uint8_t gm, bool css) 
 }
 
 // Render a whole GM 0-6 frame from guest RAM into the packed VDG buffer
-// (192 rows of 128 bytes). The table is rebuilt only when the mode or colour
-// set changes, which on a running game is never.
+// (192 rows of 128 bytes). The VDG mode decides how each byte becomes pixels
+// (and how many bytes a line reads); `stride` and `lines` are the row
+// geometry from vdg_gfx_geometry. The table is rebuilt only when the mode or
+// colour set changes, which on a running game is never.
 static inline void vdg_render_gm(struct vdg_gm_lut *t, const uint8_t *ram,
                                  uint16_t base, uint8_t gm, bool css,
-                                 uint8_t *vdg_buffer) {
+                                 int stride, int lines, uint8_t *vdg_buffer) {
     if (t->key != gm * 2 + (css ? 1 : 0)) vdg_gm_lut_build(t, gm, css);
-    const int bpr  = vdg_gm_bytes_per_row(gm);
     const int opb  = vdg_gm_out_per_byte(gm);
-    const int nlpr = VDG_GM_NLPR[gm];
-    const int data_rows = 192 / nlpr;
+    const int nlpr = lines > 0 ? lines : 1;
+    const int data_rows = (192 + nlpr - 1) / nlpr;
     for (int drow = 0; drow < data_rows; drow++) {
-        const uint8_t *p = &ram[(uint16_t)(base + drow * bpr)];
+        const uint8_t *p = &ram[(uint16_t)(base + drow * stride)];
         uint8_t *row = &vdg_buffer[drow * nlpr * 128];
         if (opb == 8) {
             for (int i = 0; i < 16; i++) memcpy(row + i * 8, t->out[p[i]], 8);
         } else {
             for (int i = 0; i < 32; i++) memcpy(row + i * 4, t->out[p[i]], 4);
         }
-        for (int rep = 1; rep < nlpr; rep++)
+        for (int rep = 1; rep < nlpr && drow * nlpr + rep < 192; rep++)
             memcpy(row + rep * 128, row, 128);
     }
 }

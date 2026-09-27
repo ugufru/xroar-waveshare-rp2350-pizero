@@ -82,6 +82,7 @@ struct CocoMachine {
     // each bit by writing the even/odd address). Used by coco_vdg_fetch
     // to read from the right framebuffer for graphics modes like RG6.
     uint16_t sam_f = 0;
+    uint8_t  sam_v = 0;          // PIZERO-140: SAM VDG mode V2-V0, sets row geometry
 
 
     struct MC6809 *cpu = nullptr;
@@ -467,6 +468,13 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         // Shadow the TY bit for our fast decode.
         if (A == 0xFFDE) g_m.sam_ty = false;
         else if (A == 0xFFDF) g_m.sam_ty = true;
+        // PIZERO-140: shadow the V register (VDG address mode, $FFC0-$FFC5):
+        // it, not the VDG mode, decides row stride and line repeats.
+        if (A <= 0xFFC5) {
+            unsigned bit = (A - 0xFFC0) >> 1;
+            if (A & 1) g_m.sam_v |=  (uint8_t)(1u << bit);
+            else       g_m.sam_v &= (uint8_t)~(1u << bit);
+        }
         // Shadow the F register (display address base) for coco_vdg_fetch.
         // $FFC6/C7 → F bit 9, $FFC8/C9 → bit 10, …, $FFD2/D3 → bit 15.
         if (A >= 0xFFC6 && A <= 0xFFD3) {
@@ -1045,6 +1053,7 @@ extern "C" void coco_machine_cold_reset(void) {
     g_m.sam->reset(g_m.sam);
     g_m.sam_ty = false;
     g_m.sam_f  = 0;
+    g_m.sam_v  = 0;
     coco_machine_palette_reset();
 #ifdef GIME_TIMER
     gime_timer_reset(&g_gime);
@@ -1195,7 +1204,10 @@ static void build_rg6a_lut(uint8_t c01, uint8_t c10) {
 }
 
 static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
-    // 32 bytes × 8 bits = 256 pixels per scanline × 192 scanlines.
+    // 32 bytes × 8 bits = 256 pixels per scanline × 192 scanlines. PIZERO-140:
+    // rows advance and repeat as the SAM says (e.g. V4 doubles each row).
+    int stride, lines;
+    vdg_gfx_geometry(7, g_m.sam_v, &stride, &lines);
     if (g_artifact_active) {
         // AMOLED-22 NTSC artifact colours: PMODE 4 (RG6, PB[7:4]=1111)
         // produces colour from adjacent bit PAIRS. CSS picks the pair.
@@ -1212,7 +1224,7 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
 #endif
         if (g_rg6a_key != (uint8_t)((c01 << 4) | c10)) build_rg6a_lut(c01, c10);
         for (int row = 0; row < COCO_VDG_H; row++) {
-            const uint8_t *src = &g_m.ram[(base + row * 32) & 0xFFFF];
+            const uint8_t *src = &g_m.ram[(base + (row / lines) * stride) & 0xFFFF];
             uint32_t *dst = (uint32_t *)&g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
             for (int byte = 0; byte < 32; byte++)
                 dst[byte] = g_rg6a_lut[src[byte]];
@@ -1222,7 +1234,7 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
     // Plain monochrome RG6 (white on black).
     if (!g_rg6_lut_ready) build_rg6_lut();
     for (int row = 0; row < COCO_VDG_H; row++) {
-        const uint8_t *src = &g_m.ram[(base + row * 32) & 0xFFFF];
+        const uint8_t *src = &g_m.ram[(base + (row / lines) * stride) & 0xFFFF];
         uint32_t *dst = (uint32_t *)&g_m.vdg_buffer[row * (COCO_VDG_W / 2)];
         for (int byte = 0; byte < 32; byte++)
             dst[byte] = g_rg6_lut[src[byte]];
@@ -1237,7 +1249,9 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
 // (GM5) took ~7.5 ms a frame here before and ran at 50 fps.
 static struct vdg_gm_lut g_gm_lut = { -1, {{0}} };
 static void HOT_FUNC(render_graphics_frame)(uint16_t base, uint8_t gm, bool css) {
-    vdg_render_gm(&g_gm_lut, g_m.ram, base, gm, css, g_m.vdg_buffer);
+    int stride, lines;
+    vdg_gfx_geometry(gm, g_m.sam_v, &stride, &lines);
+    vdg_render_gm(&g_gm_lut, g_m.ram, base, gm, css, stride, lines, g_m.vdg_buffer);
 }
 
 extern "C" void HOT_FUNC(coco_machine_render_frame)(void) {
@@ -1260,6 +1274,8 @@ extern "C" void HOT_FUNC(coco_machine_render_frame)(void) {
 // (bit 7 = graphics, bits 6-4 = GM, bit 3 = CSS). Measurements are hard to
 // read without it: the three render paths differ by an order of magnitude in
 // cost, so "render took 4.8 ms" means nothing until you know which one ran.
+extern "C" uint8_t coco_machine_sam_v(void) { return g_m.sam_v; }   // PIZERO-140
+
 extern "C" uint8_t coco_machine_vdg_mode_bits(void) {
     if (!g_m.pia1) return 0;
     return (uint8_t)((g_m.pia1->b.out_source & g_m.pia1->b.out_sink) & 0xF8);

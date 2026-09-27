@@ -96,6 +96,7 @@ void coco_machine_audio_counters(uint32_t *produced, uint32_t *tone);
  * between the alpha, RG6 and general-graphics paths, so a render time is
  * only meaningful alongside this. */
 uint8_t coco_machine_vdg_mode_bits(void);
+uint8_t coco_machine_sam_v(void);   /* PIZERO-140: SAM VDG address mode, 0-7 */
 
 /* Pointer to the current VDG buffer — COCO_VDG_W * COCO_VDG_H bytes,
  * one palette index per pixel. Stable for the lifetime of the

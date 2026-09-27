@@ -252,7 +252,9 @@ static void test_gm_frames_match_the_per_pixel_renderer(void) {
                 memset(g_ref, 0xAA, sizeof g_ref);
                 memset(g_new, 0x55, sizeof g_new);
                 ref_render_graphics_frame(g_ram, bases[b], (uint8_t)gm, css, g_ref);
-                vdg_render_gm(&lut, g_ram, bases[b], (uint8_t)gm, css, g_new);
+                int stride, lines;                       // SAM agrees with the VDG
+                vdg_gfx_geometry((uint8_t)gm, 0, &stride, &lines);
+                vdg_render_gm(&lut, g_ram, bases[b], (uint8_t)gm, css, stride, lines, g_new);
                 char msg[48];
                 snprintf(msg, sizeof msg, "gm=%d css=%d base=%04X", gm, css, bases[b]);
                 TEST_ASSERT_EQUAL_MEMORY_MESSAGE(g_ref, g_new, sizeof g_ref, msg);
@@ -267,9 +269,53 @@ static void test_gm_every_byte_value_in_every_mode(void) {
             for (int v = 0; v < 256; v++) {
                 memset(g_ram, v, 64);
                 ref_render_graphics_frame(g_ram, 0, (uint8_t)gm, css, g_ref);
-                vdg_render_gm(&lut, g_ram, 0, (uint8_t)gm, css, g_new);
+                int stride, lines;
+                vdg_gfx_geometry((uint8_t)gm, 0, &stride, &lines);
+                vdg_render_gm(&lut, g_ram, 0, (uint8_t)gm, css, stride, lines, g_new);
                 TEST_ASSERT_EQUAL_MEMORY(g_ref, g_new, 128);
             }
+}
+
+static void test_sam_mode_sets_the_row_geometry(void) {
+    int stride, lines;
+    // A SAM graphics mode wins over the VDG mode, whatever the VDG says.
+    vdg_gfx_geometry(5, 3, &stride, &lines);
+    TEST_ASSERT_EQUAL_INT(16, stride); TEST_ASSERT_EQUAL_INT(2, lines);
+    vdg_gfx_geometry(7, 4, &stride, &lines);          // RG6 bytes, doubled rows
+    TEST_ASSERT_EQUAL_INT(32, stride); TEST_ASSERT_EQUAL_INT(2, lines);
+    vdg_gfx_geometry(0, 1, &stride, &lines);
+    TEST_ASSERT_EQUAL_INT(16, stride); TEST_ASSERT_EQUAL_INT(3, lines);
+    // SAM in text (0) or DMA (7): fall back to the VDG mode's own geometry.
+    vdg_gfx_geometry(5, 0, &stride, &lines);
+    TEST_ASSERT_EQUAL_INT(16, stride); TEST_ASSERT_EQUAL_INT(1, lines);
+    vdg_gfx_geometry(7, 7, &stride, &lines);
+    TEST_ASSERT_EQUAL_INT(32, stride); TEST_ASSERT_EQUAL_INT(1, lines);
+    // Each SAM mode agrees with the VDG mode of the same shape.
+    const uint8_t gm_for_v[7] = { 0, 1, 2, 3, 4, 5, 6 };
+    for (unsigned v = 1; v <= 6; v++) {
+        int s2, l2;
+        vdg_gfx_geometry(gm_for_v[v], 0, &s2, &l2);
+        vdg_gfx_geometry(gm_for_v[v], v, &stride, &lines);
+        TEST_ASSERT_EQUAL_INT(s2, stride); TEST_ASSERT_EQUAL_INT(l2, lines);
+    }
+}
+
+static void test_popcorn_gm5_with_sam_v3_is_double_height(void) {
+    // VDG GM5 (RG, 16 bytes a line) with the SAM in V3 (16-byte rows, two
+    // lines each) must look exactly like GM3, which is RG at 16 bytes with
+    // two lines per row: the whole screen, not the top half.
+    uint32_t seed = 777;
+    for (size_t i = 0; i < sizeof g_ram; i++) { seed = seed * 1103515245u + 12345u; g_ram[i] = (uint8_t)(seed >> 16); }
+    static struct vdg_gm_lut lut = { -1, {{0}} };
+    for (int css = 0; css <= 1; css++) {
+        ref_render_graphics_frame(g_ram, 0x0E00, 3, css, g_ref);
+        int stride, lines;
+        vdg_gfx_geometry(5, 3, &stride, &lines);
+        vdg_render_gm(&lut, g_ram, 0x0E00, 5, css, stride, lines, g_new);
+        TEST_ASSERT_EQUAL_MEMORY(g_ref, g_new, sizeof g_ref);
+        // and the bottom half really is drawn: row 191 comes from data row 95
+        TEST_ASSERT_EQUAL_MEMORY(&g_ref[191 * 128], &g_new[191 * 128], 128);
+    }
 }
 
 int main(void) {
@@ -288,5 +334,7 @@ int main(void) {
     RUN_TEST(test_display_base_honours_zero_once_written);
     RUN_TEST(test_gm_frames_match_the_per_pixel_renderer);
     RUN_TEST(test_gm_every_byte_value_in_every_mode);
+    RUN_TEST(test_sam_mode_sets_the_row_geometry);
+    RUN_TEST(test_popcorn_gm5_with_sam_v3_is_double_height);
     return UNITY_END();
 }
