@@ -17,6 +17,7 @@
 
 #include <Arduino.h>
 #include "vdg_pack.h"
+#include "cart_gmc.h"          // PIZERO-142, host-tested
 #include "coco_palette.h"
 #include "audio_servo.h"
 #ifdef GIME_TIMER
@@ -47,6 +48,12 @@ struct CocoMachine {
     size_t rom_len = 0;
     const uint8_t *cart_rom = nullptr;   // at $C000, NULL = no cart
     uint16_t cart_mask = 0x1FFF;         // PIZERO-139: size - 1, so a small cart repeats
+    // PIZERO-142: a bank-switched cart (over 16 KB). cart_rom then points at
+    // the selected bank inside cart_base, so reads cost nothing extra.
+    const uint8_t *cart_base = nullptr;
+    uint32_t cart_len = 0;
+    bool     cart_banked = false;
+    uint32_t csg_writes = 0;             // SN76489 writes, not yet emulated
     int32_t cart_toggle_remaining = 0;   // 6809 cycles until next CART pulse
     bool    cart_cb1_level = true;
 
@@ -522,7 +529,7 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         case 5:  g_m.cpu->D = mc6821_read(g_m.pia1, A);
                  if ((A & 1) == 0) g_m.pia_irq_dirty = true;
                  break;
-        case 6:  g_m.cpu->D = fdc_io_read(A); break;
+        case 6:  g_m.cpu->D = g_m.cart_banked ? 0xFF : fdc_io_read(A); break;
         default:
 #ifdef GIME_PALETTE
                  if (coco_pal_owns(A)) { g_m.cpu->D = coco_pal_read(&g_pal, A); break; }
@@ -559,7 +566,12 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
             g_m.pia_irq_dirty = true;
         }
 #endif
-        else if ((A & 0xFFE0) == 0xFF40) fdc_io_write(A, g_m.cpu->D);  // cart I/O
+        else if ((A & 0xFFE0) == 0xFF40) {                               // cart I/O
+            if (!g_m.cart_banked) fdc_io_write(A, g_m.cpu->D);
+            else if (gmc_is_bank_register(A))                            // PIZERO-142
+                g_m.cart_rom = g_m.cart_base + gmc_bank_offset(g_m.cpu->D, g_m.cart_len);
+            else g_m.csg_writes++;
+        }
         else if (A < 0x8000)             g_m.ram[A] = g_m.cpu->D;
         else if (g_m.sam_ty && A < 0xFF00) g_m.ram[A] = g_m.cpu->D;  // all-RAM mode
         // ROM and other I/O writes ignored
@@ -1022,6 +1034,9 @@ extern "C" void coco_machine_install_cart(const uint8_t *rom8k) {
 }
 
 extern "C" void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len) {
+    g_m.cart_banked = false;
+    g_m.cart_base = rom;
+    g_m.cart_len = len;
     g_m.cart_rom = rom;
     g_m.cart_mask = (uint16_t)((len >= 2048 && len <= 16384) ? len - 1 : 0x1FFF);
     g_m.cart_toggle_remaining = 88950;
@@ -1030,6 +1045,18 @@ extern "C" void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len
 #endif
     g_m.cart_cb1_level = true;
 }
+
+// PIZERO-142: a bank-switched cartridge of len bytes (see cart_gmc.h),
+// starting in bank 0. The image must stay valid while installed.
+extern "C" void coco_machine_install_cart_banked(const uint8_t *rom, uint32_t len) {
+    coco_machine_install_cart_sized(rom, 16384);
+    g_m.cart_banked = true;
+    g_m.cart_base = rom;
+    g_m.cart_len = len;
+    g_m.csg_writes = 0;
+}
+
+extern "C" uint32_t coco_machine_cart_csg_writes(void) { return g_m.csg_writes; }
 
 // PIZERO-81d: a power-on restart without a power cycle, for launching from
 // the F12 overlay. Ported from the Fruit Jam port's coco_machine_cold_reset
@@ -1066,6 +1093,7 @@ extern "C" void coco_machine_cold_reset(void) {
     g_m.fdc_buf_pos = g_m.fdc_buf_len = 0;
     g_m.cart_toggle_remaining = 88950;
     g_m.cart_cb1_level = true;
+    if (g_m.cart_banked) g_m.cart_rom = g_m.cart_base;   // PIZERO-142: bank 0
     g_m.cpu->reset(g_m.cpu);
 }
 

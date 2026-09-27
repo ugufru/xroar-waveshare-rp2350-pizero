@@ -30,7 +30,17 @@
 #include <string.h>
 #include <strings.h>
 
+// 128 entries (~8 KB). The double-buffered firmware builds (no
+// HDMI_DATA_ISLAND) carry two framebuffers and have no RAM to spare, so they
+// list 64. Decided here, in the one header every user includes, so the
+// struct is the same size in every translation unit.
+#ifndef DSK_CAT_MAX
+#if defined(ARDUINO) && !defined(HDMI_DATA_ISLAND)
+#define DSK_CAT_MAX      64
+#else
 #define DSK_CAT_MAX      128
+#endif
+#endif
 #define DSK_NAME_MAX     64     // bytes including the terminator
 
 enum cat_kind { CAT_DSK = 0, CAT_BIN, CAT_CART, CAT_KINDS };

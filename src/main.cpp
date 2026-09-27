@@ -115,6 +115,7 @@ extern "C" {
 #include "dsk_catalog.h"   // PIZERO-81a
 #include "disk_overlay.h"  // PIZERO-81/114: F12 disk drives overlay
 #include "rsdos_dir.h"     // PIZERO-81d: find the program to run on a disk
+#include "cart_gmc.h"      // PIZERO-142: bank-switched cartridges
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -901,6 +902,52 @@ static int  g_bin_settle = 0;            // frames until a pending BIN is loaded
 
 static void noop_loadm_cb(uint16_t, const uint8_t *, uint16_t, void *) {}
 
+// PIZERO-142: one way to install any cartridge file. Up to 16 KB goes in the
+// fixed buffer; a bank-switched image (32 KB and up, cart_gmc.h) gets a heap
+// buffer of its own size, only while it is installed, so the RAM stays free
+// for everything else. The old big buffer is released before the new one is
+// taken (the cart is unplugged first, so nothing reads freed memory), which
+// lets one 64 KB cart replace another.
+static uint8_t *g_cart_big = nullptr;
+static uint32_t g_cart_big_len = 0;
+#define CART_HEAP_MARGIN 16384      // left free for FatFs, USB and stacks
+
+static bool banked_cart_fits(uint32_t len) {
+    return (uint32_t)rp2040.getFreeHeap() + g_cart_big_len >= len + CART_HEAP_MARGIN;
+}
+
+static void release_big_cart(void) {
+    free(g_cart_big);
+    g_cart_big = nullptr;
+    g_cart_big_len = 0;
+}
+
+static bool install_cart_file(const char *path) {
+    FILINFO fi;
+    if (f_stat(path, &fi) != FR_OK) return false;
+    uint32_t n = (uint32_t)fi.fsize;
+    if (cart_is_banked_size(n)) {
+        coco_machine_install_cart(nullptr);
+        release_big_cart();
+        uint8_t *img = (uint8_t *)malloc(n);
+        if (!img) {
+            Serial.printf("[cart] no memory for %lu bytes\r\n", (unsigned long)n);
+            return false;
+        }
+        if (!coco_boot_load_file(path, img, n)) { free(img); return false; }
+        g_cart_big = img;
+        g_cart_big_len = n;
+        coco_machine_install_cart_banked(img, n);
+        Serial.printf("[cart] banked, %lu banks\r\n", (unsigned long)(n / CART_BANK_SIZE));
+        return true;
+    }
+    uint32_t len = 0;
+    if (!coco_boot_load_cart_path(path, g_cart_rom, COCO_CART_MAX, &len)) return false;
+    coco_machine_install_cart_sized(g_cart_rom, len);
+    release_big_cart();
+    return true;
+}
+
 static bool overlay_launch_request(int kind, const char *path, char *msg, size_t msg_sz) {
     if (strlen(path) >= sizeof g_launch_path) return false;
     FILINFO fi;
@@ -923,13 +970,19 @@ static bool overlay_launch_request(int kind, const char *path, char *msg, size_t
     }
     case CAT_CART:
         if (f_stat(path, &fi) != FR_OK) { snprintf(msg, msg_sz, "CANNOT OPEN IT"); return false; }
-        if (!cat_cart_size_ok((unsigned long)fi.fsize, COCO_CART_MAX)) {
-            snprintf(msg, msg_sz, cat_cart_size_ok((unsigned long)fi.fsize, 16384)
-                                      ? "16K CARTS NOT IN THIS BUILD"
-                                      : "NOT A 2/4/8/16K CARTRIDGE");
-            return false;
+        if (cat_cart_size_ok((unsigned long)fi.fsize, COCO_CART_MAX)) break;
+        if (cart_is_banked_size((uint32_t)fi.fsize)) {
+            if (!banked_cart_fits((uint32_t)fi.fsize)) {
+                snprintf(msg, msg_sz, "NOT ENOUGH MEMORY FOR %luK",
+                         (unsigned long)(fi.fsize / 1024));
+                return false;
+            }
+            break;
         }
-        break;
+        snprintf(msg, msg_sz, cat_cart_size_ok((unsigned long)fi.fsize, 16384)
+                                  ? "16K CARTS NOT IN THIS BUILD"
+                                  : "NOT A CARTRIDGE IMAGE");
+        return false;
     default:
         return false;
     }
@@ -963,9 +1016,8 @@ static void perform_launch(void) {
     switch (kind) {
     case CAT_DSK: {
         if (!coco_boot_mount_drive(0, g_launch_path)) return;
-        uint32_t len = 0;
-        if (!coco_boot_load_cart_named("disk11.rom", g_cart_rom, COCO_CART_MAX, &len)) return;
-        coco_machine_install_cart_sized(g_cart_rom, len);
+        char rom[80];
+        if (!coco_boot_resolve_cart("disk11.rom", rom, sizeof rom) || !install_cart_file(rom)) return;
         coco_machine_install_disk_reader(coco_boot_disk_read_sector);
         coco_machine_cold_reset();
         if (disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
@@ -982,13 +1034,10 @@ static void perform_launch(void) {
         coco_machine_cold_reset();
         g_bin_settle = 30;                        // as at power-on: PIA DDRs settle
         break;
-    case CAT_CART: {
-        uint32_t len = 0;
-        if (!coco_boot_load_cart_path(g_launch_path, g_cart_rom, COCO_CART_MAX, &len)) return;
-        coco_machine_install_cart_sized(g_cart_rom, len);
+    case CAT_CART:
+        if (!install_cart_file(g_launch_path)) return;
         coco_machine_cold_reset();
         break;
-    }
     }
 }
 
@@ -1393,9 +1442,8 @@ void setup() {
         }
     } else {
         const char *cart = (have_autorun && autorun.cart_name[0]) ? autorun.cart_name : "disk11.rom";
-        uint32_t cart_len = 0;
-        if (coco_boot_load_cart_named(cart, g_cart_rom, COCO_CART_MAX, &cart_len)) {
-            coco_machine_install_cart_sized(g_cart_rom, cart_len);
+        char cart_path[80];
+        if (coco_boot_resolve_cart(cart, cart_path, sizeof cart_path) && install_cart_file(cart_path)) {
             bool dsk = have_autorun && autorun.disk_name[0]
                        ? (coco_boot_resolve("dsk", autorun.disk_name, path, sizeof(path))
                           && coco_boot_attach_dsk(path))
@@ -1416,6 +1464,8 @@ void setup() {
     disk_overlay_init(present_card, overlay_launch_request);   // PIZERO-81: F12 overlay
     g_machine_running = true;
     Serial.print("[main] coco_machine running\r\n");
+    Serial.printf("[mem] free heap %d bytes (bank-switched carts need their size + %d)\r\n",
+                  rp2040.getFreeHeap(), CART_HEAP_MARGIN);
 #ifdef AUDIO_WAV_DUMP
     // PIZERO-18 validation build: the capture is armed from loop() once the
     // USB-CDC host attaches (so flashing then opening the monitor doesn't miss

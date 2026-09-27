@@ -275,22 +275,20 @@ extern "C" bool coco_boot_load_rom_from_sd(uint8_t *rom16k) {
 
 // AMOLED-58: cart loader takes a bare filename so autorun.txt can
 // pick an alternate cart (e.g. a game .ccc) via @CART.
-// PIZERO-136: cartridges (.ccc) live in /coco/cart, so that is searched
-// first; the machine's own cartridge ROM (disk11.rom) is found in /coco/roms
-// as before, and a card with everything in /coco still works.
-extern "C" bool coco_boot_load_cart_named(const char *name, uint8_t *buf,
-                                          uint32_t max, uint32_t *len) {
-    char path[80];
-    if (!coco_boot_resolve("cart", name, path, sizeof(path)) &&
-        !coco_boot_resolve("rom", name, path, sizeof(path))) {
-        Serial.printf("[cart] %s not found\n", name);
-        return false;
-    }
-    return coco_boot_load_cart_path(path, buf, max, len);
+// PIZERO-142: where a cartridge name lives, in the loader's search order.
+extern "C" bool coco_boot_resolve_cart(const char *name, char *out, size_t out_sz) {
+    return coco_boot_resolve("cart", name, out, out_sz) ||
+           coco_boot_resolve("rom", name, out, out_sz);
 }
 
-// Load a cartridge from an exact path (the overlay's choice). PIZERO-139:
-// any size the machine can map (2, 4, 8 or 16 KB) that fits the buffer. The
+// PIZERO-142: read exactly len bytes of a file (a banked cart's image).
+extern "C" bool coco_boot_load_file(const char *path, uint8_t *buf, uint32_t len) {
+    return read_rom_file(path, buf, len) == len;
+}
+
+// PIZERO-136/139: load a plain cartridge from an exact path: any size the
+// machine maps directly (2, 4, 8 or 16 KB) that fits the buffer. Cartridges
+// (.ccc) live in /coco/cart; coco_boot_resolve_cart finds one by name. The
 // buffer is only touched once the size is known to be good, so a refused
 // file leaves the installed cartridge intact.
 extern "C" bool coco_boot_load_cart_path(const char *path, uint8_t *buf,
