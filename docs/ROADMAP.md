@@ -5,7 +5,7 @@ map over `issues.jsonl` — it sequences the open work and links the tickets; it
 does **not** restate ticket detail. Authoritative status always lives in the
 ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`).
 
-_Last updated: 2026-08-05._
+_Last updated: 2026-09-26 (overlay milestone, CoCo 3 plan)._
 
 ## Shipped / working (V1.0 core)
 
@@ -60,6 +60,12 @@ This is the current push. Order reflects value × independence.
 A new UX workstream — pick what to load and recolor it, all in-firmware with a
 native-CoCo look. Chain: `PIZERO-81` → `PIZERO-53` → `PIZERO-55`.
 
+- **Current milestone (2026-09-26): F12 disk drives overlay.** `81a`
+  catalogue, `114` four drives, `81c` keys and pause, `81b` drawing, in that
+  build order. F12 opens it, keys 0 to 3 put the highlighted `.dsk` in that
+  drive or take it out (hot swap, no reset), ESC closes. Launching (`81d`,
+  `115`) comes after. The BOOT button joins via `PIZERO-128`. The design
+  below is the original one; the tickets hold the current decisions.
 - **`PIZERO-81` — F12 disk-image switcher** (sliced `81a`–`81d`). Ported from the
   AMOLED picker but keyboard-driven: **F12** opens, **←/→** select, **ENTER**
   cold-boots, **ESC** cancels. Emulation is paused while it's up; all three entry
@@ -88,6 +94,13 @@ native-CoCo look. Chain: `PIZERO-81` → `PIZERO-53` → `PIZERO-55`.
   → `GAME.FNT`, same fallback chain) — so a game can carry both its palette and
   its font. Cleanly decoupled from the palette LUT (font swaps need no rebuild);
   redefines the 64-glyph alpha slot. Depends on `PIZERO-53`.
+
+## Later: CoCo 3 (128 KB)
+
+Gated on a faster 6809, measured before any GIME code: `PIZERO-129`
+correctness harness, `PIZERO-130` 1.79 MHz benchmark, `PIZERO-131` the
+speed-up, then `PIZERO-133` the machine (`134` for 640-wide modes, `135` the
+open decisions). The plan and its reasoning are in `docs/coco3-plan.md`.
 
 ## Next: storage & filesystem layer (replaces DECB)
 

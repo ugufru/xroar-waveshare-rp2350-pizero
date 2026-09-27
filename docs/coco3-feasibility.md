@@ -101,6 +101,11 @@ tuning pass, and it is the first thing that would have to succeed.
 **CoCo 3 stays an aspiration, and the next step is a CPU experiment, not a
 feature branch.**
 
+_2026-09-26: picked up. The staged plan, with a correctness harness ahead of
+any optimisation, is in [`coco3-plan.md`](coco3-plan.md) (PIZERO-129 to 135).
+It keeps the framebuffer for the first milestone, since 128 KB fits without
+freeing it, and moves per-line scanout to the 640-wide follow-on._
+
 If it is ever picked up, the order is forced by the arithmetic:
 
 1. **Make the 6809 core faster**, and prove it with the soak harness at an
