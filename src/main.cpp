@@ -112,6 +112,7 @@ extern "C" {
 }
 
 #include "coco_boot.h"
+#include "dsk_catalog.h"   // PIZERO-81a
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -1173,6 +1174,20 @@ void setup() {
             boot_page(MSG_CBONLY_TITLE, MSG_CBONLY_BODY, MSG_CBONLY_DETAIL);
             delay(4000);          // long enough to read, short enough to forgive
         }
+    }
+
+    // PIZERO-81a: the disk catalogue the F12 overlay lists, dumped once so it
+    // can be checked over serial before anything is drawn.
+    {
+        int n = coco_boot_rescan_dsk();
+        const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+        Serial.printf("[dsk] %d image(s)", n);
+        if (cat->skipped_long) Serial.printf(", %d skipped (name too long)", cat->skipped_long);
+        if (cat->skipped_full) Serial.printf(", %d skipped (over %d)", cat->skipped_full, DSK_CAT_MAX);
+        Serial.print("\r\n");
+        char p[96];
+        for (int i = 0; i < n; i++)
+            if (dsk_cat_path(cat, i, p, sizeof p)) Serial.printf("[dsk]   %s\r\n", p);
     }
 
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.

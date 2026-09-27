@@ -29,6 +29,7 @@ extern "C" {
 }
 
 #include "coco_boot.h"
+#include "dsk_catalog.h"        // PIZERO-81a, host-tested
 
 // Panel native — must match src/main.cpp.
 #define LCD_W   368
@@ -202,6 +203,35 @@ extern "C" bool coco_boot_find_default_dsk(char *out, size_t out_sz) {
         return true;
     }
     return false;
+}
+
+// PIZERO-81a: the disk catalogue the F12 overlay lists. The rules (what
+// counts, order, cap, duplicates) are in dsk_catalog.h and tested on the
+// host; this is only the FatFs walk. /coco/dsk first, then /coco, so a name
+// in both is listed from /coco/dsk, as coco_boot_resolve would find it.
+static struct dsk_catalog g_dsk_cat;
+
+static void cat_scan_dir(const char *dir, uint8_t which) {
+    DIR d;
+    if (f_opendir(&d, dir) != FR_OK) return;
+    FILINFO fi;
+    while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
+        if (fi.fattrib & (AM_HID | AM_SYS)) continue;
+        dsk_cat_add(&g_dsk_cat, fi.fname, (fi.fattrib & AM_DIR) != 0, which);
+    }
+    f_closedir(&d);
+}
+
+extern "C" int coco_boot_rescan_dsk(void) {
+    dsk_cat_clear(&g_dsk_cat);
+    cat_scan_dir("0:/coco/dsk", DSK_DIR_DSK);
+    cat_scan_dir("0:/coco", DSK_DIR_ROOT);
+    dsk_cat_sort(&g_dsk_cat);
+    return g_dsk_cat.n;
+}
+
+extern "C" const struct dsk_catalog *coco_boot_dsk_catalog(void) {
+    return &g_dsk_cat;
 }
 
 // PIZERO-92: the caller needs to tell a MISSING ROM from a DAMAGED one, because
