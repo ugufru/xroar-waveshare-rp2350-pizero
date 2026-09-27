@@ -17,7 +17,7 @@
 //   * a name too long to store is SKIPPED, not truncated, because a truncated
 //     name cannot be opened again (FRUITJAM-103); the count is kept so the
 //     overlay can say so rather than silently hide a file
-//   * the kind's own folder (/coco/dsk, /coco/bin, /coco/roms) is searched
+//   * the kind's own folder (/coco/dsk, /coco/bin, /coco/cart) is searched
 //     before /coco, matching coco_boot_resolve, and a name found in both is
 //     listed once, from the kind's folder
 //   * sorted case-insensitively, capped at DSK_CAT_MAX
@@ -38,7 +38,7 @@ enum { DSK_DIR_DSK = 0, DSK_DIR_ROOT = 1 };   // the kind's folder, then /coco
 
 // The kind's own folder; dir DSK_DIR_ROOT is always /coco.
 static inline const char *cat_kind_dir(int kind) {
-    return kind == CAT_BIN ? "0:/coco/bin" : kind == CAT_CART ? "0:/coco/roms"
+    return kind == CAT_BIN ? "0:/coco/bin" : kind == CAT_CART ? "0:/coco/cart"
                                                               : "0:/coco/dsk";
 }
 

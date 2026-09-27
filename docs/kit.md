@@ -131,7 +131,7 @@ These five items account for essentially every question you will be asked.
 > distribute them; they are still under copyright, so dump or source your own.
 >
 > **5. Press F12 to pick what to run.** Put disks (`.dsk`) in `/coco/dsk/`,
-> programs (`.bin`) in `/coco/bin/` and cartridges (`.ccc`) in `/coco/roms/`. F12 shows
+> programs (`.bin`) in `/coco/bin/` and cartridges (`.ccc`) in `/coco/cart/`. F12 shows
 > them, LEFT/RIGHT switch list, ENTER starts the highlighted one, ESC goes back
 > to what was running.
 >

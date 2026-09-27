@@ -970,10 +970,7 @@ static void perform_launch(void) {
         g_bin_settle = 30;                        // as at power-on: PIA DDRs settle
         break;
     case CAT_CART: {
-        char name[64];
-        const char *slash = strrchr(g_launch_path, '/');
-        snprintf(name, sizeof name, "%s", slash ? slash + 1 : g_launch_path);
-        if (!coco_boot_load_cart_named(name, g_cart_rom)) return;
+        if (!coco_boot_load_cart_path(g_launch_path, g_cart_rom)) return;
         coco_machine_install_cart(g_cart_rom);
         coco_machine_cold_reset();
         break;

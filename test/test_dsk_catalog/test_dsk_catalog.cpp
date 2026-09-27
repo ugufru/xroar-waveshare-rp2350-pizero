@@ -133,7 +133,7 @@ static void test_bin_and_cart_lists(void) {
     TEST_ASSERT_FALSE(dsk_cat_add(&cat, "GAME.DSK", false, DSK_DIR_DSK));  // wrong kind
     dsk_cat_add(&cat, "POLARIS.CCC", false, DSK_DIR_DSK);
     TEST_ASSERT_TRUE(dsk_cat_path(&cat, 0, p, sizeof p));
-    TEST_ASSERT_EQUAL_STRING("0:/coco/roms/POLARIS.CCC", p);
+    TEST_ASSERT_EQUAL_STRING("0:/coco/cart/POLARIS.CCC", p);
     char name[32];
     dsk_cat_display_name("POOYAN.CCC", name, 27);
     TEST_ASSERT_EQUAL_STRING("POOYAN", name);

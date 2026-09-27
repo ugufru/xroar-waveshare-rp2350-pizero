@@ -83,8 +83,10 @@ After boot, **F12** opens the disk drives overlay, which can put any
 `@DISK` mounted (PIZERO-114). `@DISK` only decides what drive 0 holds at
 power-on.
 
-### `@CART filename.rom` (or `.ccc`)
-Install this cartridge ROM at `$C000`.
+### `@CART filename.ccc` (or `.rom`)
+Install this cartridge ROM at `$C000`. Searched in `/coco/cart/` first, then
+`/coco/roms/`, then `/coco/`; a name without an extension gets `.CCC` in
+`/coco/cart/` (PIZERO-136). Cartridges must be 8 KB.
 
 If absent: the loader installs `/coco/roms/disk11.rom` (or `/coco/disk11.rom`)
 if found. If neither exists, the cart is empty (Color BASIC only — no

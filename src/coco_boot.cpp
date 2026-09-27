@@ -157,6 +157,7 @@ extern "C" bool coco_boot_resolve(const char *subdir, const char *name,
             if      (!strcmp(subdir, "bin")) ext = "BIN";
             else if (!strcmp(subdir, "dsk")) ext = "DSK";
             else if (!strcmp(subdir, "rom")) ext = "ROM";
+            else if (!strcmp(subdir, "cart")) ext = "CCC";
         }
         if (ext) {
             for (int i = 0; i < nsub; i++) {
@@ -274,17 +275,26 @@ extern "C" bool coco_boot_load_rom_from_sd(uint8_t *rom16k) {
 
 // AMOLED-58: cart loader takes a bare filename so autorun.txt can
 // pick an alternate cart (e.g. a game .ccc) via @CART.
+// PIZERO-136: cartridges (.ccc) live in /coco/cart, so that is searched
+// first; the machine's own cartridge ROM (disk11.rom) is found in /coco/roms
+// as before, and a card with everything in /coco still works.
 extern "C" bool coco_boot_load_cart_named(const char *name, uint8_t *cart8k) {
-    memset(cart8k, 0xFF, 8192);
     char path[80];
-    if (!coco_boot_resolve("rom", name, path, sizeof(path))) {
+    if (!coco_boot_resolve("cart", name, path, sizeof(path)) &&
+        !coco_boot_resolve("rom", name, path, sizeof(path))) {
+        memset(cart8k, 0xFF, 8192);
         Serial.printf("[cart] %s not found\n", name);
         return false;
     }
+    return coco_boot_load_cart_path(path, cart8k);
+}
+
+// Load an 8 KB cartridge from an exact path (the overlay's choice).
+extern "C" bool coco_boot_load_cart_path(const char *path, uint8_t *cart8k) {
+    memset(cart8k, 0xFF, 8192);
     size_t n = read_rom_file(path, cart8k, 8192);
     if (n != 8192) {
-        Serial.printf("[cart] %s load failed (got %u bytes)\n",
-                      name, (unsigned)n);
+        Serial.printf("[cart] %s load failed (got %u bytes)\n", path, (unsigned)n);
         return false;
     }
     return true;
