@@ -30,14 +30,20 @@ _Bool coco_machine_init(const uint8_t *rom, size_t rom_len);
 void coco_machine_install_cart(const uint8_t *rom8k);
 
 /* Floppy disk callback. drive/track/sector identify the requested sector.
- * Write 256 bytes into `out256`. Return 0 on success, non-zero on error
- * (record not found). Sector numbers are 1-based per WD2797 convention. */
+ * Write 256 bytes into `out256`. Return 0 on success, COCO_DISK_NOT_READY
+ * for an empty drive, or any other non-zero value for an error (record not
+ * found). Sector numbers are 1-based per WD2797 convention. */
+#define COCO_DISK_NOT_READY 2
 typedef int (*coco_disk_read_sector_fn)(unsigned drive, unsigned track,
                                         unsigned sector, uint8_t *out256);
 
 /* Install (or remove with NULL) the disk-read callback used by the
  * cartridge-side FDC at $FF48-$FF4B. */
 void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn);
+
+/* PIZERO-114: the drive DECB last selected at $FF40 (0-3), so the F12
+ * overlay can open on the drive the program was using. */
+unsigned coco_machine_fdc_drive(void);
 
 /* Directly write `len` bytes from `src` into emulator RAM starting at
  * `addr`. Bypasses the 6809 / SAM / TY logic — used by AMOLED-26 to

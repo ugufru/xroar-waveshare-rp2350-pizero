@@ -1230,10 +1230,11 @@ void setup() {
                           && coco_boot_attach_dsk(path))
                        : (coco_boot_find_default_dsk(path, sizeof(path))
                           && coco_boot_attach_dsk(path));
-            if (dsk) {
-                coco_machine_install_disk_reader(coco_boot_disk_read_sector);
-                Serial.printf("[autorun] disk: %s\r\n", path);
-            }
+            // PIZERO-114: install the reader even with nothing mounted, so
+            // the four drives work when filled later from the F12 overlay;
+            // an empty drive reports NOT READY rather than having no FDC.
+            coco_machine_install_disk_reader(coco_boot_disk_read_sector);
+            if (dsk) Serial.printf("[autorun] disk: %s\r\n", path);
             if (have_autorun && autorun.autotype[0]) {
                 g_autotype = autorun.autotype;
                 g_autotype_warmup = 180;

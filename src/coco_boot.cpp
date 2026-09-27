@@ -358,46 +358,75 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
     return true;
 }
 
-// JVC disk image kept open at /coco/demos.dsk. CoCo standard: 35 tracks,
+// Disk images, one per drive (PIZERO-114). CoCo standard: 35 tracks,
 // 18 sectors/track, 256 bytes/sector, single-sided = 161 280 bytes.
 // Sector numbers from BASIC/DECB are 1-based; track is 0-based.
-static FIL  g_dsk_file;
-static bool g_dsk_open = false;
+//
+// The data stays on the card and is read a sector at a time: there is no
+// PSRAM here and one image is larger than all free RAM. Read-only; the FDC
+// reports write-protect (PIZERO-66). Mounting and ejecting happen from the
+// F12 overlay while the machine is paused, so they never race a read.
+#define COCO_NDRIVE 4
+static FIL  g_dsk_file[COCO_NDRIVE];
+static bool g_dsk_open[COCO_NDRIVE];
+static char g_dsk_path[COCO_NDRIVE][96];
 
-extern "C" bool coco_boot_attach_dsk(const char *path) {
-    if (g_dsk_open) { f_close(&g_dsk_file); g_dsk_open = false; }
-    FRESULT fr = f_open(&g_dsk_file, path, FA_READ);
+extern "C" void coco_boot_eject_drive(unsigned drive) {
+    if (drive >= COCO_NDRIVE) return;
+    if (g_dsk_open[drive]) {
+        f_close(&g_dsk_file[drive]);
+        Serial.printf("[dsk] drive %u ejected %s\n", drive, g_dsk_path[drive]);
+    }
+    g_dsk_open[drive] = false;
+    g_dsk_path[drive][0] = '\0';
+}
+
+extern "C" bool coco_boot_mount_drive(unsigned drive, const char *path) {
+    if (drive >= COCO_NDRIVE || !path) return false;
+    coco_boot_eject_drive(drive);
+    if (strlen(path) >= sizeof g_dsk_path[drive]) return false;
+    FRESULT fr = f_open(&g_dsk_file[drive], path, FA_READ);
     if (fr != FR_OK) {
-        Serial.printf("[dsk] open %s failed: %s (%d)\n",
-                      path, FRESULT_str(fr), fr);
+        Serial.printf("[dsk] drive %u open %s failed: %s (%d)\n",
+                      drive, path, FRESULT_str(fr), fr);
         return false;
     }
-    g_dsk_open = true;
-    Serial.printf("[dsk] attached %s (%lu bytes)\n",
-                  path, (unsigned long)f_size(&g_dsk_file));
+    g_dsk_open[drive] = true;
+    strcpy(g_dsk_path[drive], path);
+    Serial.printf("[dsk] drive %u mounted %s (%lu bytes)\n",
+                  drive, path, (unsigned long)f_size(&g_dsk_file[drive]));
     return true;
+}
+
+extern "C" const char *coco_boot_drive_path(unsigned drive) {
+    return (drive < COCO_NDRIVE && g_dsk_open[drive]) ? g_dsk_path[drive] : nullptr;
+}
+
+// Boot-time autorun path: @DISK and the default disk go to drive 0.
+extern "C" bool coco_boot_attach_dsk(const char *path) {
+    return coco_boot_mount_drive(0, path);
 }
 
 extern "C" int coco_boot_disk_read_sector(unsigned drive, unsigned track,
                                           unsigned sector, uint8_t *out256) {
-    if (drive != 0 || !g_dsk_open) {
-        Serial.printf("[dsk] reject drive=%u open=%d\n", drive, (int)g_dsk_open);
-        return 1;
-    }
+    if (drive >= COCO_NDRIVE || !g_dsk_open[drive])
+        return COCO_DISK_NOT_READY;          // empty drive, as a real one reports
     if (track > 34 || sector < 1 || sector > 18) {
-        Serial.printf("[dsk] reject t=%u s=%u (range)\n", track, sector);
+        Serial.printf("[dsk] reject d=%u t=%u s=%u (range)\n", drive, track, sector);
         return 1;
     }
+    FIL *f = &g_dsk_file[drive];
     const uint32_t off = ((uint32_t)track * 18 + (sector - 1)) * 256;
-    FRESULT fr = f_lseek(&g_dsk_file, off);
+    FRESULT fr = f_lseek(f, off);
     if (fr != FR_OK) {
-        Serial.printf("[dsk] seek t=%u s=%u failed: %d\n", track, sector, fr);
+        Serial.printf("[dsk] seek d=%u t=%u s=%u failed: %d\n", drive, track, sector, fr);
         return 1;
     }
     UINT br = 0;
-    fr = f_read(&g_dsk_file, out256, 256, &br);
+    fr = f_read(f, out256, 256, &br);
     if (fr != FR_OK || br != 256) {
-        Serial.printf("[dsk] read t=%u s=%u failed: fr=%d br=%u\n", track, sector, fr, (unsigned)br);
+        Serial.printf("[dsk] read d=%u t=%u s=%u failed: fr=%d br=%u\n",
+                      drive, track, sector, fr, (unsigned)br);
         return 1;
     }
     return 0;

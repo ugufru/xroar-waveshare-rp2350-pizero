@@ -312,7 +312,9 @@ static void fdc_handle_command(uint8_t cmd) {
         int rc = g_m.fdc_read_cb(g_m.fdc_drive, g_m.fdc_track,
                                  g_m.fdc_sector, g_m.fdc_buf);
         if (rc != 0) {
-            g_m.fdc_status = 0x10;
+            // PIZERO-114: an empty drive reports NOT READY, as a WD279x does
+            // with no disk; anything else is RECORD NOT FOUND.
+            g_m.fdc_status = (rc == COCO_DISK_NOT_READY) ? 0x80 : 0x10;
             g_m.fdc_busy = false;
             fdc_signal_intrq();
             return;
@@ -381,6 +383,10 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
 
 extern "C" void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn) {
     g_m.fdc_read_cb = fn;
+}
+
+extern "C" unsigned coco_machine_fdc_drive(void) {
+    return g_m.fdc_drive;
 }
 
 extern "C" void coco_machine_loadm_write(uint16_t addr, const uint8_t *src, uint16_t len) {

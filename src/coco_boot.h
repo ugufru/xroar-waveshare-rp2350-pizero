@@ -58,6 +58,12 @@ bool coco_boot_load_cart_named(const char *name, uint8_t *cart8k);
 // coco_boot_resolve("dsk", name, ...) to build it).
 bool coco_boot_attach_dsk(const char *path);
 
+// PIZERO-114: four drives. Mount replaces whatever is in the drive; eject
+// empties it. drive_path is the mounted path, or NULL for an empty drive.
+bool coco_boot_mount_drive(unsigned drive, const char *path);
+void coco_boot_eject_drive(unsigned drive);
+const char *coco_boot_drive_path(unsigned drive);
+
 // Sector read for the WD2797 emulator (set up in coco_machine).
 int coco_boot_disk_read_sector(unsigned drive, unsigned track,
                                unsigned sector, uint8_t *out256);
