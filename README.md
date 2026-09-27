@@ -79,6 +79,12 @@ same HDMI cable**. Only joystick input remains open.
    - *Cartridges:* **ENTER** plugs it in and restarts into it.
 
    Disks are read-only for now.
+5. **Three-voice sound: an SN76489 at `$FF41`.** The sound chip from the Games
+   Master Cartridge (three square-wave tones, noise, 16 volume steps) is
+   always there, not only with a GMC plugged in, so GMC music works and your
+   own programs can use it: `POKE &HFF41,&H9F` silences tone 1, for example.
+   Bank-switched cartridges over 16 KB (Games Master Cartridge style) load
+   from the cartridge list too.
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).

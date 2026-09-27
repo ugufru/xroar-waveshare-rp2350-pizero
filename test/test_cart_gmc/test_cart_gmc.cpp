@@ -49,10 +49,25 @@ static void test_even_is_bank_odd_is_sound(void) {
     TEST_ASSERT_TRUE(gmc_is_bank_register(0xFF5E));
 }
 
+static void test_chip_on_the_odd_latch_mirrors_only(void) {
+    // $FF41 is where GMC software writes the chip; it must reach the chip
+    // with Disk BASIC in. The latch itself and the WD279x must not.
+    TEST_ASSERT_TRUE(csg_on_latch_mirror(0xFF41));
+    TEST_ASSERT_TRUE(csg_on_latch_mirror(0xFF47));
+    TEST_ASSERT_TRUE(csg_on_latch_mirror(0xFF51));
+    TEST_ASSERT_FALSE(csg_on_latch_mirror(0xFF40));   // the drive latch DECB uses
+    TEST_ASSERT_FALSE(csg_on_latch_mirror(0xFF42));
+    for (uint16_t a = 0xFF48; a <= 0xFF4F; a++)       // the WD279x and mirrors
+        TEST_ASSERT_FALSE(csg_on_latch_mirror(a));
+    for (uint16_t a = 0xFF58; a <= 0xFF5F; a++)
+        TEST_ASSERT_FALSE(csg_on_latch_mirror(a));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_banked_sizes);
     RUN_TEST(test_bank_offsets_stay_inside_the_image);
     RUN_TEST(test_even_is_bank_odd_is_sound);
+    RUN_TEST(test_chip_on_the_odd_latch_mirrors_only);
     return UNITY_END();
 }

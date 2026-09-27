@@ -33,4 +33,15 @@ static inline uint32_t gmc_bank_offset(uint8_t d, uint32_t len) {
 // Which of the GMC's two registers an $FF40-$FF5F write reaches.
 static inline bool gmc_is_bank_register(uint16_t a) { return (a & 1) == 0; }
 
+// PIZERO-143: the SN76489 is available all the time, not only with a GMC in
+// (a settings switch will turn that off). Without a banked cart, $FF40-$FF5F
+// belongs to the disk controller: A3 = 0 is its drive latch, which repeats
+// across $FF40-$FF47 (and $FF50-$FF57); A3 = 1 is the WD279x at $FF48-$FF4B.
+// Disk BASIC and OS-9 write the latch only at $FF40 itself, so its ODD
+// mirrors ($FF41, 43, 45, 47 and 51-57) go to the chip instead. That puts it
+// at $FF41, where GMC software writes it, with Disk BASIC still working.
+static inline bool csg_on_latch_mirror(uint16_t a) {
+    return (a & 0x09) == 0x01;               // odd, and in the latch half
+}
+
 #endif  // CART_GMC_H

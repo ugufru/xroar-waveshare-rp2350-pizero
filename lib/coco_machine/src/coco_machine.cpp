@@ -454,6 +454,24 @@ static void csg_reset(void) {
     g_csg_active = false;
 }
 
+// Available all the time by default, not only with a GMC in (see
+// csg_on_latch_mirror in cart_gmc.h); the settings page will switch it.
+static bool g_csg_always = true;
+
+// A byte from the bus to the chip, dropped if it comes inside the chip's
+// 32-clock ready gap, as XRoar does.
+static void csg_bus_write(uint8_t d) {
+    g_m.csg_writes++;
+    uint32_t now = (uint32_t)event_current_tick;
+    if (sn_ready(g_csg_last_write, now)) {
+        sn_write(&g_csg, d);
+        g_csg_last_write = now;
+        g_csg_active = true;
+    } else {
+        g_csg_dropped++;
+    }
+}
+
 extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     (void)sptr;
     g_m.total_mem_cycles++;
@@ -582,19 +600,14 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         }
 #endif
         else if ((A & 0xFFE0) == 0xFF40) {                               // cart I/O
-            if (!g_m.cart_banked) fdc_io_write(A, g_m.cpu->D);
-            else if (gmc_is_bank_register(A))                            // PIZERO-142
-                g_m.cart_rom = g_m.cart_base + gmc_bank_offset(g_m.cpu->D, g_m.cart_len);
-            else {                                                       // PIZERO-143
-                g_m.csg_writes++;
-                uint32_t now = (uint32_t)event_current_tick;
-                if (sn_ready(g_csg_last_write, now)) {
-                    sn_write(&g_csg, g_m.cpu->D);
-                    g_csg_last_write = now;
-                    g_csg_active = true;
-                } else {
-                    g_csg_dropped++;
-                }
+            if (g_m.cart_banked) {
+                if (gmc_is_bank_register(A))                             // PIZERO-142
+                    g_m.cart_rom = g_m.cart_base + gmc_bank_offset(g_m.cpu->D, g_m.cart_len);
+                else csg_bus_write(g_m.cpu->D);                          // PIZERO-143
+            } else if (g_csg_always && csg_on_latch_mirror(A)) {
+                csg_bus_write(g_m.cpu->D);           // PIZERO-143: $FF41 with Disk BASIC in
+            } else {
+                fdc_io_write(A, g_m.cpu->D);
             }
         }
         else if (A < 0x8000)             g_m.ram[A] = g_m.cpu->D;
@@ -1086,6 +1099,10 @@ extern "C" void coco_machine_install_cart_banked(const uint8_t *rom, uint32_t le
 
 extern "C" uint32_t coco_machine_cart_csg_writes(void) { return g_m.csg_writes; }
 extern "C" uint32_t coco_machine_cart_csg_dropped(void) { return g_csg_dropped; }
+extern "C" void coco_machine_csg_always(bool on) {   // PIZERO-143, for the settings page
+    g_csg_always = on;
+    if (!on && !g_m.cart_banked) csg_reset();
+}
 
 // PIZERO-81d: a power-on restart without a power cycle, for launching from
 // the F12 overlay. Ported from the Fruit Jam port's coco_machine_cold_reset

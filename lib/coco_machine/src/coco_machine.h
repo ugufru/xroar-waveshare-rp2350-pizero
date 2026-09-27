@@ -41,6 +41,10 @@ void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len);
 void coco_machine_install_cart_banked(const uint8_t *rom, uint32_t len);
 uint32_t coco_machine_cart_csg_writes(void);    /* bytes written to the SN76489 */
 uint32_t coco_machine_cart_csg_dropped(void);   /* ...of which too fast, ignored */
+/* PIZERO-143: the SN76489 is also available without a GMC, at $FF41 (the
+ * odd mirrors of the disk latch), unless switched off here. On by default;
+ * the settings page (PIZERO-53) will expose it. */
+void coco_machine_csg_always(_Bool on);
 
 /* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,
  * SAM reset), keeping the installed cartridge, disk reader and drives. */
