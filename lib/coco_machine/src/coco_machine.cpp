@@ -1107,10 +1107,13 @@ static_assert(PAL_GREEN == VDG_PAL_GREEN && PAL_WHITE == VDG_PAL_WHITE &&
               PAL_BLUE == VDG_PAL_BLUE && PAL_ORANGE == VDG_PAL_ORANGE,
               "vdg_pack.h palette indices must match coco_machine.cpp");
 #define PAL_DARK_GREEN  9
+// PIZERO-140: the GM 0-6 renderer in vdg_pack.h draws RG backgrounds in these.
+static_assert(PAL_BLACK == VDG_PAL_BLACK && PAL_DARK_GREEN == VDG_PAL_DARK_GREEN,
+              "vdg_pack.h palette indices must match coco_machine.cpp");
 
-// Lines-per-row for each graphics GM (vertical replication). GM bit0
-// also selects RG (1 bit/pixel, 2 colours) vs CG (2 bits/pixel, 4).
-static const uint8_t GM_nLPR[8] = { 3, 3, 3, 2, 2, 1, 1, 1 };
+// Lines-per-row for each graphics GM (vertical replication) is VDG_GM_NLPR
+// in vdg_pack.h. GM bit0 also selects RG (1 bit/pixel, 2 colours) vs CG
+// (2 bits/pixel, 4).
 
 static inline void put2(uint8_t *dst, int px, uint8_t color) {
     // Pack into vdg_buffer (low nibble = even px, high nibble = odd px).
@@ -1228,57 +1231,13 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
 
 // AMOLED-60: general color/resolution-graphics renderer for GM 0-6.
 // (RG6/GM7 is handled by render_rg6_frame for its NTSC-artifact path.)
-// Reads bytes_per_row bytes per data row, expands to 256 logical pixels
-// with horizontal replication, and repeats each data row nLPR display
-// scanlines. RG = 1 bit/pixel fg/bg; CG = 2 bits/pixel, colour =
-// cg_base + value.
+// PIZERO-140: table-driven, in vdg_pack.h. Each data byte becomes its run of
+// packed pixels in one lookup instead of a per-pixel loop; the host test
+// checks every mode frame-for-frame against the per-pixel rule. Popcorn
+// (GM5) took ~7.5 ms a frame here before and ran at 50 fps.
+static struct vdg_gm_lut g_gm_lut = { -1, {{0}} };
 static void HOT_FUNC(render_graphics_frame)(uint16_t base, uint8_t gm, bool css) {
-    const bool is_32       = (gm == 2 || gm == 4 || gm == 6);
-    const int  bytes_per_row = is_32 ? 32 : 16;
-    const int  nlpr        = GM_nLPR[gm];
-    const bool rg          = gm & 1;
-    const int  data_rows   = COCO_VDG_H / nlpr;          // 64/96/192
-
-    const uint8_t cg_base = css ? PAL_WHITE : PAL_GREEN; // CG colour set
-    const uint8_t fg = css ? PAL_WHITE : PAL_GREEN;      // RG foreground
-    const uint8_t bg = css ? PAL_BLACK : PAL_DARK_GREEN; // RG background
-
-    // Source pixels produced per row before horizontal replication:
-    //   RG → 8 per byte, CG → 4 cells per byte.
-    const int src_px = rg ? bytes_per_row * 8 : bytes_per_row * 4;
-    const int hrep   = COCO_VDG_W / src_px;              // 1/2/4
-
-    static uint8_t rowbuf[COCO_VDG_W];
-    for (int drow = 0; drow < data_rows; drow++) {
-        const uint8_t *p = &g_m.ram[(base + drow * bytes_per_row) & 0xFFFF];
-        int px = 0;
-        for (int byte = 0; byte < bytes_per_row; byte++) {
-            uint8_t b = p[byte];
-            if (rg) {
-                for (int bit = 0; bit < 8; bit++) {
-                    uint8_t c = (b & (0x80 >> bit)) ? fg : bg;
-                    for (int r = 0; r < hrep; r++) rowbuf[px++] = c;
-                }
-            } else {
-                for (int cell = 0; cell < 4; cell++) {
-                    uint8_t c = cg_base + ((b >> 6) & 3);
-                    b <<= 2;
-                    for (int r = 0; r < hrep; r++) rowbuf[px++] = c;
-                }
-            }
-        }
-        // PIZERO-119: pack the row ONCE, then copy it for the repeats. This
-        // path repeats each data row 1, 2 or 3 display lines (GM_nLPR), and
-        // it used to re-pack all 256 pixels for every one of them.
-        alignas(4) static uint8_t packed[COCO_VDG_W / 2];
-        for (int x = 0; x < COCO_VDG_W; x += 2)
-            packed[x >> 1] = rowbuf[x] | (rowbuf[x + 1] << 4);
-        for (int rep = 0; rep < nlpr; rep++) {
-            int disp = drow * nlpr + rep;
-            if (disp >= COCO_VDG_H) break;
-            memcpy(&g_m.vdg_buffer[disp * (COCO_VDG_W / 2)], packed, sizeof packed);
-        }
-    }
+    vdg_render_gm(&g_gm_lut, g_m.ram, base, gm, css, g_m.vdg_buffer);
 }
 
 extern "C" void HOT_FUNC(coco_machine_render_frame)(void) {

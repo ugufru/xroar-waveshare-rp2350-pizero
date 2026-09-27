@@ -16,6 +16,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 // Palette indices. These must match the PAL_* defines in coco_machine.cpp;
 // vdg_pack_assert_palette() below is compiled into both and checks it.
@@ -139,6 +140,94 @@ static inline uint16_t vdg_display_base_legacy(uint16_t sam_f) {
 // and only fall back before that (so boot does not show a frame of garbage).
 static inline uint16_t vdg_display_base(uint16_t sam_f, bool sam_f_written) {
     return sam_f_written ? sam_f : (uint16_t)0x0400;
+}
+
+// ---- GM 0-6 graphics modes (PIZERO-140) ------------------------------------
+//
+// The colour and resolution graphics modes other than RG6 used to be drawn a
+// pixel at a time: every bit or 2-bit cell expanded through a replication
+// loop into a row buffer, then packed. Popcorn (GM5) spent ~7.5 ms a frame on
+// it and ran at 50 fps. Every mode here turns one data byte into a fixed run
+// of packed output bytes (a data row is always 256 displayed pixels, 128
+// packed bytes), so a 256-entry table indexed by the data byte does the whole
+// expansion in one lookup. The table is built from exactly the per-pixel rule
+// it replaces, and the host test compares whole frames against that rule.
+
+// Display lines per data row, by GM (must match GM_nLPR in coco_machine.cpp).
+static const uint8_t VDG_GM_NLPR[8] = { 3, 3, 3, 2, 2, 1, 1, 1 };
+
+static inline int vdg_gm_bytes_per_row(uint8_t gm) {
+    return (gm == 2 || gm == 4 || gm == 6) ? 32 : 16;
+}
+
+// Packed output bytes per data byte: 128 packed bytes per row.
+static inline int vdg_gm_out_per_byte(uint8_t gm) {
+    return 128 / vdg_gm_bytes_per_row(gm);            // 8 or 4
+}
+
+// The palette index of each displayed pixel one data byte produces, the rule
+// render_graphics_frame always used: RG = 1 bit/pixel fg or bg; CG = 2-bit
+// cells, colour = base + value; each repeated to fill 256 pixels a row.
+static inline int vdg_gm_expand(uint8_t gm, bool css, uint8_t b, uint8_t *px) {
+    const bool rg = gm & 1;
+    const int  src_px = rg ? vdg_gm_bytes_per_row(gm) * 8 : vdg_gm_bytes_per_row(gm) * 4;
+    const int  hrep = 256 / src_px;
+    const uint8_t cg_base = css ? VDG_PAL_WHITE : VDG_PAL_GREEN;
+    const uint8_t fg = css ? VDG_PAL_WHITE : VDG_PAL_GREEN;
+    const uint8_t bg = css ? VDG_PAL_BLACK : VDG_PAL_DARK_GREEN;
+    int n = 0;
+    if (rg) {
+        for (int bit = 0; bit < 8; bit++) {
+            uint8_t c = (b & (0x80 >> bit)) ? fg : bg;
+            for (int r = 0; r < hrep; r++) px[n++] = c;
+        }
+    } else {
+        for (int cell = 0; cell < 4; cell++) {
+            uint8_t c = (uint8_t)(cg_base + ((b >> 6) & 3));
+            b = (uint8_t)(b << 2);
+            for (int r = 0; r < hrep; r++) px[n++] = c;
+        }
+    }
+    return n;                                        // 16 or 8 pixels
+}
+
+struct vdg_gm_lut {
+    int     key;                                     // gm * 2 + css, -1 = none
+    uint8_t out[256][8];                             // packed bytes per data byte
+};
+
+static inline void vdg_gm_lut_build(struct vdg_gm_lut *t, uint8_t gm, bool css) {
+    for (int b = 0; b < 256; b++) {
+        uint8_t px[16];
+        int n = vdg_gm_expand(gm, css, (uint8_t)b, px);
+        for (int i = 0; i < n; i += 2)
+            t->out[b][i >> 1] = (uint8_t)(px[i] | (px[i + 1] << 4));
+    }
+    t->key = gm * 2 + (css ? 1 : 0);
+}
+
+// Render a whole GM 0-6 frame from guest RAM into the packed VDG buffer
+// (192 rows of 128 bytes). The table is rebuilt only when the mode or colour
+// set changes, which on a running game is never.
+static inline void vdg_render_gm(struct vdg_gm_lut *t, const uint8_t *ram,
+                                 uint16_t base, uint8_t gm, bool css,
+                                 uint8_t *vdg_buffer) {
+    if (t->key != gm * 2 + (css ? 1 : 0)) vdg_gm_lut_build(t, gm, css);
+    const int bpr  = vdg_gm_bytes_per_row(gm);
+    const int opb  = vdg_gm_out_per_byte(gm);
+    const int nlpr = VDG_GM_NLPR[gm];
+    const int data_rows = 192 / nlpr;
+    for (int drow = 0; drow < data_rows; drow++) {
+        const uint8_t *p = &ram[(uint16_t)(base + drow * bpr)];
+        uint8_t *row = &vdg_buffer[drow * nlpr * 128];
+        if (opb == 8) {
+            for (int i = 0; i < 16; i++) memcpy(row + i * 8, t->out[p[i]], 8);
+        } else {
+            for (int i = 0; i < 32; i++) memcpy(row + i * 4, t->out[p[i]], 4);
+        }
+        for (int rep = 1; rep < nlpr; rep++)
+            memcpy(row + rep * 128, row, 128);
+    }
 }
 
 #endif  // VDG_PACK_H

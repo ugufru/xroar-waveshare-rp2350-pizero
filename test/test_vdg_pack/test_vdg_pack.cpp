@@ -11,6 +11,7 @@
 
 #include <unity.h>
 
+#include <cstdio>
 #include <cstring>
 
 #include "../../lib/coco_machine/src/vdg_pack.h"
@@ -187,6 +188,90 @@ static void test_display_base_honours_zero_once_written(void) {
 void setUp(void) {}
 void tearDown(void) {}
 
+// --- PIZERO-140: GM 0-6 whole frames ---------------------------------------
+// render_graphics_frame as it stood before PIZERO-140, transcribed verbatim
+// from coco_machine.cpp (per-bit and per-cell expansion, then pack). The table
+// renderer must match it byte for byte on every mode, both colour sets.
+static const uint8_t REF_GM_nLPR[8] = { 3, 3, 3, 2, 2, 1, 1, 1 };
+static void ref_render_graphics_frame(const uint8_t *ram, uint16_t base, uint8_t gm,
+                                      bool css, uint8_t *vdg_buffer) {
+    const bool is_32       = (gm == 2 || gm == 4 || gm == 6);
+    const int  bytes_per_row = is_32 ? 32 : 16;
+    const int  nlpr        = REF_GM_nLPR[gm];
+    const bool rg          = gm & 1;
+    const int  data_rows   = 192 / nlpr;
+    const uint8_t cg_base = css ? VDG_PAL_WHITE : VDG_PAL_GREEN;
+    const uint8_t fg = css ? VDG_PAL_WHITE : VDG_PAL_GREEN;
+    const uint8_t bg = css ? VDG_PAL_BLACK : VDG_PAL_DARK_GREEN;
+    const int src_px = rg ? bytes_per_row * 8 : bytes_per_row * 4;
+    const int hrep   = 256 / src_px;
+    uint8_t rowbuf[256];
+    for (int drow = 0; drow < data_rows; drow++) {
+        const uint8_t *p = &ram[(base + drow * bytes_per_row) & 0xFFFF];
+        int px = 0;
+        for (int byte = 0; byte < bytes_per_row; byte++) {
+            uint8_t b = p[byte];
+            if (rg) {
+                for (int bit = 0; bit < 8; bit++) {
+                    uint8_t c = (b & (0x80 >> bit)) ? fg : bg;
+                    for (int r = 0; r < hrep; r++) rowbuf[px++] = c;
+                }
+            } else {
+                for (int cell = 0; cell < 4; cell++) {
+                    uint8_t c = cg_base + ((b >> 6) & 3);
+                    b <<= 2;
+                    for (int r = 0; r < hrep; r++) rowbuf[px++] = c;
+                }
+            }
+        }
+        uint8_t packed[128];
+        for (int x = 0; x < 256; x += 2)
+            packed[x >> 1] = rowbuf[x] | (rowbuf[x + 1] << 4);
+        for (int rep = 0; rep < nlpr; rep++) {
+            int disp = drow * nlpr + rep;
+            if (disp >= 192) break;
+            memcpy(&vdg_buffer[disp * 128], packed, sizeof packed);
+        }
+    }
+}
+
+static uint8_t g_ram[65536 + 64];
+static uint8_t g_ref[192 * 128], g_new[192 * 128];
+
+static void test_gm_frames_match_the_per_pixel_renderer(void) {
+    uint32_t seed = 12345;
+    for (size_t i = 0; i < sizeof g_ram; i++) {        // deterministic noise
+        seed = seed * 1103515245u + 12345u;
+        g_ram[i] = (uint8_t)(seed >> 16);
+    }
+    static struct vdg_gm_lut lut = { -1, {{0}} };
+    const uint16_t bases[] = { 0x0400, 0x0600, 0x0E00, 0x1C00, 0x3000, 0x6000 };
+    for (int gm = 0; gm <= 6; gm++)
+        for (int css = 0; css <= 1; css++)
+            for (unsigned b = 0; b < sizeof bases / sizeof bases[0]; b++) {
+                memset(g_ref, 0xAA, sizeof g_ref);
+                memset(g_new, 0x55, sizeof g_new);
+                ref_render_graphics_frame(g_ram, bases[b], (uint8_t)gm, css, g_ref);
+                vdg_render_gm(&lut, g_ram, bases[b], (uint8_t)gm, css, g_new);
+                char msg[48];
+                snprintf(msg, sizeof msg, "gm=%d css=%d base=%04X", gm, css, bases[b]);
+                TEST_ASSERT_EQUAL_MEMORY_MESSAGE(g_ref, g_new, sizeof g_ref, msg);
+            }
+}
+
+static void test_gm_every_byte_value_in_every_mode(void) {
+    // Noise might miss a value; walk all 256 through the first data row.
+    static struct vdg_gm_lut lut = { -1, {{0}} };
+    for (int gm = 0; gm <= 6; gm++)
+        for (int css = 0; css <= 1; css++)
+            for (int v = 0; v < 256; v++) {
+                memset(g_ram, v, 64);
+                ref_render_graphics_frame(g_ram, 0, (uint8_t)gm, css, g_ref);
+                vdg_render_gm(&lut, g_ram, 0, (uint8_t)gm, css, g_new);
+                TEST_ASSERT_EQUAL_MEMORY(g_ref, g_new, 128);
+            }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_pack8_matches_put2);
@@ -201,5 +286,7 @@ int main(void) {
     RUN_TEST(test_alpha_glyph_index_folds_into_the_t1_block);
     RUN_TEST(test_display_base_legacy_loses_address_zero);
     RUN_TEST(test_display_base_honours_zero_once_written);
+    RUN_TEST(test_gm_frames_match_the_per_pixel_renderer);
+    RUN_TEST(test_gm_every_byte_value_in_every_mode);
     return UNITY_END();
 }
