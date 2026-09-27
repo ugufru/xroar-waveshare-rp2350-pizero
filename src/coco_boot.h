@@ -94,6 +94,7 @@ void coco_boot_card_clear(void);
 void coco_boot_card_text(int col, int row, const char *s);
 void coco_boot_card_center(int row, const char *s);
 void coco_boot_card_present(uint16_t *fb);
+void coco_boot_card_invert_row(int row);   // PIZERO-81b: selection bar
 int  coco_boot_card_wrap(int col, int row, int width, int max_rows, const char *s);
 
 /* PIZERO-92: what the last ROM load actually found, so a diagnostic can tell a

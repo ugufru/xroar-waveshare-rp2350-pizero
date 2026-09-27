@@ -109,4 +109,16 @@ static inline int dsk_cat_find_path(const struct dsk_catalog *c, const char *pat
     return -1;
 }
 
+// The name as the overlay shows it: every entry is a .dsk, so the extension
+// is dropped to leave more of the name on a 32-column screen. Clipped to
+// `width` characters.
+static inline void dsk_cat_display_name(const char *name, char *out, int width) {
+    int len = (int)strlen(name);
+    const char *ext = strrchr(name, '.');
+    if (ext && strcasecmp(ext, ".dsk") == 0) len = (int)(ext - name);
+    if (len > width) len = width;
+    memcpy(out, name, (size_t)len);
+    out[len] = '\0';
+}
+
 #endif  // DSK_CATALOG_H

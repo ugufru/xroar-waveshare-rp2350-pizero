@@ -108,7 +108,7 @@ estimates rather than quotes. Fill in real numbers when ordering.
 
 ## 4. The card that goes in the box
 
-These four items account for essentially every question you will be asked.
+These five items account for essentially every question you will be asked.
 
 > **CoCo on RP2350 — read this first**
 >
@@ -129,6 +129,10 @@ These four items account for essentially every question you will be asked.
 > Format a microSD as FAT32 and put `bas12.rom` in `/coco/roms/` — that one is
 > required. `extbas11.rom` and `disk11.rom` are strongly recommended. We do not
 > distribute them; they are still under copyright, so dump or source your own.
+>
+> **5. Press F12 to change disks.** Put `.dsk` images in `/coco/dsk/` on the
+> card. F12 shows them; press 0 to 3 to put the highlighted one in that drive,
+> ESC to go back to the program.
 >
 > Everything else — the source, the build instructions, the SD layout, and how
 > to update the firmware — is at:

@@ -78,6 +78,11 @@ Mount this disk image as drive 0.
 If absent: the loader mounts the first `.dsk` found in `/coco/dsk/`
 or `/coco/` (alphabetical). If no disks exist, no disk is mounted.
 
+After boot, **F12** opens the disk drives overlay, which can put any
+`.dsk` from `/coco/dsk` or `/coco` into drives 0 to 3, replacing what
+`@DISK` mounted (PIZERO-114). `@DISK` only decides what drive 0 holds at
+power-on.
+
 ### `@CART filename.rom` (or `.ccc`)
 Install this cartridge ROM at `$C000`.
 

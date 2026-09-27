@@ -609,6 +609,15 @@ extern "C" void coco_boot_card_text(int col, int row, const char *s) {
         if (c >= 0) g_card[row][c] = card_code(*s);
 }
 
+// PIZERO-81b: inverse video for a whole row (the overlay's selection and
+// title bars), as the 6847 draws it: paper-coloured glyphs on an ink bar.
+// Bit 7 of a card cell is free, since card_code only yields $20-$5F.
+#define CARD_INVERSE 0x80
+extern "C" void coco_boot_card_invert_row(int row) {
+    if (row < 0 || row >= CARD_ROWS) return;
+    for (int c = 0; c < CARD_COLS; c++) g_card[row][c] |= CARD_INVERSE;
+}
+
 extern "C" void coco_boot_card_center(int row, const char *s) {
     if (!s) return;
     int len = 0;
@@ -646,10 +655,13 @@ extern "C" void coco_boot_card_present(uint16_t *fb) {
             uint16_t *frow = &fb[(PIZERO_Y0 + y) * PIZERO_FB_W + PIZERO_X0];
             for (int c = 0; c < CARD_COLS; c++) {
                 // Same fold the alpha renderer uses, from the tested header.
-                uint8_t glyph = font_6847t1[vdg_alpha_glyph_index(g_card[r][c]) * 12 + sub];
+                uint8_t cell = g_card[r][c];
+                uint8_t glyph = font_6847t1[vdg_alpha_glyph_index(cell & 0x7F) * 12 + sub];
+                uint16_t fg = (cell & CARD_INVERSE) ? paper : ink;
+                uint16_t bg = (cell & CARD_INVERSE) ? ink : paper;
                 uint16_t *px = &frow[c * 8];
                 for (int b = 0; b < 8; b++)
-                    px[b] = (glyph & (0x80 >> b)) ? ink : paper;
+                    px[b] = (glyph & (0x80 >> b)) ? fg : bg;
             }
         }
     }

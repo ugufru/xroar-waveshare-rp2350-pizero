@@ -113,6 +113,7 @@ extern "C" {
 
 #include "coco_boot.h"
 #include "dsk_catalog.h"   // PIZERO-81a
+#include "disk_overlay.h"  // PIZERO-81/114: F12 disk drives overlay
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -352,6 +353,11 @@ static void hid_table_init(void) {
 // HID boot-keyboard report state. tuh_hid_report_received_cb fires from
 // USBHost.task() (called once per loop()), so this runs on core 0 alongside
 // the CoCo machine — no cross-core sync needed.
+static bool    g_machine_running = false;
+// PIZERO-81c: frames since boot (key repeat timing), and the audio pause the
+// overlay asks for, read by core 1 in stream_next_sample.
+static uint32_t g_frame_count = 0;
+static volatile bool g_audio_paused = false;
 static uint8_t g_hid_prev_codes[6] = {0};
 static bool    g_hid_shift_prev = false;
 
@@ -359,6 +365,26 @@ static void hid_keyboard_apply(const uint8_t *report) {
     uint8_t mods = report[0];
     const uint8_t *codes = &report[2];
     bool shift = (mods & 0x22u) != 0;  // bit 1 = L-Shift, bit 5 = R-Shift
+
+    // PIZERO-81c: the F12 overlay sees every report first. Open, it takes all
+    // of them, so nothing reaches BASIC; closed, it takes only F12.
+    if (g_machine_running) {
+        bool closed = false;
+        if (disk_overlay_key(codes, g_frame_count, &closed)) {
+            g_audio_paused = disk_overlay_is_open();
+            if (disk_overlay_is_open()) {
+                g_hid_shift_prev = false;          // open_now released every key
+            } else if (closed) {
+                // Resync to what is held NOW, so the ESC that closed the overlay
+                // is not seen as a fresh BREAK (FRUITJAM-68). A held shift is
+                // restored, since the machine's keys were all released on open.
+                memcpy(g_hid_prev_codes, codes, 6);
+                if (shift) coco_machine_press_key(K_SHIFT);
+                g_hid_shift_prev = shift;
+            }
+            return;
+        }
+    }
 
     // Modifier (shift only — CoCo has no Ctrl/Alt/Meta).
     if (shift && !g_hid_shift_prev) coco_machine_press_key(K_SHIFT);
@@ -393,7 +419,6 @@ static void hid_keyboard_apply(const uint8_t *report) {
 // ---- ROM/boot (same flow as the AMOLED port) -----------------------------
 static uint8_t g_coco_rom[16384];
 static uint8_t g_cart_rom[8192];
-static bool    g_machine_running = false;
 
 static bool mount_sd() {
     static FATFS fs;
@@ -612,9 +637,20 @@ static inline int16_t __not_in_flash_func(stream_next_sample)(void) {
     g_synth_ph += g_synth_inc;
     return s;
 #else
+    // PIZERO-81c: while the overlay pauses the machine, the ring is left
+    // exactly as it was (the producer is stopped too, so the rate servo sees
+    // no jump on resume) and the output fades to digital silence rather than
+    // holding the last level as DC. It fades back in on resume. 256 samples
+    // each way, about 5 ms: no click, and the stream never stops.
+    static uint16_t gain = 256;
+    if (g_audio_paused) {
+        if (gain) gain--;
+        return (int16_t)(((int32_t)g_stream_last * gain) >> 8);
+    }
     int16_t s;
     if (coco_machine_audio_read(&s, 1) < 1) { s = g_stream_last; g_stream_under++; }   // PIZERO-39: ring from IRQ
     g_stream_last = s;
+    if (gain < 256) { gain++; return (int16_t)(((int32_t)s * gain) >> 8); }
     return s;
 #endif
 }
@@ -818,11 +854,9 @@ static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 //   title    one line, centred, the headline the reader repeats on the phone
 //   body     what happened and what to do, wrapped
 //   detail   the evidence, so the next person does not have to guess
-static void boot_page(const char *title, const char *body, const char *detail) {
-    coco_boot_card_clear();
-    coco_boot_card_center(1, title);
-    int r = coco_boot_card_wrap(2, 4, 28, 7, body);
-    if (detail) coco_boot_card_wrap(2, (r < 12 ? 12 : r + 1), 28, 3, detail);
+// Put the finished card on screen. Shared by the boot pages and the F12
+// overlay (PIZERO-81), which both draw while the machine is not running.
+static void present_card(void) {
 #ifdef HDMI_DATA_ISLAND
     coco_boot_card_present(g_fb);
 #else
@@ -830,6 +864,14 @@ static void boot_page(const char *title, const char *body, const char *detail) {
     coco_boot_card_present(g_fb[1]);
     g_front = g_fb[0];
 #endif
+}
+
+static void boot_page(const char *title, const char *body, const char *detail) {
+    coco_boot_card_clear();
+    coco_boot_card_center(1, title);
+    int r = coco_boot_card_wrap(2, 4, 28, 7, body);
+    if (detail) coco_boot_card_wrap(2, (r < 12 ? 12 : r + 1), 28, 3, detail);
+    present_card();
 }
 
 void setup() {
@@ -1242,6 +1284,7 @@ void setup() {
         }
     }
 #endif // AUDIO_WAV_DUMP
+    disk_overlay_init(present_card);   // PIZERO-81: F12 disk drives overlay
     g_machine_running = true;
     Serial.print("[main] coco_machine running\r\n");
 #ifdef AUDIO_WAV_DUMP
@@ -1334,15 +1377,26 @@ void loop() {
     static uint32_t next_us = 0;
     if (next_us == 0) next_us = micros();
 
+    g_frame_count++;
+    uint32_t a, b, c, d;
+    if (disk_overlay_is_open()) {
+        // PIZERO-81c: the machine is paused under the overlay. No keys, no
+        // cycles, no render or blit; the overlay redraws only on change. USB,
+        // the watchdog, pacing and core 1's scanout and audio all carry on.
+        a = b = c = micros();
+        wd_phase(WP_RENDER);
+        disk_overlay_frame(g_frame_count);
+        d = micros();
+    } else {
     wd_phase(WP_KBD);
     pump_keyboard();
-    uint32_t a = micros();
+    a = micros();
     wd_phase(WP_EMU);
     coco_machine_run_cycles(CYCLES_PER_FRAME);
-    uint32_t b = micros();
+    b = micros();
     wd_phase(WP_RENDER);
     coco_machine_render_frame();                  // regenerate VDG buffer (SUPPRESS_RENDER_SCANLINE)
-    uint32_t c = micros();
+    c = micros();
     wd_phase(WP_BLIT);
 #ifdef HDMI_DATA_ISLAND
     coco_boot_blit_vdg_pizero(g_fb);              // single buffer; g_front already points at it
@@ -1351,7 +1405,8 @@ void loop() {
     g_front = g_fb[g_back];                        // publish: core 1 picks it up at its next frame
     g_back ^= 1;
 #endif
-    uint32_t d = micros();
+    d = micros();
+    }
     wd_phase(WP_AUDIO);
 #if defined(HDMI_DATA_ISLAND) && !defined(HDMI_AUDIO_SWAPTEST) && !defined(HDMI_AUDIO_STATIC) && !defined(HDMI_STREAM_AUDIO)
     audio_encode_frame();                          // M2 (bank path): refill the OFF bank's audio islands

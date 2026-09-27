@@ -98,6 +98,18 @@ static void test_paths_round_trip(void) {
     TEST_ASSERT_FALSE(dsk_cat_path(&cat, 0, p, 8));        // does not fit
 }
 
+static void test_display_name_drops_the_extension_and_clips(void) {
+    char out[32];
+    dsk_cat_display_name("GAMES.DSK", out, 27);
+    TEST_ASSERT_EQUAL_STRING("GAMES", out);
+    dsk_cat_display_name("mixed.Dsk", out, 27);
+    TEST_ASSERT_EQUAL_STRING("mixed", out);
+    dsk_cat_display_name("A_VERY_LONG_DISK_IMAGE_NAME_INDEED.DSK", out, 10);
+    TEST_ASSERT_EQUAL_STRING("A_VERY_LON", out);
+    dsk_cat_display_name("NOEXT", out, 27);
+    TEST_ASSERT_EQUAL_STRING("NOEXT", out);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_only_dsk_files_count);
@@ -107,5 +119,6 @@ int main(void) {
     RUN_TEST(test_long_names_are_counted_not_truncated);
     RUN_TEST(test_the_cap_counts_what_it_drops);
     RUN_TEST(test_paths_round_trip);
+    RUN_TEST(test_display_name_drops_the_extension_and_clips);
     return UNITY_END();
 }

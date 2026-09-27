@@ -66,6 +66,13 @@ same HDMI cable**. Only joystick input remains open.
    the microSD, then apply USB-C power. The CoCo boots to the BASIC `OK` prompt;
    type directly on the keyboard. `pio device monitor` (115200) shows `[run]`
    telemetry over serial.
+4. **Change disks with F12.** Press **F12** to open the disk drives overlay:
+   a list of the `.dsk` images in `/coco/dsk` (and `/coco`) over the paused
+   machine. **Up/Down**, **PgUp/PgDn** and **Home/End** move; **0**, **1**,
+   **2** or **3** puts the highlighted disk in that drive, or takes it out if
+   it is already there; **ESC** or **F12** closes it and the program carries
+   on. The first four columns show which drives hold each disk. Disks are
+   read-only for now.
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).
