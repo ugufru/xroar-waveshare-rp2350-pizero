@@ -352,6 +352,60 @@ static void test_key_names_round_trip(void) {
     TEST_ASSERT_EQUAL_UINT8(K_INVALID, kt_key_by_name("tab"));
 }
 
+// --- PIZERO-169: the pad drives the overlay -------------------------------------
+
+static bool has_code(const uint8_t c[6], uint8_t k) {
+    for (int i = 0; i < 6; i++) if (c[i] == k) return true;
+    return false;
+}
+
+static void test_nav_a_selects_b_goes_back_dpad_moves(void) {
+    uint8_t c[6];
+    TEST_ASSERT_EQUAL_INT(1, pad_nav_codes(PAD_BIT(PAD_B_BOTTOM), 8, c));
+    TEST_ASSERT_EQUAL_HEX8(PAD_HK_ENTER, c[0]);
+    TEST_ASSERT_EQUAL_INT(1, pad_nav_codes(PAD_BIT(PAD_B_RIGHT), 8, c));
+    TEST_ASSERT_EQUAL_HEX8(PAD_HK_ESC, c[0]);
+    pad_nav_codes(0, 0, c);  TEST_ASSERT_TRUE(has_code(c, PAD_HK_UP));
+    pad_nav_codes(0, 4, c);  TEST_ASSERT_TRUE(has_code(c, PAD_HK_DOWN));
+    pad_nav_codes(0, 6, c);  TEST_ASSERT_TRUE(has_code(c, PAD_HK_LEFT));
+    pad_nav_codes(0, 2, c);  TEST_ASSERT_TRUE(has_code(c, PAD_HK_RIGHT));
+    pad_nav_codes(PAD_BIT(PAD_B_L1) | PAD_BIT(PAD_B_R1) | PAD_BIT(PAD_B_LEFT), 8, c);
+    TEST_ASSERT_TRUE(has_code(c, PAD_HK_PGUP));
+    TEST_ASSERT_TRUE(has_code(c, PAD_HK_PGDN));
+    TEST_ASSERT_TRUE(has_code(c, PAD_HK_TAB));
+}
+
+static void test_nav_home_and_other_buttons_send_nothing(void) {
+    // Home is handled by main.cpp (open, then close once let go); the rest
+    // have no meaning in the overlay.
+    uint8_t c[6];
+    uint16_t others = PAD_BIT(PAD_B_HOME) | PAD_BIT(PAD_B_TOP) | PAD_BIT(PAD_B_START) |
+                      PAD_BIT(PAD_B_SELECT) | PAD_BIT(PAD_B_L2) | PAD_BIT(PAD_B_R2) |
+                      PAD_BIT(PAD_B_L3) | PAD_BIT(PAD_B_R3);
+    TEST_ASSERT_EQUAL_INT(0, pad_nav_codes(others, 8, c));
+    for (int i = 0; i < 6; i++) TEST_ASSERT_EQUAL_HEX8(0, c[i]);
+}
+
+static void test_nav_codes_match_the_overlay_keys(void) {
+    // The overlay reads HID usages; these must be the ones overlay_keys.h uses.
+    TEST_ASSERT_EQUAL_HEX8(0x28, PAD_HK_ENTER);  TEST_ASSERT_EQUAL_HEX8(0x29, PAD_HK_ESC);
+    TEST_ASSERT_EQUAL_HEX8(0x2B, PAD_HK_TAB);    TEST_ASSERT_EQUAL_HEX8(0x52, PAD_HK_UP);
+    TEST_ASSERT_EQUAL_HEX8(0x51, PAD_HK_DOWN);   TEST_ASSERT_EQUAL_HEX8(0x50, PAD_HK_LEFT);
+    TEST_ASSERT_EQUAL_HEX8(0x4F, PAD_HK_RIGHT);  TEST_ASSERT_EQUAL_HEX8(0x4B, PAD_HK_PGUP);
+    TEST_ASSERT_EQUAL_HEX8(0x4E, PAD_HK_PGDN);
+}
+
+static void test_home_is_never_a_coco_key(void) {
+    struct pad_map m; pad_map_defaults(&m);
+    m.act[PAD_B_HOME] = K_S;                     // even if something set it
+    struct pad_state st = {};
+    st.dpad = 8;
+    st.buttons = PAD_BIT(PAD_B_HOME);
+    struct pad_out o;
+    pad_resolve(&st, &m, &o);
+    TEST_ASSERT_EQUAL_UINT8(0, o.nkeys);
+}
+
 // Color BASIC's JOYSTK: a 6-bit successive approximation, writing each trial
 // to PIA1 port A bits 2-7 and keeping the bit while PA7 reads high.
 static int joystk(uint16_t axis) {
@@ -417,5 +471,9 @@ int main(void) {
     RUN_TEST(test_a_mapping_moves_fire_and_keys);
     RUN_TEST(test_dpad_as_arrows_presses_keys_and_leaves_the_stick);
     RUN_TEST(test_key_names_round_trip);
+    RUN_TEST(test_nav_a_selects_b_goes_back_dpad_moves);
+    RUN_TEST(test_nav_home_and_other_buttons_send_nothing);
+    RUN_TEST(test_nav_codes_match_the_overlay_keys);
+    RUN_TEST(test_home_is_never_a_coco_key);
     return UNITY_END();
 }

@@ -277,6 +277,7 @@ static inline void pad_resolve(const struct pad_state *s, const struct pad_map *
     o->nkeys = 0;
     for (int b = 0; b < PAD_BUTTONS; b++) {
         if (!(s->buttons & PAD_BIT(b))) continue;
+        if (b == PAD_B_HOME) continue;            // the overlay's button (PIZERO-169)
         uint8_t a = m->act[b];
         if (a == PAD_ACT_FIRE) o->fire[0] = true;
         else if (a == PAD_ACT_FIRE_RIGHT) o->fire[1] = true;
@@ -306,10 +307,49 @@ static inline bool pad_read(enum pad_kind k, const uint8_t *r, uint16_t len,
     return true;
 }
 
-// The names the settings file uses for the buttons, by PAD_B_*.
+// The names the settings file uses for the buttons, by PAD_B_*. Home is not
+// among them: it always opens and closes the overlay (PIZERO-169).
 static const char *const PAD_BUTTON_NAMES[PAD_BUTTONS] = {
     "bottom", "right", "left", "top", "l1", "r1", "l2", "r2",
-    "select", "start", "l3", "r3", "home",
+    "select", "start", "l3", "r3", 0,
 };
+
+// --- PIZERO-169: the pad drives the overlay -------------------------------------
+// While the overlay is open, the pad's buttons become the keyboard keys the
+// overlay already understands (HID usages, overlay_keys.h), which main.cpp
+// merges with the keyboard's own: D-pad = arrows (up/down move, left/right
+// switch lists), A (bottom) = ENTER, B (right) = ESC, L1/R1 = PgUp/PgDn,
+// X (left) = TAB. Home is main.cpp's job: it opens the overlay, and closes it
+// once it has been let go since opening (else the press that opened it would
+// close it again).
+#define PAD_HK_ENTER 0x28
+#define PAD_HK_ESC   0x29
+#define PAD_HK_TAB   0x2B
+#define PAD_HK_PGUP  0x4B
+#define PAD_HK_PGDN  0x4E
+#define PAD_HK_RIGHT 0x4F
+#define PAD_HK_LEFT  0x50
+#define PAD_HK_DOWN  0x51
+#define PAD_HK_UP    0x52
+
+// Fill codes[6] (zero-padded) and return how many were set.
+static inline int pad_nav_codes(uint16_t buttons, uint8_t dpad, uint8_t codes[6]) {
+    int n = 0;
+    for (int i = 0; i < 6; i++) codes[i] = 0;
+#define PAD_NAV_ADD(c) do { if (n < 6) codes[n++] = (uint8_t)(c); } while (0)
+    if (dpad < 8) {
+        static const int8_t HX[8] = {  0, +1, +1, +1,  0, -1, -1, -1 };
+        static const int8_t HY[8] = { -1, -1,  0, +1, +1, +1,  0, -1 };
+        if (HY[dpad]) PAD_NAV_ADD(HY[dpad] > 0 ? PAD_HK_DOWN : PAD_HK_UP);
+        if (HX[dpad]) PAD_NAV_ADD(HX[dpad] > 0 ? PAD_HK_RIGHT : PAD_HK_LEFT);
+    }
+    if (buttons & PAD_BIT(PAD_B_BOTTOM)) PAD_NAV_ADD(PAD_HK_ENTER);
+    if (buttons & PAD_BIT(PAD_B_RIGHT)) PAD_NAV_ADD(PAD_HK_ESC);
+    if (buttons & PAD_BIT(PAD_B_L1)) PAD_NAV_ADD(PAD_HK_PGUP);
+    if (buttons & PAD_BIT(PAD_B_R1)) PAD_NAV_ADD(PAD_HK_PGDN);
+    if (buttons & PAD_BIT(PAD_B_LEFT)) PAD_NAV_ADD(PAD_HK_TAB);
+#undef PAD_NAV_ADD
+    return n;
+}
 
 #endif  // GAMEPAD_H

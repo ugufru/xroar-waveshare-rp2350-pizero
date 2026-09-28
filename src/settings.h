@@ -24,7 +24,7 @@
 //   dpad              = joystick | arrows     D-pad moves the stick, or presses arrows
 //   pad_<button>      = fire | fire_right | none | a CoCo key   (PIZERO-164)
 //                       buttons: bottom right left top l1 r1 l2 r2
-//                                select start l3 r3 home
+//                                select start l3 r3 (Home opens the overlay)
 //                       keys: a-z 0-9 @ : ; , - . / space enter clear
 //                             break shift up down left right
 //   color_green       = #RRGGBB               override one palette color
@@ -209,7 +209,7 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     } else if (!strncmp(name, "pad_", 4)) {
         int bi = -1;
         for (int i = 0; i < PAD_BUTTONS; i++)
-            if (!strcmp(name + 4, PAD_BUTTON_NAMES[i])) bi = i;
+            if (PAD_BUTTON_NAMES[i] && !strcmp(name + 4, PAD_BUTTON_NAMES[i])) bi = i;
         if (bi < 0) return SET_UNKNOWN;
         uint8_t a;
         if (!strcmp(v, "fire"))            a = PAD_ACT_FIRE;
@@ -289,6 +289,7 @@ static inline int settings_template(char *out, size_t n) {
     // PIZERO-164: the pad, every button at its default.
     k += snprintf(out + k, n - (size_t)k, "dpad = %s\n", d.pad.dpad_arrows ? "arrows" : "joystick");
     for (int b = 0; b < PAD_BUTTONS && k < (int)n; b++) {
+        if (!PAD_BUTTON_NAMES[b]) continue;       // Home: the overlay's button
         uint8_t a = d.pad.act[b];
         char key[16] = "none";                    // longest is "fire_right"
         if (a == PAD_ACT_FIRE) strcpy(key, "fire");

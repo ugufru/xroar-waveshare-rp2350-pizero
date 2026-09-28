@@ -65,6 +65,7 @@ static void test_every_setting(void) {
     TEST_ASSERT_EQUAL_INT(SET_OK, line("pad_top = none"));     TEST_ASSERT_EQUAL_UINT8(PAD_ACT_NONE, s.pad.act[PAD_B_TOP]);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("pad_start = tab"));
     TEST_ASSERT_EQUAL_INT(SET_UNKNOWN, line("pad_turbo = fire"));
+    TEST_ASSERT_EQUAL_INT(SET_UNKNOWN, line("pad_home = s"));   // PIZERO-169: Home is the overlay's
     TEST_ASSERT_EQUAL_INT(SET_OK, line("dpad = arrows"));      TEST_ASSERT_TRUE(s.pad.dpad_arrows);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("dpad = mouse"));
     TEST_ASSERT_EQUAL_INT(SET_OK, line("color_green = #1ED01E"));

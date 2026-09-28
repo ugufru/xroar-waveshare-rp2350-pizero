@@ -316,6 +316,44 @@ static void hid_key_repeat(void) {
         hid_keys_present(g_hid_mods);
 }
 
+// PIZERO-169: the overlay's input is the keyboard's held keys merged with
+// the pad's navigation keys, fed together so its press detection sees one
+// consistent set. Returns true when the overlay took the report.
+static uint8_t  g_kb_codes[6];                // the keyboard's keys held now
+static uint8_t  g_pad_nav[6];                 // the pad's, as overlay keys
+static uint16_t g_pad_buttons_now = 0;        // the pad's buttons held now
+static uint16_t g_pad_inert = 0;              // held when the overlay closed
+static bool     g_pad_dpad_inert = false;
+
+static bool overlay_feed(uint8_t mods) {
+    uint8_t u[6] = { 0 };
+    int n = 0;
+    const uint8_t *src[2] = { g_kb_codes, g_pad_nav };
+    for (int s = 0; s < 2; s++)
+        for (int i = 0; i < 6 && n < 6; i++) {
+            uint8_t c = src[s][i];
+            if (!c) continue;
+            bool dup = false;
+            for (int j = 0; j < n; j++) if (u[j] == c) dup = true;
+            if (!dup) u[n++] = c;
+        }
+    bool closed = false;
+    if (!disk_overlay_key(mods, u, g_frame_count, &closed)) return false;
+    g_audio_paused = disk_overlay_is_open();
+    if (closed) {
+        // Keys held NOW press nothing until released, so the ESC that
+        // closed the overlay is not a BREAK (FRUITJAM-68). A held Shift is
+        // restored, since the machine's keys were all released on open. The
+        // pad's held buttons likewise, so launching with A is not a fire.
+        kt_resync(&g_kt, g_kb_codes);
+        hid_keys_present(mods);
+        g_pad_inert = g_pad_buttons_now;
+        g_pad_dpad_inert = true;
+        memset(g_pad_nav, 0, sizeof g_pad_nav);
+    }
+    return true;
+}
+
 static void hid_keyboard_apply(const uint8_t *report) {
     uint8_t mods = report[0];
     g_hid_mods = mods;
@@ -344,18 +382,8 @@ static void hid_keyboard_apply(const uint8_t *report) {
 
     // PIZERO-81c: the F12 overlay sees every report first. Open, it takes all
     // of them, so nothing reaches BASIC; closed, it takes only its F keys.
-    bool closed = false;
-    if (disk_overlay_key(mods, codes, g_frame_count, &closed)) {
-        g_audio_paused = disk_overlay_is_open();
-        if (closed) {
-            // Keys held NOW press nothing until released, so the ESC that
-            // closed the overlay is not a BREAK (FRUITJAM-68). A held Shift is
-            // restored, since the machine's keys were all released on open.
-            kt_resync(&g_kt, codes);
-            hid_keys_present(mods);
-        }
-        return;
-    }
+    memcpy(g_kb_codes, codes, 6);
+    if (overlay_feed(mods)) return;
 
     // PIZERO-163: each key types its keycap's character, SHIFT forced to suit.
     kt_update(&g_kt, mods, codes);
@@ -1914,13 +1942,47 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
             m_held = m;
         }
         bool mine = g_pad_daddr && daddr == g_pad_daddr && idx == g_pad_idx;
+        struct pad_state st;
         struct pad_out ps;
         if ((mine || !g_pad_daddr) &&
-            pad_read(g_pad_kind_of[daddr], report, len, &g_settings.pad, &ps)) {
+            pad_decode(g_pad_kind_of[daddr], report, len, &st)) {
             if (!mine) {                       // first decodable report: bind
                 g_pad_daddr = daddr;
                 g_pad_idx = idx;
                 Serial.printf("[usb] gamepad bound addr=%u idx=%u\r\n", daddr, idx);
+            }
+            // PIZERO-169: Home opens the overlay; while it is open the pad
+            // drives it and does nothing to the machine.
+            g_pad_buttons_now = st.buttons;
+            static bool home_held = false, home_armed = false;
+            bool home = st.buttons & PAD_BIT(PAD_B_HOME);
+            bool home_new = home && !home_held;
+            home_held = home;
+            if (!disk_overlay_is_open() && home_new && g_machine_running) {
+                disk_overlay_open();
+                g_audio_paused = true;
+                home_armed = false;                // this press opened it
+                pad_nav_codes(st.buttons, st.dpad, g_pad_nav);
+            } else if (disk_overlay_is_open()) {
+                if (!home) home_armed = true;      // let go: the next press closes
+                uint8_t nav[6];
+                int n = pad_nav_codes(st.buttons, st.dpad, nav);
+                if (home && home_armed && n < 6) nav[n] = PAD_HK_ESC;
+                if (memcmp(nav, g_pad_nav, 6)) {
+                    memcpy(g_pad_nav, nav, 6);
+                    overlay_feed(g_hid_mods);
+                }
+            }
+            if (disk_overlay_is_open()) {
+                pad_centered(&ps);
+            } else {
+                // Buttons (and the D-pad) held when the overlay closed stay
+                // inert until let go.
+                g_pad_inert &= st.buttons;
+                st.buttons &= (uint16_t)~g_pad_inert;
+                if (st.dpad >= 8) g_pad_dpad_inert = false;
+                if (g_pad_dpad_inert) st.dpad = 8;
+                pad_resolve(&st, &g_settings.pad, &ps);
             }
             // PIZERO-160: joystick_swap sends each pad stick, with its fire
             // buttons, to the other CoCo joystick.

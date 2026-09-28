@@ -121,7 +121,12 @@ style pads), and each can be one of:
 | `pad_l2`, `pad_r2` | triggers | `none` |
 | `pad_select`, `pad_start` | the two small buttons left and right of center | `none`, `enter` |
 | `pad_l3`, `pad_r3` | pressing a stick in | `none` |
-| `pad_home` | the center button | `none` |
+
+The center **Home** button is not in the list: it always opens and closes
+the overlay lists (the F9 to F12 screens). While a list is open, the D-pad
+moves (left and right switch lists), **A** (bottom) selects, **B** (right)
+goes back, L1 and R1 page, and X (left) edits the highlighted game's own
+settings file.
 
 `dpad = arrows` makes the D-pad press the arrow keys instead of moving the
 joystick, for the many games that read the arrow keys. `dpad = joystick` is

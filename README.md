@@ -105,6 +105,8 @@ same HDMI cable**. Only joystick input remains open.
    the left one. Start is ENTER and the top face button SPACE, and every
    other button, and the D-pad, can be set to any CoCo key, per game too
    (`pad_start = s`, `dpad = arrows`: see [`SETTINGS.md`](SETTINGS.md)).
+   The pad's **Home** button opens the lists too: D-pad to move, A to start
+   the highlighted game, B to go back, so the pad alone is enough to play.
    `PRINT JOYSTK(0)` reads 0-63. Tested with a GameSir
    Tegenaria Lite in Android mode (hold Home + A), and in its automatic mode;
    its Switch mode (Home + Y) sends nothing and does not work. A pad plugged
