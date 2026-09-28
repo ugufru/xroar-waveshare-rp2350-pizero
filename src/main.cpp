@@ -367,6 +367,8 @@ static bool    g_machine_running = false;
 // overlay asks for, read by core 1 in stream_next_sample.
 static uint32_t g_frame_count = 0;
 static volatile bool g_audio_paused = false;
+// PIZERO-152: a key pressed while a boot page is up (before the machine runs).
+static bool g_boot_key = false;
 static uint8_t g_hid_prev_codes[6] = {0};
 static bool    g_hid_shift_prev = false;
 
@@ -374,6 +376,20 @@ static void hid_keyboard_apply(const uint8_t *report) {
     uint8_t mods = report[0];
     const uint8_t *codes = &report[2];
     bool shift = (mods & 0x22u) != 0;  // bit 1 = L-Shift, bit 5 = R-Shift
+
+    // PIZERO-152: before the machine runs, a key only dismisses a boot page;
+    // it is tracked but not pressed, so it cannot reach BASIC as a keystroke.
+    if (!g_machine_running) {
+        for (int i = 0; i < 6; i++) {
+            if (!codes[i]) continue;
+            bool was = false;
+            for (int j = 0; j < 6; j++) if (g_hid_prev_codes[j] == codes[i]) was = true;
+            if (!was) g_boot_key = true;
+        }
+        memcpy(g_hid_prev_codes, codes, 6);
+        g_hid_shift_prev = false;
+        return;
+    }
 
     // PIZERO-81c: the F12 overlay sees every report first. Open, it takes all
     // of them, so nothing reaches BASIC; closed, it takes only F12.
@@ -916,6 +932,20 @@ static void present_card(void) {
 #endif
 }
 
+// PIZERO-152: hold a boot page until a key is pressed or max_ms passes.
+// Runs before loop(), so it services the USB host itself; a byte on the
+// serial console counts as a key too. The timeout keeps a board with no
+// keyboard from waiting forever.
+static void boot_wait(uint32_t max_ms) {
+    g_boot_key = false;
+    uint32_t t0 = millis();
+    while (!g_boot_key && (millis() - t0) < max_ms) {
+        USBHost.task();
+        if (Serial.available()) { while (Serial.available()) Serial.read(); break; }
+        delay(2);
+    }
+}
+
 static void boot_page(const char *title, const char *body, const char *detail) {
     coco_boot_card_clear();
     coco_boot_card_center(1, title);
@@ -1440,7 +1470,7 @@ void setup() {
         const struct coco_rom_status *rs = coco_boot_rom_status();
         if (rs->ecb_bytes != 8192) {
             boot_page(MSG_CBONLY_TITLE, MSG_CBONLY_BODY, MSG_CBONLY_DETAIL);
-            delay(4000);          // long enough to read, short enough to forgive
+            boot_wait(4000);      // long enough to read; a key skips it (PIZERO-152)
         }
     }
 
@@ -1477,7 +1507,7 @@ void setup() {
     if (g_run_button_reset && have_autorun && g_settings.run_skips_autorun) {
         Serial.print("[autorun] skipped: RUN button reset (PIZERO-116)\r\n");
         boot_page(MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL);
-        delay(2500);
+        boot_wait(2500);          // a key skips it (PIZERO-152)
         have_autorun = false;
     }
 
@@ -1546,7 +1576,7 @@ void setup() {
         char body[160];
         snprintf(body, sizeof body, MSG_ARMISS_BODY, miss_kind, miss_name);
         boot_page(MSG_ARMISS_TITLE, body, MSG_ARMISS_DETAIL);
-        delay(3000);              // long enough to read; boot then carries on
+        boot_wait(30000);         // until a key; boot then carries on
     }
 #endif // AUDIO_WAV_DUMP
     disk_overlay_init(present_card, overlay_launch_request);   // PIZERO-81: F12 overlay
