@@ -147,6 +147,16 @@ void coco_machine_press_key(uint8_t dscan);
 void coco_machine_release_key(uint8_t dscan);
 void coco_machine_release_all_keys(void);
 
+/* PIZERO-163: who is pressing. Each source has its own layer of the key
+ * matrix, and a key is down while any source holds it, so the serial typer
+ * or a gamepad button cannot drop a key the USB keyboard is holding. The
+ * three calls above act on the USB keyboard's layer, except release_all,
+ * which clears every layer. */
+enum { COCO_KEYS_USB = 0, COCO_KEYS_TYPED = 1, COCO_KEYS_PAD = 2, COCO_KEY_SOURCES = 3 };
+void coco_machine_press_key_src(int src, uint8_t dscan);
+void coco_machine_release_key_src(int src, uint8_t dscan);
+void coco_machine_release_all_keys_src(int src);
+
 /* PIZERO-13: joysticks. Port 0 = RIGHT (fire on PIA0 PA0), port 1 = LEFT
  * (PA1); axis 0 = X (0 left, 65535 right), axis 1 = Y (0 up, 65535 down).
  * Center is 32767; all start centered with fire released. */

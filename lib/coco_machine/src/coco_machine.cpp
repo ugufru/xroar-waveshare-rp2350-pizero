@@ -205,6 +205,23 @@ static void gime_timer_restart(void) {
 static uint8_t g_kb_col_row_mask[8] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
+// PIZERO-163: one layer per key source (USB keyboard, serial or autotype,
+// gamepad), so one source releasing a key cannot drop another's hold.
+// g_kb_col_row_mask above is their AND, kept current on every change, so the
+// PIA read below costs the same as before.
+static uint8_t g_kb_src[COCO_KEY_SOURCES][8];
+static bool    g_kb_src_ready;
+
+static void kb_src_init(void) {
+    memset(g_kb_src, 0xFF, sizeof g_kb_src);
+    g_kb_src_ready = true;
+}
+
+static void kb_combine(uint8_t col) {
+    uint8_t m = 0xFF;
+    for (int s = 0; s < COCO_KEY_SOURCES; s++) m &= g_kb_src[s][col];
+    g_kb_col_row_mask[col] = m;
+}
 
 // AMOLED-22 globals consumed by mc6847.c's render_scanline LUT rebuild.
 // g_artifact_active is set by coco_pia1b_postwrite to indicate the VDG is
@@ -297,21 +314,43 @@ static inline void dscan_to_row_col(uint8_t dscan, uint8_t *row, uint8_t *col) {
     *row = (raw_row == 6) ? 6 : (uint8_t)((raw_row + 4) % 6);
 }
 
-extern "C" void coco_machine_press_key(uint8_t dscan) {
-    if (dscan >= 0x40) return;
+extern "C" void coco_machine_press_key_src(int src, uint8_t dscan) {
+    if (dscan >= 0x40 || (unsigned)src >= COCO_KEY_SOURCES) return;
+    if (!g_kb_src_ready) kb_src_init();
     uint8_t row, col;
     dscan_to_row_col(dscan, &row, &col);
-    g_kb_col_row_mask[col] &= ~(1u << row);
+    g_kb_src[src][col] &= (uint8_t)~(1u << row);
+    kb_combine(col);
+}
+
+extern "C" void coco_machine_release_key_src(int src, uint8_t dscan) {
+    if (dscan >= 0x40 || (unsigned)src >= COCO_KEY_SOURCES) return;
+    if (!g_kb_src_ready) kb_src_init();
+    uint8_t row, col;
+    dscan_to_row_col(dscan, &row, &col);
+    g_kb_src[src][col] |= (uint8_t)(1u << row);
+    kb_combine(col);
+}
+
+extern "C" void coco_machine_release_all_keys_src(int src) {
+    if ((unsigned)src >= COCO_KEY_SOURCES) return;
+    if (!g_kb_src_ready) kb_src_init();
+    memset(g_kb_src[src], 0xFF, sizeof g_kb_src[src]);
+    for (uint8_t c = 0; c < 8; c++) kb_combine(c);
+}
+
+// The original calls are the USB keyboard's layer.
+extern "C" void coco_machine_press_key(uint8_t dscan) {
+    coco_machine_press_key_src(COCO_KEYS_USB, dscan);
 }
 
 extern "C" void coco_machine_release_key(uint8_t dscan) {
-    if (dscan >= 0x40) return;
-    uint8_t row, col;
-    dscan_to_row_col(dscan, &row, &col);
-    g_kb_col_row_mask[col] |= (1u << row);
+    coco_machine_release_key_src(COCO_KEYS_USB, dscan);
 }
 
+// Every source: reset, and the overlay opening.
 extern "C" void coco_machine_release_all_keys(void) {
+    kb_src_init();
     memset(g_kb_col_row_mask, 0xFF, sizeof(g_kb_col_row_mask));
 }
 

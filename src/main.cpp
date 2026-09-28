@@ -125,6 +125,7 @@ extern "C" {
 #include "text_editor.h"   // PIZERO-146: on-screen editor for it
 #include "text_edit_keys.h" // PIZERO-146/147: the editor's status words
 #include "gamepad.h"        // PIZERO-13: USB gamepad -> CoCo joysticks
+#include "key_translate.h"  // PIZERO-163: USB keycaps -> CoCo chords
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -230,61 +231,12 @@ static struct coco_settings g_settings;     // settings_defaults() at the top of
 static const char *g_autotype        = nullptr;
 static int         g_autotype_warmup = 0;
 
-enum {
-    K_0 = 0x00, K_1, K_2, K_3, K_4, K_5, K_6, K_7,
-    K_8 = 0x08, K_9, K_COLON, K_SEMI, K_COMMA, K_MINUS, K_DOT, K_SLASH,
-    K_AT = 0x10, K_A, K_B, K_C, K_D, K_E, K_F, K_G,
-    K_H = 0x18, K_I, K_J, K_K, K_L, K_M, K_N, K_O,
-    K_P = 0x20, K_Q, K_R, K_S, K_T, K_U, K_V, K_W,
-    K_X = 0x28, K_Y, K_Z, K_UP, K_DOWN, K_LEFT, K_RIGHT, K_SPACE,
-    K_ENTER = 0x30, K_CLEAR, K_BREAK,
-    K_SHIFT = 0x37,
-    K_INVALID = 0x3F,
-};
-
-static void ascii_to_dscan(char c, uint8_t *dscan_out, bool *shift_out) {
-    *shift_out = false;
-    if (c >= 'a' && c <= 'z') { *dscan_out = K_A + (c - 'a'); return; }
-    if (c >= 'A' && c <= 'Z') { *dscan_out = K_A + (c - 'A'); return; }
-    if (c >= '0' && c <= '9') { *dscan_out = K_0 + (c - '0'); return; }
-    switch (c) {
-        case ' ':  *dscan_out = K_SPACE; return;
-        case '\r': case '\n': *dscan_out = K_ENTER; return;
-        case ':':  *dscan_out = K_COLON; return;
-        case ';':  *dscan_out = K_SEMI;  return;
-        case ',':  *dscan_out = K_COMMA; return;
-        case '-':  *dscan_out = K_MINUS; return;
-        case '.':  *dscan_out = K_DOT;   return;
-        case '/':  *dscan_out = K_SLASH; return;
-        case '@':  *dscan_out = K_AT;    return;
-        case '!':  *dscan_out = K_1; *shift_out = true; return;
-        case '"':  *dscan_out = K_2; *shift_out = true; return;
-        case '#':  *dscan_out = K_3; *shift_out = true; return;
-        case '$':  *dscan_out = K_4; *shift_out = true; return;
-        case '%':  *dscan_out = K_5; *shift_out = true; return;
-        case '&':  *dscan_out = K_6; *shift_out = true; return;
-        case '\'': *dscan_out = K_7; *shift_out = true; return;
-        case '(':  *dscan_out = K_8; *shift_out = true; return;
-        case ')':  *dscan_out = K_9; *shift_out = true; return;
-        case '*':  *dscan_out = K_COLON; *shift_out = true; return;
-        case '+':  *dscan_out = K_SEMI;  *shift_out = true; return;
-        case '<':  *dscan_out = K_COMMA; *shift_out = true; return;
-        case '=':  *dscan_out = K_MINUS; *shift_out = true; return;
-        case '>':  *dscan_out = K_DOT;   *shift_out = true; return;
-        case '?':  *dscan_out = K_SLASH; *shift_out = true; return;
-        case 0x08: case 0x7F: *dscan_out = K_LEFT; return;
-        case 0x03: case 0x1B: *dscan_out = K_BREAK; return;
-        case 0x0C:           *dscan_out = K_CLEAR; return;
-        default:   *dscan_out = K_INVALID; return;
-    }
-}
-
+// PIZERO-163: the CoCo key names and the character chords live in
+// key_translate.h (host-tested), shared by serial typing and the USB keyboard.
 static int g_kb_hold = 0;
 static int g_kb_gap  = 0;
-// Track what autotype/serial last pressed so we can release just that key
-// rather than nuking the whole matrix (which would also drop USB-held keys).
-static uint8_t g_pump_last_dscan = K_INVALID;
-static bool    g_pump_last_shift = false;
+// Serial and autotype press keys on their own layer (PIZERO-163), so
+// releasing one cannot drop a key the USB keyboard is holding.
 
 static int next_keychar() {
     if (g_autotype) {
@@ -301,13 +253,7 @@ static int next_keychar() {
 static void pump_keyboard() {
     if (g_kb_hold > 0) {
         if (--g_kb_hold == 0) {
-            // Release only what this pump pressed; leave USB-held keys alone.
-            if (g_pump_last_dscan != K_INVALID) {
-                coco_machine_release_key(g_pump_last_dscan);
-            }
-            if (g_pump_last_shift) coco_machine_release_key(K_SHIFT);
-            g_pump_last_dscan = K_INVALID;
-            g_pump_last_shift = false;
+            coco_machine_release_all_keys_src(COCO_KEYS_TYPED);
             g_kb_gap = g_autotype ? 4 : 2;
         }
         return;
@@ -315,45 +261,11 @@ static void pump_keyboard() {
     if (g_kb_gap > 0) { g_kb_gap--; return; }
     int c = next_keychar();
     if (c < 0) return;
-    uint8_t dscan; bool shift;
-    ascii_to_dscan((char)c, &dscan, &shift);
-    if (dscan == K_INVALID) return;
-    if (shift) coco_machine_press_key(K_SHIFT);
-    coco_machine_press_key(dscan);
-    g_pump_last_dscan = dscan;
-    g_pump_last_shift = shift;
+    uint8_t dscan, shift;
+    if (!kt_chord((char)c, &dscan, &shift)) return;
+    if (shift == KT_SHIFT_ON) coco_machine_press_key_src(COCO_KEYS_TYPED, K_SHIFT);
+    coco_machine_press_key_src(COCO_KEYS_TYPED, dscan);
     g_kb_hold = g_autotype ? 5 : 3;
-}
-
-// ---- HID → DSCAN translation (PIZERO-12) ---------------------------------
-// HID usage codes (boot keyboard) -> CoCo DSCAN. Sentinel 0xFF = no mapping.
-// We can't use 0 for "unmapped" because K_0 = 0x00.
-static uint8_t g_hid_to_dscan[256];
-
-static void hid_table_init(void) {
-    memset(g_hid_to_dscan, 0xFF, sizeof(g_hid_to_dscan));
-    // 0x04..0x1D = a..z (boot keyboard usage). CoCo K_A..K_Z are contiguous.
-    for (int i = 0; i < 26; i++) g_hid_to_dscan[0x04 + i] = (uint8_t)(K_A + i);
-    // 0x1E..0x26 = 1..9, 0x27 = 0. CoCo K_0..K_9 contiguous but ordered 0..9.
-    g_hid_to_dscan[0x1E] = K_1;  g_hid_to_dscan[0x1F] = K_2;
-    g_hid_to_dscan[0x20] = K_3;  g_hid_to_dscan[0x21] = K_4;
-    g_hid_to_dscan[0x22] = K_5;  g_hid_to_dscan[0x23] = K_6;
-    g_hid_to_dscan[0x24] = K_7;  g_hid_to_dscan[0x25] = K_8;
-    g_hid_to_dscan[0x26] = K_9;  g_hid_to_dscan[0x27] = K_0;
-    // Misc.
-    g_hid_to_dscan[0x28] = K_ENTER;   // Enter
-    g_hid_to_dscan[0x29] = K_BREAK;   // Esc -> Break
-    g_hid_to_dscan[0x2A] = K_LEFT;    // Backspace -> Left (CoCo delete key)
-    g_hid_to_dscan[0x2C] = K_SPACE;   // Space
-    g_hid_to_dscan[0x2D] = K_MINUS;   // -
-    g_hid_to_dscan[0x33] = K_SEMI;    // ;
-    g_hid_to_dscan[0x36] = K_COMMA;   // ,
-    g_hid_to_dscan[0x37] = K_DOT;     // .
-    g_hid_to_dscan[0x38] = K_SLASH;   // /
-    g_hid_to_dscan[0x4F] = K_RIGHT;   // Right arrow
-    g_hid_to_dscan[0x50] = K_LEFT;    // Left arrow
-    g_hid_to_dscan[0x51] = K_DOWN;    // Down arrow
-    g_hid_to_dscan[0x52] = K_UP;      // Up arrow
 }
 
 // PIZERO-11b: hot-replug watchdog attempt — DISABLED. The premise (read
@@ -376,12 +288,20 @@ static volatile bool g_audio_paused = false;
 // PIZERO-152: a key pressed while a boot page is up (before the machine runs).
 static bool g_boot_key = false;
 static uint8_t g_hid_prev_codes[6] = {0};
-static bool    g_hid_shift_prev = false;
+// PIZERO-163: the USB keys held and the CoCo key each chose (key_translate.h).
+static struct kt_state g_kt;
+
+// Make the USB keyboard's layer of the key matrix match what is held now.
+static void hid_keys_present(uint8_t mods) {
+    uint8_t keys[KT_HELD_MAX + 1];
+    int n = kt_keys(&g_kt, mods, keys);
+    coco_machine_release_all_keys_src(COCO_KEYS_USB);
+    for (int i = 0; i < n; i++) coco_machine_press_key_src(COCO_KEYS_USB, keys[i]);
+}
 
 static void hid_keyboard_apply(const uint8_t *report) {
     uint8_t mods = report[0];
     const uint8_t *codes = &report[2];
-    bool shift = (mods & 0x22u) != 0;  // bit 1 = L-Shift, bit 5 = R-Shift
 
     // PIZERO-152: before the machine runs, a key only dismisses a boot page;
     // it is tracked but not pressed, so it cannot reach BASIC as a keystroke.
@@ -393,58 +313,28 @@ static void hid_keyboard_apply(const uint8_t *report) {
             if (!was) g_boot_key = true;
         }
         memcpy(g_hid_prev_codes, codes, 6);
-        g_hid_shift_prev = false;
+        kt_resync(&g_kt, codes);
         return;
     }
 
     // PIZERO-81c: the F12 overlay sees every report first. Open, it takes all
-    // of them, so nothing reaches BASIC; closed, it takes only F12.
-    if (g_machine_running) {
-        bool closed = false;
-        if (disk_overlay_key(mods, codes, g_frame_count, &closed)) {
-            g_audio_paused = disk_overlay_is_open();
-            if (disk_overlay_is_open()) {
-                g_hid_shift_prev = false;          // open_now released every key
-            } else if (closed) {
-                // Resync to what is held NOW, so the ESC that closed the overlay
-                // is not seen as a fresh BREAK (FRUITJAM-68). A held shift is
-                // restored, since the machine's keys were all released on open.
-                memcpy(g_hid_prev_codes, codes, 6);
-                if (shift) coco_machine_press_key(K_SHIFT);
-                g_hid_shift_prev = shift;
-            }
-            return;
+    // of them, so nothing reaches BASIC; closed, it takes only its F keys.
+    bool closed = false;
+    if (disk_overlay_key(mods, codes, g_frame_count, &closed)) {
+        g_audio_paused = disk_overlay_is_open();
+        if (closed) {
+            // Keys held NOW press nothing until released, so the ESC that
+            // closed the overlay is not a BREAK (FRUITJAM-68). A held Shift is
+            // restored, since the machine's keys were all released on open.
+            kt_resync(&g_kt, codes);
+            hid_keys_present(mods);
         }
+        return;
     }
 
-    // Modifier (shift only — CoCo has no Ctrl/Alt/Meta).
-    if (shift && !g_hid_shift_prev) coco_machine_press_key(K_SHIFT);
-    if (!shift && g_hid_shift_prev) coco_machine_release_key(K_SHIFT);
-    g_hid_shift_prev = shift;
-
-    // Releases: codes in prev but not in current.
-    for (int i = 0; i < 6; i++) {
-        uint8_t prev = g_hid_prev_codes[i];
-        if (prev == 0) continue;
-        bool still = false;
-        for (int j = 0; j < 6; j++) if (codes[j] == prev) { still = true; break; }
-        if (!still) {
-            uint8_t ds = g_hid_to_dscan[prev];
-            if (ds != 0xFF) coco_machine_release_key(ds);
-        }
-    }
-    // Presses: codes in current but not in prev.
-    for (int i = 0; i < 6; i++) {
-        uint8_t curr = codes[i];
-        if (curr == 0) continue;
-        bool was = false;
-        for (int j = 0; j < 6; j++) if (g_hid_prev_codes[j] == curr) { was = true; break; }
-        if (!was) {
-            uint8_t ds = g_hid_to_dscan[curr];
-            if (ds != 0xFF) coco_machine_press_key(ds);
-        }
-    }
-    memcpy(g_hid_prev_codes, codes, 6);
+    // PIZERO-163: each key types its keycap's character, SHIFT forced to suit.
+    kt_update(&g_kt, mods, codes);
+    hid_keys_present(mods);
 }
 
 // ---- ROM/boot (same flow as the AMOLED port) -----------------------------
@@ -1268,7 +1158,6 @@ void setup() {
                   chip_rev <= 2 ? "yes" : "NO — may explain pull-down-reads-HIGH");
     Serial.flush();
 
-    hid_table_init();   // PIZERO-12: build HID-usage -> CoCo-DSCAN lookup.
 
     // PIZERO-11: PIO-USB host on core 0, PIO 1 (libdvi will own PIO 0).
     // Init BEFORE multicore_launch_core1 — alarm_pool_create() needs

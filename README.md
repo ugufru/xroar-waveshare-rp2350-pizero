@@ -107,6 +107,14 @@ same HDMI cable**. Only joystick input remains open.
    its Switch mode (Home + Y) sends nothing and does not work. A pad plugged
    in after power-on is not seen yet (PIZERO-51). How USB input got here, and
    the lessons: [`docs/usb-retrospective.md`](docs/usb-retrospective.md).
+8. **A USB keyboard types what its keycaps say.** `"` is Shift+`'`, `:` is
+   Shift+`;`, `=` and `+` are where they are printed, and `[ ] \ _` work at
+   the BASIC prompt (the CoCo types them with SHIFT and an arrow or CLEAR,
+   which the keyboard does for you). **Caps Lock** is the CoCo's upper and
+   lower case toggle, **Home** is CLEAR, **Esc** is BREAK, and Backspace
+   deletes. The numeric keypad types its characters. The CoCo has no
+   `{ } | ~` or backtick, so those keys do nothing. Shift with a letter is
+   still the CoCo's other case, and Shift alone is still SHIFT, for games.
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).
