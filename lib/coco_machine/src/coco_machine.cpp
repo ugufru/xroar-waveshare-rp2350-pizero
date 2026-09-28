@@ -1316,6 +1316,7 @@ extern "C" const uint8_t *coco_machine_get_vdg_buffer(void) {
 
 extern "C" const uint8_t font_6847t1[];  // 128 chars × 12 rows = 1.5 KB
 extern "C" const uint8_t font_6847[];    // PIZERO-166: 64 chars, font = classic
+extern "C" const uint8_t font_6847t2[];  // PIZERO-166: ours, font = 6847t2
 
 // Palette indices — match g_vdg_rgb565[] in coco_boot.cpp.
 #define PAL_GREEN       0
@@ -1396,7 +1397,8 @@ static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
     if (!g_sg4_lut_ready) build_sg4_lut();
     int key = (g_font << 1) | (vdg_lower_case(g_vdg_ext, g_font, g_lowercase) ? 1 : 0);
     if (key != g_alpha_map_key) build_alpha_map(key);
-    const uint8_t *font = (g_font == VDG_FONT_CLASSIC) ? font_6847 : font_6847t1;
+    const uint8_t *font = g_font == VDG_FONT_CLASSIC ? font_6847
+                        : g_font == VDG_FONT_T1      ? font_6847t1 : font_6847t2;
     // 32 chars wide × 16 text rows × 12 pixel rows = 192 lines.
     // Each glyph is 8 px wide → 32 chars × 8 = 256 px per line.
     for (int text_row = 0; text_row < 16; text_row++) {

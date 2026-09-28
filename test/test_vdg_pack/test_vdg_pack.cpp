@@ -20,6 +20,7 @@
 #define __attribute__(x)
 #include "../../lib/xroar_core/src/mc6847/font-6847t1.c"
 #undef __attribute__
+#include "../../lib/coco_machine/src/font_6847t2.c"
 
 // --- reference implementation --------------------------------------------
 // The original put2(): nibble-packed, low nibble = even pixel. Every fast
@@ -350,15 +351,15 @@ static void test_t1_with_ext_has_true_lower_case_and_braces(void) {
     TEST_ASSERT_EQUAL_UINT8(1, pair);
 }
 
-static void test_t2_fixes_caret_and_underscore_always(void) {
-    uint8_t pair;
-    for (int ext = 0; ext < 2; ext++) {
-        TEST_ASSERT_EQUAL_UINT8(0x00, vdg_alpha_glyph(0x5E, ext, VDG_FONT_T2, &pair));     // ^
-        TEST_ASSERT_EQUAL_UINT8(0x1F, vdg_alpha_glyph(0x5F, ext, VDG_FONT_T2, &pair));     // _
-        TEST_ASSERT_EQUAL_UINT8(0x41, vdg_alpha_glyph(0x41, ext, VDG_FONT_T2, &pair));     // A unchanged
-    }
-    TEST_ASSERT_EQUAL_UINT8(0x41, vdg_alpha_glyph(0x01, false, VDG_FONT_T2, &pair));       // inverse A kept
-    TEST_ASSERT_EQUAL_UINT8(0, pair);
+static void test_t2_uses_the_t1_slots(void) {
+    // The T2 is its own font with the T1's layout, so it indexes like the T1.
+    uint8_t p1, p2;
+    for (int ch = 0; ch < 128; ch++)
+        for (int ext = 0; ext < 2; ext++) {
+            TEST_ASSERT_EQUAL_UINT8(vdg_alpha_glyph((uint8_t)ch, ext, VDG_FONT_T1, &p1),
+                                    vdg_alpha_glyph((uint8_t)ch, ext, VDG_FONT_T2, &p2));
+            TEST_ASSERT_EQUAL_UINT8(p1, p2);
+        }
 }
 
 static void test_every_code_stays_inside_its_font(void) {
@@ -381,26 +382,51 @@ static void test_lowercase_setting_holds_t2_lower_case(void) {
     TEST_ASSERT_FALSE(vdg_lower_case(true, VDG_FONT_CLASSIC, true));
 }
 
-static int rows_used(uint8_t glyph, int *first, int *last) {
+static int rows_used(const uint8_t *font, uint8_t glyph, int *first, int *last) {
     int n = 0; *first = -1; *last = -1;
     for (int r = 0; r < 12; r++)
-        if (font_6847t1[glyph * 12 + r]) { if (*first < 0) *first = r; *last = r; n++; }
+        if (font[glyph * 12 + r]) { if (*first < 0) *first = r; *last = r; n++; }
     return n;
 }
 
 static void test_t2_glyphs_really_are_a_caret_and_an_underscore(void) {
-    // Checked against the font data, not the index: the underscore is one
-    // low bar, the caret sits in the top half, and the braces mirror.
+    // Checked against the font data: in the ^ and _ slots the T2 has a caret
+    // in the top half and one low bar, the braces mirror, and the backtick
+    // slot is not the caret the T1 drew there.
     int first, last;
-    TEST_ASSERT_EQUAL_INT(1, rows_used(0x1F, &first, &last));
+    TEST_ASSERT_EQUAL_INT(1, rows_used(font_6847t2, 0x5F, &first, &last));
     TEST_ASSERT_TRUE(first >= 6);
-    TEST_ASSERT_TRUE(rows_used(0x00, &first, &last) > 0);
+    TEST_ASSERT_TRUE(rows_used(font_6847t2, 0x5E, &first, &last) > 0);
     TEST_ASSERT_TRUE(last <= 5);
+    TEST_ASSERT_TRUE(memcmp(&font_6847t2[0x00 * 12], &font_6847t2[0x5E * 12], 12) != 0);
     for (int r = 0; r < 12; r++) {
-        uint8_t l = font_6847t1[0x1B * 12 + r], rt = font_6847t1[0x1D * 12 + r], m = 0;
+        uint8_t l = font_6847t2[0x1B * 12 + r], rt = font_6847t2[0x1D * 12 + r], m = 0;
         for (int b = 0; b < 7; b++) if (l & (1 << b)) m |= (uint8_t)(1 << (6 - b));
         TEST_ASSERT_EQUAL_UINT8(m, rt);
     }
+}
+
+// The screen code Color BASIC stores for an ASCII character (PRINT, INPUT).
+static uint8_t basic_screen_code(uint8_t c) {
+    if (c < 0x40) return (uint8_t)(c + 0x40);
+    if (c < 0x60) return c;
+    return (uint8_t)(c - 0x60);
+}
+
+static void test_t2_with_lower_case_draws_every_ascii_character_differently(void) {
+    // The user's character map found the underscore twice and no backtick.
+    // With lower case on, the 95 printable ASCII characters must be 95
+    // different pictures in the T2.
+    for (int a = 0x20; a <= 0x7E; a++)
+        for (int b = a + 1; b <= 0x7E; b++) {
+            uint8_t pa, pb;
+            uint8_t ga = vdg_alpha_glyph(basic_screen_code((uint8_t)a), true, VDG_FONT_T2, &pa);
+            uint8_t gb = vdg_alpha_glyph(basic_screen_code((uint8_t)b), true, VDG_FONT_T2, &pb);
+            bool same = pa == pb && !memcmp(&font_6847t2[ga * 12], &font_6847t2[gb * 12], 12);
+            char msg[40];
+            snprintf(msg, sizeof msg, "'%c' and '%c' look the same", a, b);
+            TEST_ASSERT_FALSE_MESSAGE(same, msg);
+        }
 }
 
 int main(void) {
@@ -424,9 +450,10 @@ int main(void) {
     RUN_TEST(test_classic_is_the_original_6847);
     RUN_TEST(test_t1_without_ext_is_the_6847_behaviour);
     RUN_TEST(test_t1_with_ext_has_true_lower_case_and_braces);
-    RUN_TEST(test_t2_fixes_caret_and_underscore_always);
+    RUN_TEST(test_t2_uses_the_t1_slots);
     RUN_TEST(test_every_code_stays_inside_its_font);
     RUN_TEST(test_t2_glyphs_really_are_a_caret_and_an_underscore);
     RUN_TEST(test_lowercase_setting_holds_t2_lower_case);
+    RUN_TEST(test_t2_with_lower_case_draws_every_ascii_character_differently);
     return UNITY_END();
 }

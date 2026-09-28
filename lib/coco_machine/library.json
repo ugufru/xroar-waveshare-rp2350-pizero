@@ -9,6 +9,6 @@
   },
   "build": {
     "srcDir": "src",
-    "srcFilter": ["+<*.cpp>"]
+    "srcFilter": ["+<*.cpp>", "+<*.c>"]
   }
 }

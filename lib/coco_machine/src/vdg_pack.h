@@ -133,8 +133,10 @@ static inline uint8_t vdg_alpha_glyph_index(uint8_t ch) {
 //            until a program sets EXT (PIA1 PB bit 4, POKE 65314,16); then
 //            the full 7-bit code picks the glyph, giving true lower case and
 //            { | } ~, all drawn with INV set (upstream mc6847.c:470-497).
-//   T2       ours, the default: the T1, but ^ is a caret and _ an underscore
-//            at all times (the T1's own glyphs $00 and $1F).
+//   T2       ours, the default (font_6847t2, generated from the T1 by
+//            scripts/make_font_6847t2.py): the T1 with a caret for ^ and an
+//            underscore for _, a real backtick, and a symbol for DEL where the
+//            T1 kept its underscore. Same slots as the T1, so the same indexing.
 enum { VDG_FONT_CLASSIC = 0, VDG_FONT_T1 = 1, VDG_FONT_T2 = 2 };
 
 // PIZERO-166: whether true lower case is on. The T1 follows its EXT line,
@@ -147,9 +149,9 @@ static inline bool vdg_lower_case(bool ext, int font, bool lowercase_setting) {
     return ext || (font == VDG_FONT_T2 && lowercase_setting);
 }
 
-// The glyph a character code shows, as an index into font_6847 (CLASSIC) or
-// font_6847t1 (T1, T2), and in *pair which colour pair (bit 6 of the code, or
-// forced on under EXT), matching vdg_build_alpha_table's rows.
+// The glyph a character code shows, as an index into font_6847 (CLASSIC),
+// font_6847t1 (T1) or font_6847t2 (T2), and in *pair which colour pair (bit 6
+// of the code, or forced on under EXT), matching vdg_build_alpha_table's rows.
 static inline uint8_t vdg_alpha_glyph(uint8_t ch, bool ext, int font, uint8_t *pair) {
     if (font == VDG_FONT_CLASSIC) {
         *pair = (uint8_t)((ch >> 6) & 1);
@@ -158,10 +160,6 @@ static inline uint8_t vdg_alpha_glyph(uint8_t ch, bool ext, int font, uint8_t *p
     uint8_t g;
     if (ext) { g = (uint8_t)(ch & 0x7F); *pair = 1; }
     else     { g = vdg_alpha_glyph_index(ch); *pair = (uint8_t)((ch >> 6) & 1); }
-    if (font == VDG_FONT_T2) {
-        if (g == 0x5E) g = 0x00;           // ^ : the T1's caret, not an up arrow
-        else if (g == 0x5F) g = 0x1F;      // _ : its underscore, not a left arrow
-    }
     return g;
 }
 

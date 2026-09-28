@@ -693,10 +693,11 @@ extern "C" void HOT_FUNC(coco_boot_blit_vdg_pizero_src)(const uint8_t *src, uint
 // this for the launcher; it is the same 32x16 card with different content.
 
 extern "C" const uint8_t font_6847t1[];   // 128 glyphs x 12 rows
+extern "C" const uint8_t font_6847t2[];   // PIZERO-166: the card draws with ours
 
 #include "text_card.h"          // card_code / card_center_col, host-tested
 
-// Each cell: a glyph index into font_6847t1 (bits 0-6) and CARD_INVERSE.
+// Each cell: a glyph index into font_6847t2 (bits 0-6) and CARD_INVERSE.
 static uint8_t g_card[CARD_ROWS][CARD_COLS];
 
 extern "C" void coco_boot_card_clear(void) {
@@ -761,7 +762,7 @@ extern "C" void coco_boot_card_present(uint16_t *fb) {
             uint16_t *frow = &fb[(PIZERO_Y0 + y) * PIZERO_FB_W + PIZERO_X0];
             for (int c = 0; c < CARD_COLS; c++) {
                 uint8_t cell = g_card[r][c];
-                uint8_t glyph = font_6847t1[(cell & 0x7F) * 12 + sub];
+                uint8_t glyph = font_6847t2[(cell & 0x7F) * 12 + sub];
                 uint16_t fg = (cell & CARD_INVERSE) ? paper : ink;
                 uint16_t bg = (cell & CARD_INVERSE) ? ink : paper;
                 uint16_t *px = &frow[c * 8];

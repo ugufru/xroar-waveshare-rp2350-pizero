@@ -39,14 +39,15 @@ static void test_lower_case_is_real_lower_case(void) {
 }
 
 static void test_the_characters_a_coco_cannot_show(void) {
-    // A CoCo shows _ and ^ as arrows; the card shows the characters.
-    TEST_ASSERT_EQUAL_UINT8(0x1F, card_code('_'));
-    TEST_ASSERT_EQUAL_UINT8(0x00, card_code('^'));
+    // A CoCo shows _ and ^ as arrows; the card uses the 6847T2 font, whose
+    // slots for them hold a caret and an underscore, and which has a backtick.
+    TEST_ASSERT_EQUAL_UINT8(0x5F, card_code('_'));
+    TEST_ASSERT_EQUAL_UINT8(0x5E, card_code('^'));
+    TEST_ASSERT_EQUAL_UINT8(0x00, card_code('`'));
     TEST_ASSERT_EQUAL_UINT8(0x1B, card_code('{'));
     TEST_ASSERT_EQUAL_UINT8(0x1C, card_code('|'));
     TEST_ASSERT_EQUAL_UINT8(0x1D, card_code('}'));
     TEST_ASSERT_EQUAL_UINT8(0x1E, card_code('~'));
-    TEST_ASSERT_EQUAL_UINT8(card_code('\''), card_code('`'));   // no glyph: borrows '
 }
 
 static void test_the_characters_the_messages_use_survive(void) {
@@ -71,12 +72,11 @@ static void test_unprintables_become_spaces_not_random_glyphs(void) {
 
 static void test_every_code_is_a_glyph_and_no_two_characters_share_one(void) {
     // Indexes must stay in the 128-glyph font with bit 7 free for inverse,
-    // and every printable character except the backtick needs its own glyph.
+    // and every printable character needs its own glyph.
     bool used[128] = { false };
     for (int c = 0x20; c <= 0x7E; c++) {
         uint8_t g = card_code((char)c);
         TEST_ASSERT_TRUE(g < 0x80);
-        if (c == '`') continue;
         TEST_ASSERT_FALSE_MESSAGE(used[g], "two characters share a glyph");
         used[g] = true;
     }
