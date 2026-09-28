@@ -50,7 +50,7 @@ void coco_machine_csg_always(_Bool on);
  * effect at once. volume 0-15 (10 = the old fixed level); artifact 0 off
  * (mono PMODE 4), 1 on, 2 swapped phase; the GIME palette and timer can be
  * removed from the bus. set_default(NULL, 0) restores the factory palette,
- * else entries with their mask bit set take the given RGB565 colour; it
+ * else entries with their mask bit set take the given RGB565 color; it
  * becomes what a reset and the cold reset restore. */
 void coco_machine_set_volume(int v);
 void coco_machine_set_artifact(int mode);

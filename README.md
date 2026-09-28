@@ -85,9 +85,9 @@ same HDMI cable**. Only joystick input remains open.
    own programs can use it: `POKE &HFF41,&H9F` silences tone 1, for example.
    Bank-switched cartridges over 16 KB (Games Master Cartridge style) load
    from the cartridge list too.
-6. **Settings: `/coco/settings.txt`.** Sound chip, volume, artifact colours,
-   the CoCo 3-style extras, RUN and serial typing behaviour, and your own
-   default colour palette, one `name = value` per line. See
+6. **Settings: `/coco/settings.txt`.** Sound chip, volume, artifact colors,
+   the CoCo 3-style extras, RUN and serial typing behavior, and any of the
+   palette colors, one `name = value` per line. See
    [`SETTINGS.md`](SETTINGS.md).
 
 Full build details, the env/flag matrix, and toolchain notes are in

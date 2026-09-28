@@ -12,12 +12,11 @@ edit it on a computer.
 # /coco/settings.txt
 sn76489           = on
 volume            = 10
-artifact_colours  = on
+artifact_colors   = on
 gime_palette      = on
 gime_timer        = on
 run_skips_autorun = on
 serial_keyboard   = on
-palette           = factory
 ```
 
 That file sets everything to its default, so it behaves exactly like having
@@ -29,16 +28,15 @@ no file at all. Change the lines you care about and delete the rest.
 |---|---|---|---|
 | `sn76489` | `on` / `off` | `on` | The SN76489 sound chip at `$FF41`, without a Games Master Cartridge. `off` gives `$FF41` back to the disk controller. With a GMC plugged in, the chip is there either way. |
 | `volume` | `0`-`15` | `10` | Overall sound level. `0` is silent; `15` is half as loud again as the default. |
-| `artifact_colours` | `on` / `off` / `swapped` | `on` | Colour in PMODE 4 graphics, from the NTSC artifact effect. `off` shows plain black and white; `swapped` exchanges the blue and orange, for games drawn with the other phase. |
+| `artifact_colors` | `on` / `off` / `swapped` | `on` | Color in PMODE 4 graphics, from the NTSC artifact effect. `off` shows plain black and white; `swapped` exchanges the blue and orange, for games drawn with the other phase. |
 | `gime_palette` | `on` / `off` | `on` | The CoCo 3-style palette registers at `$FFB0`-`$FFBF`. `off` removes them and restores the default palette. |
 | `gime_timer` | `on` / `off` | `on` | The CoCo 3-style timer and interrupts at `$FF90`-`$FF95`. `off` removes them and stops the timer. |
 | `run_skips_autorun` | `on` / `off` | `on` | Whether pressing RUN restarts straight to the BASIC prompt, skipping `autorun.txt`. `off` makes RUN behave like power-on. |
 | `serial_keyboard` | `on` / `off` | `on` | Whether characters sent over the USB serial port are typed into the CoCo. |
-| `palette` | `factory` / a name | `factory` | The colours the machine starts with. A name loads `/coco/pal/NAME.pal` (see below). |
+| `color_NAME` | `#RRGGBB` | the 6847's | Overrides one palette color. See below. |
 
-Names and values are not case-sensitive, so `VOLUME = 12` works too.
-`artifact_colors` is accepted as well as `artifact_colours`. A `#` starts a
-comment, either on its own line or after a value:
+Names and values are not case-sensitive, so `VOLUME = 12` works too. A `#`
+starts a comment, either on its own line or after a value:
 
 ```
 volume = 7   # a bit quieter
@@ -48,31 +46,29 @@ A line that cannot be understood (an unknown name, a value out of range, a
 missing `=`) is reported on the serial console with its line number and
 skipped; the rest of the file still applies.
 
-## Palettes: `/coco/pal/NAME.pal`
+## Colors
 
-A palette file lists colours by palette entry, one per line, as `#RRGGBB`:
+The machine starts with the 6847's own colors. Any of them can be replaced
+with a `color_` line giving the new color as `#RRGGBB`:
 
 ```
-# /coco/pal/soft.pal: gentler greens for text
-0 = #1ED01E
-9 = #0A3C0A
+color_green      = #1ED01E   # softer text
+color_dark_green = #0A3C0A   # text background
 ```
 
-Entries you leave out keep their factory colour, so a file only needs the
-colours it changes. The entries, in the order the 6847 uses them:
+Colors without a line keep their default. The names:
 
-| Entry | Colour | Entry | Colour |
+| Setting | Default color | Setting | Default color |
 |---|---|---|---|
-| 0 | green | 8 | black |
-| 1 | yellow | 9 | dark green (text background) |
-| 2 | blue | 10 | dark orange |
-| 3 | red | 11 | bright orange |
-| 4 | white (buff) | 12-15 | unused by the 6847 |
-| 5 | cyan | | |
-| 6 | magenta | | |
-| 7 | orange | | |
+| `color_green` | green | `color_black` | black |
+| `color_yellow` | yellow | `color_dark_green` | dark green (text background) |
+| `color_blue` | blue | `color_dark_orange` | dark orange |
+| `color_red` | red | `color_bright_orange` | bright orange |
+| `color_white` | white (buff) | | |
+| `color_cyan` | cyan | | |
+| `color_magenta` | magenta | | |
+| `color_orange` | orange | | |
 
-Then set `palette = soft` in `settings.txt`. The screen works in 16-bit
-colour, so each colour is rounded to the nearest of its 65,536. Programs
-that write the CoCo 3-style palette registers still can; a reset puts your
-palette back. Per-game palettes (PIZERO-55) will use the same file format.
+The screen works in 16-bit color, so each color is rounded to the nearest of
+its 65,536. Programs that write the CoCo 3-style palette registers still
+can; a reset puts your colors back.

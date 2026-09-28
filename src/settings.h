@@ -1,32 +1,30 @@
-// settings.h: /coco/settings.txt and /coco/pal/*.pal (PIZERO-145).
+// settings.h: /coco/settings.txt (PIZERO-145).
 //
 // There is no settings GUI: the file is the source of truth, edited as text
 // (on a PC, or on screen once PIZERO-146 lands). This header is the pure
-// half, host-tested: the settings, their defaults, and one-line parsers for
-// both files. Reading the files is coco_boot.cpp's; applying the values is
-// main.cpp's.
+// half, host-tested: the settings, their defaults, and the one-line parser.
+// Reading the file is coco_boot.cpp's; applying the values is main.cpp's.
 //
 // settings.txt, one per line, names and values case-insensitive:
 //
 //   # comment lines start with '#'
 //   sn76489           = on | off              SN76489 at $FF41 without a GMC
 //   volume            = 0-15                  10 is the old fixed level
-//   artifact_colours  = on | off | swapped    PMODE 4 colour, or plain mono
+//   artifact_colors   = on | off | swapped    PMODE 4 color, or plain mono
 //   gime_palette      = on | off              CoCo 3-style palette at $FFB0
 //   gime_timer        = on | off              CoCo 3-style timer at $FF90
 //   run_skips_autorun = on | off              RUN goes straight to BASIC
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
-//   palette           = factory | NAME        loads /coco/pal/NAME.pal
+//   color_green       = #RRGGBB               override one palette color
+//
+// There is one color_ setting per 6847 color: green, yellow, blue, red,
+// white, cyan, magenta, orange, black, dark_green, dark_orange and
+// bright_orange. A color without a line keeps its default. No palette files
+// or named styles: overriding colors here is the whole mechanism.
 //
 // Anything after the value is ignored if it starts with '#', so a line can
 // carry a comment. A missing line keeps the default; an unknown name or a
 // bad value is reported and ignored, never fatal.
-//
-// NAME.pal, one per line: "N = #RRGGBB" for palette index N (0-15). Indices
-// not listed keep their factory colour; '#' at the start of a line is a
-// comment. Index order is the VDG's: 0 green, 1 yellow, 2 blue, 3 red,
-// 4 white, 5 cyan, 6 magenta, 7 orange, 8 black, 9 dark green, 10 dark
-// orange, 11 bright orange.
 
 #ifndef SETTINGS_H
 #define SETTINGS_H
@@ -41,8 +39,6 @@
 
 enum { ART_OFF = 0, ART_ON = 1, ART_SWAPPED = 2 };
 
-#define SETTINGS_NAME_MAX 24          // a palette name, without .pal
-
 struct coco_settings {
     bool    sn76489;
     uint8_t volume;                   // 0-15
@@ -51,7 +47,14 @@ struct coco_settings {
     bool    gime_timer;
     bool    run_skips_autorun;
     bool    serial_keyboard;
-    char    palette[SETTINGS_NAME_MAX + 1];   // "" = factory
+    uint16_t color[16];               // RGB565 overrides, by palette index
+    uint16_t color_set;               // bit i: color[i] overrides the default
+};
+
+// The 6847 colors by palette index, as the color_ settings name them.
+static const char *const SETTINGS_COLOR_NAMES[12] = {
+    "green", "yellow", "blue", "red", "white", "cyan", "magenta", "orange",
+    "black", "dark_green", "dark_orange", "bright_orange"
 };
 
 static inline void settings_defaults(struct coco_settings *s) {
@@ -63,7 +66,6 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->gime_timer = true;
     s->run_skips_autorun = true;
     s->serial_keyboard = true;
-    s->palette[0] = '\0';
 }
 
 // Parse results. SET_OK covers blank and comment lines too.
@@ -109,14 +111,29 @@ static inline bool settings_bool(const char *v, bool *out) {
     return false;
 }
 
-// A palette name: letters, digits, '_' and '-' only, so it can only ever
-// name a file inside /coco/pal.
-static inline bool settings_palette_name_ok(const char *v) {
-    size_t n = strlen(v);
-    if (n == 0 || n > SETTINGS_NAME_MAX) return false;
-    for (size_t i = 0; i < n; i++)
-        if (!isalnum((unsigned char)v[i]) && v[i] != '_' && v[i] != '-') return false;
+// #RRGGBB to the screen's RGB565, rounding each channel.
+static inline uint16_t settings_rgb565(uint32_t rgb) {
+    unsigned r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+    return (uint16_t)((((r * 31 + 127) / 255) << 11) | (((g * 63 + 127) / 255) << 5)
+                      | ((b * 31 + 127) / 255));
+}
+
+// "#RRGGBB" as a 24-bit color.
+static inline bool settings_hex_color(const char *v, uint32_t *rgb) {
+    if (v[0] != '#' || strlen(v) != 7) return false;
+    char *end;
+    unsigned long c = strtoul(v + 1, &end, 16);
+    if (*end) return false;
+    *rgb = (uint32_t)c;
     return true;
+}
+
+// The palette index a color_ setting names, or -1.
+static inline int settings_color_index(const char *name) {
+    if (strncmp(name, "color_", 6)) return -1;
+    for (int i = 0; i < 12; i++)
+        if (!strcmp(name + 6, SETTINGS_COLOR_NAMES[i])) return i;
+    return -1;
 }
 
 // One line of settings.txt. On failure, *name_out (if given) holds the
@@ -138,44 +155,20 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
         char *end; long n = strtol(v, &end, 10);
         if (*end || n < 0 || n > 15) return SET_BAD_VALUE;
         s->volume = (uint8_t)n;
-    } else if (!strcmp(name, "artifact_colours") || !strcmp(name, "artifact_colors")) {
+    } else if (!strcmp(name, "artifact_colors")) {
         if (!strcmp(v, "on"))           s->artifact = ART_ON;
         else if (!strcmp(v, "off"))     s->artifact = ART_OFF;
         else if (!strcmp(v, "swapped")) s->artifact = ART_SWAPPED;
         else return SET_BAD_VALUE;
-    } else if (!strcmp(name, "palette")) {
-        if (!strcmp(v, "factory")) s->palette[0] = '\0';
-        else if (settings_palette_name_ok(v)) snprintf(s->palette, sizeof s->palette, "%s", v);
-        else return SET_BAD_VALUE;
+    } else if (settings_color_index(name) >= 0) {
+        uint32_t rgb;
+        if (!settings_hex_color(v, &rgb)) return SET_BAD_VALUE;
+        int i = settings_color_index(name);
+        s->color[i] = settings_rgb565(rgb);
+        s->color_set |= (uint16_t)(1u << i);
     } else {
         return SET_UNKNOWN;
     }
-    return SET_OK;
-}
-
-// #RRGGBB to the screen's RGB565, rounding each channel.
-static inline uint16_t settings_rgb565(uint32_t rgb) {
-    unsigned r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
-    return (uint16_t)((((r * 31 + 127) / 255) << 11) | (((g * 63 + 127) / 255) << 5)
-                      | ((b * 31 + 127) / 255));
-}
-
-// One line of a .pal file: "N = #RRGGBB". Returns SET_OK with *idx = -1
-// for a blank or comment line.
-static inline int pal_parse_line(const char *line, int *idx, uint32_t *rgb) {
-    char name[16], v[16];
-    bool syntax;
-    *idx = -1;
-    if (!settings_split(line, name, sizeof name, v, sizeof v, &syntax))
-        return syntax ? SET_SYNTAX : SET_OK;
-    char *end;
-    long n = strtol(name, &end, 10);
-    if (*end || end == name || n < 0 || n > 15) return SET_UNKNOWN;
-    if (v[0] != '#' || strlen(v) != 7) return SET_BAD_VALUE;
-    unsigned long c = strtoul(v + 1, &end, 16);
-    if (*end) return SET_BAD_VALUE;
-    *idx = (int)n;
-    *rgb = (uint32_t)c;
     return SET_OK;
 }
 

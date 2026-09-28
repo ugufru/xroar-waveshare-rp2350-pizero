@@ -126,7 +126,7 @@ static const uint16_t g_pal_factory[COCO_PAL_COUNT] = {
     0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
 };
 // PIZERO-145: the palette a reset (and the cold reset) restores. Starts as
-// the factory colours; 'palette = NAME' in settings.txt overrides entries.
+// the factory colors; color_ lines in settings.txt override entries.
 static uint16_t g_pal_default[COCO_PAL_COUNT] = {
     0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
     0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -147,8 +147,8 @@ extern "C" void coco_machine_palette_reset(void) {
     coco_pal_reset(&g_pal, g_pal_default);
 }
 
-// PIZERO-145: set the default palette. NULL restores the factory colours;
-// otherwise entries whose bit is set in `mask` take the given colour and the
+// PIZERO-145: set the default palette. NULL restores the factory colors;
+// otherwise entries whose bit is set in `mask` take the given color and the
 // rest are factory. The live palette follows at once.
 extern "C" void coco_machine_palette_set_default(const uint16_t *rgb565, uint16_t mask) {
     for (int i = 0; i < COCO_PAL_COUNT; i++)
@@ -1144,7 +1144,7 @@ extern "C" void coco_machine_set_artifact(int mode) {
 }
 
 // Off: the registers vanish from the bus and the palette returns to the
-// default, so a program that recoloured the screen cannot leave it so.
+// default, so a program that recolored the screen cannot leave it so.
 extern "C" void coco_machine_set_gime_palette(bool on) {
     g_gime_pal_on = on;
     if (!on) coco_machine_palette_reset();
@@ -1344,7 +1344,7 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
         // PIZERO-43: the artifact red/blue PHASE is arbitrary on real hardware
         // (power-on dependent). Default to the orientation Space Warp assumes;
         // build -DARTIFACT_PHASE_LEGACY for the previous (opposite) phase.
-        // PIZERO-145: the phase is the artifact_colours setting ('swapped').
+        // PIZERO-145: the phase is the artifact_colors setting ('swapped').
         const bool swap = (g_artifact_mode == 2);
         const uint8_t c01 = (g_artifact_css != swap) ? PAL_BLUE   : PAL_ORANGE;
         const uint8_t c10 = (g_artifact_css != swap) ? PAL_ORANGE : PAL_BLUE;

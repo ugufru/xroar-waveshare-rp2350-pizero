@@ -877,18 +877,14 @@ static void settings_apply(void) {
     coco_machine_set_artifact(st->artifact);
     coco_machine_set_gime_palette(st->gime_palette);
     coco_machine_set_gime_timer(st->gime_timer);
-    uint16_t rgb[16], mask = 0;
-    if (st->palette[0] && coco_boot_load_palette(st->palette, rgb, &mask))
-        coco_machine_palette_set_default(rgb, mask);
-    else
-        coco_machine_palette_set_default(nullptr, 0);
-    Serial.printf("[settings] sn76489=%s volume=%u artifact=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s palette=%s\r\n",
+    coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
+    Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
+                  "run_skips_autorun=%s serial_keyboard=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
                   st->run_skips_autorun ? "on" : "off", st->serial_keyboard ? "on" : "off",
-                  st->palette[0] ? st->palette : "factory");
+                  (unsigned)st->color_set);
 }
 
 // Put the finished card on screen. Shared by the boot pages and the F12

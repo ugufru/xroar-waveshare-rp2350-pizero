@@ -60,11 +60,10 @@ bool coco_boot_load_cart_path(const char *path, uint8_t *buf, uint32_t max, uint
 bool coco_boot_resolve_cart(const char *name, char *out, size_t out_sz);   // PIZERO-142
 bool coco_boot_load_file(const char *path, uint8_t *buf, uint32_t len);        // PIZERO-142
 
-// PIZERO-145: /coco/settings.txt and /coco/pal/NAME.pal (formats in
-// settings.h). Both report bad lines on serial and never fail the boot.
+// PIZERO-145: /coco/settings.txt (format in settings.h). Bad lines are
+// reported on serial and never fail the boot.
 struct coco_settings;
 bool coco_boot_load_settings(struct coco_settings *out);
-bool coco_boot_load_palette(const char *name, uint16_t rgb565[16], uint16_t *mask);
 
 // Disk attach. `path` is the full resolved FatFs path (use
 // coco_boot_resolve("dsk", name, ...) to build it).

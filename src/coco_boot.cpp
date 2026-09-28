@@ -258,32 +258,6 @@ extern "C" bool coco_boot_load_settings(struct coco_settings *out) {
     return true;
 }
 
-// PIZERO-145: read /coco/pal/NAME.pal into rgb565[16]; *mask gets a bit per
-// index the file sets. Returns false if the file cannot be opened.
-extern "C" bool coco_boot_load_palette(const char *name, uint16_t rgb565[16], uint16_t *mask) {
-    char path[64];
-    snprintf(path, sizeof path, "0:/coco/pal/%s.pal", name);
-    FIL f;
-    *mask = 0;
-    if (f_open(&f, path, FA_READ) != FR_OK) {
-        Serial.printf("[settings] palette %s not found\r\n", path);
-        return false;
-    }
-    char line[64];
-    int n = 0;
-    while (f_gets(line, sizeof line, &f)) {
-        n++;
-        int idx; uint32_t rgb;
-        int r = pal_parse_line(line, &idx, &rgb);
-        if (r != SET_OK) { Serial.printf("[settings] %s line %d: expected 'N = #RRGGBB', ignored\r\n", path, n); continue; }
-        if (idx < 0) continue;
-        rgb565[idx] = settings_rgb565(rgb);
-        *mask |= (uint16_t)(1u << idx);
-    }
-    f_close(&f);
-    return true;
-}
-
 // PIZERO-92: the caller needs to tell a MISSING ROM from a DAMAGED one, because
 // the advice differs and "NO ROM FOUND" while the file is sitting on the card
 // sends someone hunting for something they already have.
