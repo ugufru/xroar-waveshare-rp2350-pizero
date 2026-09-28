@@ -47,7 +47,7 @@ buildable on its own.
 | `pizero_stream_lpf` | `pizero_stream` | `-DAUDIO_OUTPUT_LPF` | single-buffered | TV-bandwidth output filter on (PIZERO-41) | ~75% |
 | `pizero_wdtest` | `pizero_stream` | `-DWATCHDOG_SELFTEST` | single-buffered | wedges core 0 to prove watchdog recovery (PIZERO-33) | ~75% |
 | `pizero_wavmeas` | `pizero_base` | `-DAUDIO_WAV_DUMP` | double-buffered | no HDMI audio: dumps the emulator's sound as WAV over USB (PIZERO-41) | ~99% |
-| `waveshare_demo` | — | (stock USB demo) | — | Waveshare's USB device_info demo, for USB triage (PIZERO-11/51) | ~6% |
+| `waveshare_demo` | (none) | (stock USB demo) | n/a | Waveshare's USB device_info demo, for USB triage (PIZERO-11/51) | ~6% |
 
 PIZERO-150 retired `pizero` and `pizero_60hz` (silent, double-buffered, ~99%
 RAM, no use as a fallback for a machine with sound) and the finished
@@ -85,7 +85,7 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 ### Core
 | Flag | Effect | Set by |
 |------|--------|--------|
-| `HDMI_DATA_ISLAND` | Master enable: HDMI data-island path — AVI + Audio InfoFrame + ACR in vblank, live audio sample packets on active lines; single-buffers the framebuffer. **Off = silent.** | `pizero_stream` |
+| `HDMI_DATA_ISLAND` | Master enable: HDMI data-island path: AVI + Audio InfoFrame + ACR in vblank, live audio sample packets on active lines; single-buffers the framebuffer. **Off = silent.** | `pizero_stream` |
 
 ### Audio test / diagnostic (layer on top of `HDMI_DATA_ISLAND`)
 | Flag | Effect |

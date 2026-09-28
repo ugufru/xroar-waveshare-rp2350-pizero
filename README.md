@@ -236,7 +236,7 @@ pio device monitor                  # serial @ 115200 — prints per-second [run
 
 A bare `pio run` builds the default `pizero_stream_60` env (60 Hz, streaming HDMI
 audio, USB host). The off-spec 52 Hz `pizero_stream` is kept as the fallback for
-displays that reject 60 Hz. Don't enable flags via the `PLATFORMIO_BUILD_FLAGS` env var — it links
+displays that reject 60 Hz. Don't enable flags via the `PLATFORMIO_BUILD_FLAGS` env var: it links
 stale objects (see BUILD.md §4b).
 
 A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and optionally
