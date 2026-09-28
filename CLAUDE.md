@@ -71,3 +71,8 @@ a build flag.
   always maps to a recoverable version. Render, commit, then open the
   slicer. See `hardware/case/README.md`.
 - User preference: no AskUserQuestion popups — ask in plain prose.
+- **Improvements are on by default.** A new setting that improves on the
+  original machine (auto-repeat, the 6847t2 font, true lower case, and the
+  like) defaults to on. Authentic behavior stays available as the other
+  value, and a game that minds gets it back in its own NAME.TXT. Do not
+  ship an improvement defaulting to off, and do not ask which default.
