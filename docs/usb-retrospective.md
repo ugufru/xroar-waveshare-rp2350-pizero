@@ -1,8 +1,9 @@
 # USB retrospective
 
 A record of how USB input got from nothing to a keyboard and a gamepad
-working together through a hub, what went wrong along the way, and what we
-now do differently because of it. It covers PIZERO-11 through PIZERO-160,
+working together through a hub, a keyboard that types what its keycaps say,
+and the screen fonts that go with it: what went wrong along the way, and what
+we now do differently because of it. It covers PIZERO-11 through PIZERO-167,
 2026-05-27 to 2026-09-28.
 
 How to use the keyboard and pad is in [README.md](../README.md) and
@@ -15,15 +16,18 @@ not made twice.
 | Area | State |
 |---|---|
 | USB host | Pico-PIO-USB (software USB on PIO 1, D+ GPIO 28, D- 29) under Adafruit TinyUSB 3.7.7. Full speed (12 Mbit/s) only. Done, PIZERO-11. |
-| Keyboard | Works. Maps CoCo key *positions*, not keycap symbols; being replaced (PIZERO-163). Done, PIZERO-12. |
+| Keyboard | Types what the keycaps say (US layout): `= + : ' " _ [ ] \` where they are printed, Caps Lock is the case toggle, Home is CLEAR, and the numeric keypad works. `{ } \| ~` and backtick do nothing: the CoCo has no such keys. Built, awaiting confirmation (PIZERO-163, 49). Replaced the positional mapping of PIZERO-12. |
+| Auto-repeat | Held keys repeat, on by default; delay and rate configurable, per game too. Done, PIZERO-167. |
+| Screen text | The machine's font is a setting: `classic`, `6847t1`, or our `6847t2` (default), which has a real caret and underscore, plus true lower case and `{ \| } ~` with `lowercase` (on by default). The firmware's own screens draw them too. Built, awaiting confirmation (PIZERO-162, 166). |
 | Gamepad | Works as both CoCo joysticks, two fire buttons. Confirmed on hardware with a GameSir Tegenaria Lite in two of its modes. Done, PIZERO-13. |
 | Stick swap | `joystick_swap` setting, also per game. Done, PIZERO-160. |
 | Hub | Keyboard and pad together through a simple hub, 60 fps, clean audio. Done, PIZERO-54. |
 | Hot-plug | Straight into the board: no. A device plugged in after power-on is never seen. Through a hub: a keyboard plugged in while running did mount. PIZERO-51. |
 | Unused pad buttons | Start, Select, the top face button, triggers and stick clicks do nothing yet (PIZERO-164). |
 
-Host tests: 180, of which 21 are the gamepad decoders and joystick
-comparator (`test/test_gamepad`).
+Host tests: 206, of which 21 are the gamepad decoders and joystick
+comparator (`test/test_gamepad`) and 17 the keyboard translation and
+auto-repeat (`test/test_key_translate`).
 
 ## Timeline
 
@@ -39,6 +43,11 @@ comparator (`test/test_gamepad`).
 | 09-28 | PIZERO-54 | A multi-port USB-C hub failed. A debug build found a one-hub limit hard-coded in the library, and behind it a TinyUSB race. Fixed the limit (98fc68f); a simple hub then worked (422adf1). |
 | 09-28 | PIZERO-160 | `joystick_swap` setting, confirmed across several games (95a3133). |
 | 09-28 | PIZERO-157, 158, 159 | Filed: Switch mode handshake, dropped serial characters, the chained-hub race. |
+| 09-28 | PIZERO-161 | This retrospective. |
+| 09-28 | PIZERO-162 | The firmware's own screens draw `_ { \| } ~ ^` and lower case: the 6847T1 font we already used had the glyphs, the card code could not reach them (73e9793). |
+| 09-28 | PIZERO-163 | The keyboard types what its keycaps say, and the key matrix gets one layer per source (8fe9ca9). |
+| 09-28 | PIZERO-166 | Font setting and the 6847T2 (6786424). The user's `POKE 65314,16` did not work; a register trace showed BASIC undoing it. `lowercase` setting added (f4c9ca6). |
+| 09-28 | PIZERO-167 | Auto-repeat, on by default, confirmed on hardware (8b6cdca). Rule adopted: improvements are on by default. |
 
 ## What worked
 
@@ -76,6 +85,16 @@ glance when the real problem was a wiped BASIC program.
 **Trying the simple hardware.** A plain 4-port hub worked at once and proved
 the whole path, which turned the chained USB-C hub from a blocker into a
 low-priority bug.
+
+**Reusing what was already there.** The keycap table came from the text
+editor (`tek_ascii`), the Color BASIC chords for `[ ] \ _` from upstream
+XRoar's translated mode, and the missing glyphs from the font the screens
+had drawn with all along. None of the three had to be written from scratch.
+
+**Giving each key source its own layer.** The keyboard, serial typing and
+(next) pad buttons each hold keys in their own layer of the CoCo's key
+matrix. Before, one source releasing a key could drop another's hold; the
+keycap mapping, which forces SHIFT on and off, would have made that common.
 
 ## What went wrong, and the lessons
 
@@ -172,6 +191,19 @@ get round it.
 **Lesson:** record these as they happen, with the workaround, so they are
 not rediscovered.
 
+### 10. A POKE that "did not work" (PIZERO-166)
+
+True lower case on the 6847T1 is switched on with `POKE 65314,16`. It did
+nothing. The telemetry showed the register back at 00 even inside a running
+program, and the obvious next step was to suspect the new code. A trace of
+every write to the register settled it: at the prompt, BASIC rewrote it
+about 110 times while reading keys and printing, back to 00 each time, and
+a `PRINT` in a program reset it too. The emulation was right; a real CoCo
+2B does the same. The answer was a setting (`lowercase`) rather than a fix.
+
+**Lesson:** when a register "does not take", count the writes to it before
+blaming the code that reads it.
+
 ## Still open
 
 | Issue | What |
@@ -180,9 +212,8 @@ not rediscovered.
 | PIZERO-157 | Switch Pro handshake, so the pad works in any mode. |
 | PIZERO-158 | Serial typing drops the first character of a line. |
 | PIZERO-159 | Devices behind a chained USB-C hub never mount (TinyUSB race). |
-| PIZERO-163 | The keyboard types what the keycaps say. |
+| PIZERO-162, 163, 166, 49 | Built and on the board, awaiting confirmation: screen glyphs, keycap keyboard and keypad, fonts. |
 | PIZERO-164 | Pad buttons press CoCo keys; `dpad = arrows`. |
-| PIZERO-49 | Numeric keypad keys. |
 | PIZERO-50 | A real CoCo joystick on the header pins. |
 
 ## Working rules this produced
@@ -195,8 +226,12 @@ not rediscovered.
 - After setting a library option by build flag, prove it took (a log line,
   a symbol, or a test).
 - When a device will not enumerate, turn on the library's own log
-  (`pizero_usbdebug`) before theorising.
+  (`pizero_usbdebug`) before theorizing.
 - Keep diagnostic telemetry that separates the device from the machine
   (`[usb]` mount lines, `[pad]`).
 - Try the simplest hardware (a plain hub, a direct connection) before
   debugging the complicated case.
+- When a register or setting seems not to take, trace the writes to it
+  (the `[vdg]` line's `pb_writes` and `pb_last` are the model).
+- Improvements to the machine are on by default; authentic behavior stays
+  one setting away, per game if need be (CLAUDE.md).
