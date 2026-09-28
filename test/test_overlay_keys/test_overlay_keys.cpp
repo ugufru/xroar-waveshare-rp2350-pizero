@@ -196,8 +196,8 @@ static int rows_needed(const char *s, int width) {
     return rows;
 }
 static void test_overlay_words_fit_and_print(void) {
-    const char *one_line[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART,
-                               OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART };
+    const char *one_line[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART, OVL_TITLE_FILES,
+                               OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES };
     for (unsigned i = 0; i < sizeof one_line / sizeof one_line[0]; i++)
         TEST_ASSERT_TRUE_MESSAGE(strlen(one_line[i]) <= CARD_COLS, one_line[i]);
     const char *wrapped[] = { OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART };
@@ -206,8 +206,8 @@ static void test_overlay_words_fit_and_print(void) {
     char skipped[64];
     snprintf(skipped, sizeof skipped, OVL_SKIPPED, 128);  // worst case
     TEST_ASSERT_TRUE(strlen(skipped) <= CARD_COLS);
-    const char *all[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART,
-                          OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART,
+    const char *all[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART, OVL_TITLE_FILES,
+                          OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES,
                           OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART, skipped };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++)
         for (const char *p = all[i]; *p; p++)

@@ -35,11 +35,24 @@
 #include "text_card.h"
 #include "coco_boot.h"
 #include "coco_machine.h"
+#include "text_editor.h"
+#include "settings.h"
 
 #define OVL_NDRIVE 4
 
-static const char *const k_title[CAT_KINDS]  = { OVL_TITLE_DSK,  OVL_TITLE_BIN,  OVL_TITLE_CART };
-static const char *const k_legend[CAT_KINDS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART };
+// The three catalogue lists, then FILES (PIZERO-146): text files to edit.
+#define OVL_FILES  CAT_KINDS
+#define OVL_LISTS  (CAT_KINDS + 1)
+static const char *const k_title[OVL_LISTS]  = { OVL_TITLE_DSK,  OVL_TITLE_BIN,  OVL_TITLE_CART,  OVL_TITLE_FILES };
+static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES };
+
+// The files the editor can open. Listed whether or not they exist yet: the
+// editor starts a missing one from a template. autorun.txt: PIZERO-147.
+struct ovl_file { const char *name, *path; };
+static const struct ovl_file k_files[] = {
+    { "SETTINGS.TXT", "0:/coco/settings.txt" },
+};
+#define OVL_NFILES ((int)(sizeof k_files / sizeof k_files[0]))
 static const char *const k_empty[CAT_KINDS]  = { OVL_EMPTY_DSK,  OVL_EMPTY_BIN,  OVL_EMPTY_CART };
 
 static struct ovk_state g_ovk;
@@ -74,7 +87,12 @@ static void draw(void) {
     coco_boot_card_center(0, k_title[g_kind]);
     coco_boot_card_invert_row(0);
 
-    if (cat->n == 0) {
+    if (g_kind == OVL_FILES) {
+        for (int i = 0; i < OVL_NFILES; i++) {
+            coco_boot_card_text(0, 1 + i, k_files[i].name);
+            if (i == g_ovk.sel) coco_boot_card_invert_row(1 + i);
+        }
+    } else if (cat->n == 0) {
         coco_boot_card_wrap(2, 3, 28, 6, k_empty[g_kind]);
     } else {
         g_top = ovk_top(g_ovk.sel, g_top, cat->n);
@@ -101,6 +119,7 @@ static void draw(void) {
 // Rescan the list on show. A skipped-file notice replaces the legend until
 // the next key, so it cannot hide the controls for good.
 static void load_list(void) {
+    if (g_kind == OVL_FILES) { ovk_set_count(&g_ovk, OVL_NFILES); legend(); return; }
     int n = coco_boot_rescan(g_kind);
     ovk_set_count(&g_ovk, n);
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
@@ -127,7 +146,7 @@ static void open_now(void) {
 }
 
 static void switch_kind(int dir) {
-    g_kind = (g_kind + dir + CAT_KINDS) % CAT_KINDS;
+    g_kind = (g_kind + dir + OVL_LISTS) % OVL_LISTS;
     g_ovk.sel = 0;
     g_top = 0;
     load_list();
@@ -151,6 +170,17 @@ static void toggle_drive(int d) {
             snprintf(msg, sizeof msg, "CANNOT OPEN %s", name);
     }
     set_status(msg);
+}
+
+// PIZERO-146: ENTER in FILES opens the editor over the list. A missing
+// settings.txt starts from a template of every setting at its default.
+static void edit_file(const uint8_t codes[6]) {
+    int i = g_ovk.sel;
+    if (i < 0 || i >= OVL_NFILES) return;
+    static char tmpl[512];
+    settings_template(tmpl, sizeof tmpl);
+    if (text_editor_open(k_files[i].path, k_files[i].name, tmpl))
+        text_editor_hold(codes);            // the ENTER that opened it is not typed
 }
 
 // Returns true when the launch was accepted and the overlay has closed.
@@ -187,7 +217,20 @@ void disk_overlay_open(void) {
     open_now();
 }
 
-bool disk_overlay_key(const uint8_t codes[6], uint32_t frame, bool *closed) {
+bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool *closed) {
+    // PIZERO-146: while the editor is open every key is the editor's. When it
+    // closes, the list takes the keyboard back as it stands, so the ESC that
+    // closed the editor does not also close the overlay.
+    if (text_editor_is_open()) {
+        text_editor_key(mods, codes, frame);
+        if (!text_editor_is_open()) {
+            memcpy(g_ovk.prev, codes, 6);
+            g_ovk.held = 0;
+            legend();
+        }
+        if (closed) *closed = false;
+        return true;
+    }
     struct ovk_result r = ovk_report(&g_ovk, codes, frame);
     bool shut = (r.action == OVK_CLOSE);
     switch (r.action) {
@@ -196,7 +239,10 @@ bool disk_overlay_key(const uint8_t codes[6], uint32_t frame, bool *closed) {
     case OVK_MOVED:  legend(); break;
     case OVK_DRIVE:  toggle_drive(r.drive); break;
     case OVK_KIND:   switch_kind(r.drive); break;
-    case OVK_LAUNCH: shut = launch(); break;
+    case OVK_LAUNCH:
+        if (g_kind == OVL_FILES) edit_file(codes);
+        else shut = launch();
+        break;
     default: break;
     }
     if (closed) *closed = shut;
@@ -205,6 +251,7 @@ bool disk_overlay_key(const uint8_t codes[6], uint32_t frame, bool *closed) {
 
 void disk_overlay_frame(uint32_t frame) {
     if (!g_ovk.open) return;
+    if (text_editor_is_open()) { text_editor_frame(frame); return; }
     if (ovk_tick(&g_ovk, frame) == OVK_MOVED) legend();
     if (g_dirty) draw();
 }

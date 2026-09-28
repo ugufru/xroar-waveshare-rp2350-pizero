@@ -172,4 +172,29 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     return SET_OK;
 }
 
+// PIZERO-146: the text the on-screen editor starts from when there is no
+// settings.txt: every setting at its default, with the colors commented out,
+// so the file documents itself. Built from settings_defaults, so it cannot
+// drift from them. Returns the length written.
+static inline int settings_template(char *out, size_t n) {
+    struct coco_settings d;
+    settings_defaults(&d);
+    int k = snprintf(out, n,
+        "# COCO ZERO SETTINGS. SEE SETTINGS.MD\n"
+        "sn76489 = %s\n"
+        "volume = %u\n"
+        "artifact_colors = %s\n"
+        "gime_palette = %s\n"
+        "gime_timer = %s\n"
+        "run_skips_autorun = %s\n"
+        "serial_keyboard = %s\n"
+        "# color_green = #00FF00\n"
+        "# color_dark_green = #006500\n",
+        d.sn76489 ? "on" : "off", d.volume,
+        d.artifact == ART_OFF ? "off" : d.artifact == ART_SWAPPED ? "swapped" : "on",
+        d.gime_palette ? "on" : "off", d.gime_timer ? "on" : "off",
+        d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off");
+    return (k < 0) ? 0 : (k >= (int)n ? (int)n - 1 : k);
+}
+
 #endif  // SETTINGS_H

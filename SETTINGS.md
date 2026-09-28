@@ -3,8 +3,24 @@
 The CoCo Zero reads `/coco/settings.txt` from the SD card at power-on. It is
 plain text, one setting per line, and every line is optional: a missing file
 or line means the default. There is no settings menu; the file is the
-settings. An on-screen editor for it is planned (PIZERO-146); until then,
-edit it on a computer.
+settings.
+
+## Editing it on the CoCo Zero
+
+Press **F12**, then **Right** until the title reads **< FILES >**, and
+**ENTER** on `SETTINGS.TXT`. The file opens as text on the screen. If there
+is no file yet, it opens a template listing every setting at its default.
+
+- Arrows, Home/End and PgUp/PgDn move; typing inserts; Backspace, Delete and
+  Enter work as usual. Held keys repeat.
+- **Ctrl-S** saves. The settings take effect straight away, no reboot.
+- **ESC** leaves. With unsaved changes, the first ESC warns and a second one
+  discards them.
+
+The screen shows upper case only (the CoCo's font has no lower case), which
+is fine: settings are not case-sensitive. The save writes a new copy and
+then swaps it in, so pulling the power mid-save cannot leave a broken file.
+You can also edit the file on a computer.
 
 ## Example
 

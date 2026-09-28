@@ -258,6 +258,61 @@ extern "C" bool coco_boot_load_settings(struct coco_settings *out) {
     return true;
 }
 
+// PIZERO-146: text files the on-screen editor opens and saves. Load reads up
+// to max bytes; it returns false (with *len = 0) when there is no file.
+extern "C" bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *len) {
+    *len = 0;
+    FIL f;
+    if (f_open(&f, path, FA_READ) != FR_OK) return false;
+    UINT br = 0;
+    FRESULT fr = f_read(&f, buf, max, &br);
+    f_close(&f);
+    if (fr != FR_OK) return false;
+    *len = br;
+    return true;
+}
+
+// Save safely: write the whole text to PATH.tmp, then swap it in for PATH.
+// A power cut during the write leaves the old file untouched; one between
+// removing the old file and the rename leaves only the .tmp, which
+// coco_boot_recover_text() finishes at the next boot.
+static void tmp_path_for(const char *path, char *out, size_t n) {
+    snprintf(out, n, "%s.tmp", path);
+}
+
+extern "C" bool coco_boot_save_text(const char *path, const char *buf, uint32_t len) {
+    char tmp[96];
+    tmp_path_for(path, tmp, sizeof tmp);
+    FIL f;
+    FRESULT fr = f_open(&f, tmp, FA_WRITE | FA_CREATE_ALWAYS);
+    if (fr != FR_OK) { Serial.printf("[save] %s: open failed (%d)\r\n", tmp, fr); return false; }
+    UINT bw = 0;
+    fr = f_write(&f, buf, len, &bw);
+    FRESULT fc = f_close(&f);                 // close flushes to the card
+    if (fr != FR_OK || fc != FR_OK || bw != len) {
+        Serial.printf("[save] %s: write failed (%d/%d, %u of %lu)\r\n", tmp, fr, fc,
+                      (unsigned)bw, (unsigned long)len);
+        f_unlink(tmp);
+        return false;
+    }
+    fr = f_unlink(path);
+    if (fr != FR_OK && fr != FR_NO_FILE) { Serial.printf("[save] %s: remove old failed (%d)\r\n", path, fr); return false; }
+    fr = f_rename(tmp, path);
+    if (fr != FR_OK) { Serial.printf("[save] %s: rename failed (%d)\r\n", path, fr); return false; }
+    Serial.printf("[save] %s: %lu bytes\r\n", path, (unsigned long)len);
+    return true;
+}
+
+// Finish a save a power cut interrupted: PATH gone, PATH.tmp present.
+extern "C" void coco_boot_recover_text(const char *path) {
+    char tmp[96];
+    tmp_path_for(path, tmp, sizeof tmp);
+    FILINFO fi;
+    if (f_stat(path, &fi) == FR_OK || f_stat(tmp, &fi) != FR_OK) return;
+    if (f_rename(tmp, path) == FR_OK)
+        Serial.printf("[save] recovered %s from an interrupted save\r\n", path);
+}
+
 // PIZERO-92: the caller needs to tell a MISSING ROM from a DAMAGED one, because
 // the advice differs and "NO ROM FOUND" while the file is sitting on the card
 // sends someone hunting for something they already have.
@@ -654,6 +709,12 @@ extern "C" void coco_boot_card_text(int col, int row, const char *s) {
 extern "C" void coco_boot_card_invert_row(int row) {
     if (row < 0 || row >= CARD_ROWS) return;
     for (int c = 0; c < CARD_COLS; c++) g_card[row][c] |= CARD_INVERSE;
+}
+
+// PIZERO-146: the editor's cursor, one cell in inverse.
+extern "C" void coco_boot_card_invert_cell(int col, int row) {
+    if (row < 0 || row >= CARD_ROWS || col < 0 || col >= CARD_COLS) return;
+    g_card[row][col] ^= CARD_INVERSE;
 }
 
 extern "C" void coco_boot_card_center(int row, const char *s) {

@@ -65,6 +65,13 @@ bool coco_boot_load_file(const char *path, uint8_t *buf, uint32_t len);        /
 struct coco_settings;
 bool coco_boot_load_settings(struct coco_settings *out);
 
+// PIZERO-146: text files for the on-screen editor. save_text writes PATH.tmp
+// and swaps it in, so a power cut never leaves a half-written file;
+// recover_text finishes a swap a power cut interrupted.
+bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *len);
+bool coco_boot_save_text(const char *path, const char *buf, uint32_t len);
+void coco_boot_recover_text(const char *path);
+
 // Disk attach. `path` is the full resolved FatFs path (use
 // coco_boot_resolve("dsk", name, ...) to build it).
 bool coco_boot_attach_dsk(const char *path);
@@ -106,6 +113,7 @@ void coco_boot_card_text(int col, int row, const char *s);
 void coco_boot_card_center(int row, const char *s);
 void coco_boot_card_present(uint16_t *fb);
 void coco_boot_card_invert_row(int row);   // PIZERO-81b: selection bar
+void coco_boot_card_invert_cell(int col, int row);   // PIZERO-146: editor cursor
 int  coco_boot_card_wrap(int col, int row, int width, int max_rows, const char *s);
 
 /* PIZERO-92: what the last ROM load actually found, so a diagnostic can tell a

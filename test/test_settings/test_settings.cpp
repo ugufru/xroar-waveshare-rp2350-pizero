@@ -92,6 +92,26 @@ static void test_rgb565_rounding(void) {
     TEST_ASSERT_EQUAL_HEX16(0x001F, settings_rgb565(0x0000FF));
 }
 
+static void test_the_template_parses_back_to_the_defaults(void) {
+    // The editor offers this when there is no file; saving it unchanged
+    // must leave every setting exactly at its default, with no errors.
+    char tmpl[512];
+    int n = settings_template(tmpl, sizeof tmpl);
+    TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof tmpl);
+    settings_defaults(&s);
+    s.volume = 3; s.sn76489 = false;                  // so the template must reset them
+    char *line = tmpl;
+    while (*line) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = 0;
+        TEST_ASSERT_EQUAL_INT_MESSAGE(SET_OK, settings_parse_line(&s, line, NULL, 0), line);
+        if (!nl) break;
+        line = nl + 1;
+    }
+    struct coco_settings d; settings_defaults(&d);
+    TEST_ASSERT_EQUAL_MEMORY(&d, &s, sizeof s);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_defaults_match_todays_behaviour);
@@ -99,5 +119,6 @@ int main(void) {
     RUN_TEST(test_case_spacing_and_comments);
     RUN_TEST(test_bad_lines_are_reported_and_change_nothing);
     RUN_TEST(test_rgb565_rounding);
+    RUN_TEST(test_the_template_parses_back_to_the_defaults);
     return UNITY_END();
 }

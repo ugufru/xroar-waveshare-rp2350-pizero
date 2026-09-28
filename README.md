@@ -87,8 +87,9 @@ same HDMI cable**. Only joystick input remains open.
    from the cartridge list too.
 6. **Settings: `/coco/settings.txt`.** Sound chip, volume, artifact colors,
    the CoCo 3-style extras, RUN and serial typing behavior, and any of the
-   palette colors, one `name = value` per line. See
-   [`SETTINGS.md`](SETTINGS.md).
+   palette colors, one `name = value` per line. Edit it on the CoCo Zero
+   itself (F12, the **< FILES >** list, ENTER on `SETTINGS.TXT`, Ctrl-S to
+   save and apply) or on a computer. See [`SETTINGS.md`](SETTINGS.md).
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).

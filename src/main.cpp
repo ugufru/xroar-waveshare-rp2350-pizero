@@ -117,6 +117,7 @@ extern "C" {
 #include "rsdos_dir.h"     // PIZERO-81d: find the program to run on a disk
 #include "cart_gmc.h"      // PIZERO-142: bank-switched cartridges
 #include "settings.h"      // PIZERO-145: /coco/settings.txt
+#include "text_editor.h"   // PIZERO-146: on-screen editor for it
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -377,7 +378,7 @@ static void hid_keyboard_apply(const uint8_t *report) {
     // of them, so nothing reaches BASIC; closed, it takes only F12.
     if (g_machine_running) {
         bool closed = false;
-        if (disk_overlay_key(codes, g_frame_count, &closed)) {
+        if (disk_overlay_key(mods, codes, g_frame_count, &closed)) {
             g_audio_paused = disk_overlay_is_open();
             if (disk_overlay_is_open()) {
                 g_hid_shift_prev = false;          // open_now released every key
@@ -868,6 +869,16 @@ static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 //   title    one line, centred, the headline the reader repeats on the phone
 //   body     what happened and what to do, wrapped
 //   detail   the evidence, so the next person does not have to guess
+static void settings_apply(void);
+
+// PIZERO-146: after the editor saves settings.txt, re-read it and apply it
+// at once, so a change needs no reboot.
+static void on_file_saved(const char *path) {
+    if (strcmp(path, "0:/coco/settings.txt") != 0) return;
+    coco_boot_load_settings(&g_settings);
+    settings_apply();
+}
+
 // PIZERO-145: put every setting into effect. Called at boot and again
 // whenever settings.txt is re-read (the on-screen editor, PIZERO-146).
 static void settings_apply(void) {
@@ -1410,6 +1421,7 @@ void setup() {
 
     // PIZERO-145: settings from the card, now that the machine exists to
     // take them and before AUTORUN, which run_skips_autorun governs.
+    coco_boot_recover_text("0:/coco/settings.txt");   // PIZERO-146: finish a cut-off save
     if (!coco_boot_load_settings(&g_settings))
         Serial.print("[settings] no /coco/settings.txt: defaults\r\n");
     settings_apply();
@@ -1493,6 +1505,7 @@ void setup() {
     }
 #endif // AUDIO_WAV_DUMP
     disk_overlay_init(present_card, overlay_launch_request);   // PIZERO-81: F12 overlay
+    text_editor_init(present_card, on_file_saved);             // PIZERO-146
     g_machine_running = true;
     Serial.print("[main] coco_machine running\r\n");
     Serial.printf("[mem] free heap %d bytes (bank-switched carts need their size + %d)\r\n",
