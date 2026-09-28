@@ -119,6 +119,11 @@ same HDMI cable**. Only joystick input remains open.
    `{ } | ~` or backtick, so those keys do nothing. Shift with a letter is
    still the CoCo's other case, and Shift alone is still SHIFT, for games.
    Held keys auto-repeat (`key_repeat` in [`SETTINGS.md`](SETTINGS.md)).
+9. **Print Screen saves a screenshot** as a PNG in `/coco/screendumps/`
+   (`SCR0001.PNG`, `SCR0002.PNG`, ...), exactly what is on the screen,
+   border and any open list included. The GameSir pad's M button does the
+   same, and so does Ctrl-P sent over the USB serial port. The machine
+   pauses for about a fifth of a second while the card is written.
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).

@@ -74,6 +74,10 @@ bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *le
 bool coco_boot_save_text(const char *path, const char *buf, uint32_t len);
 void coco_boot_recover_text(const char *path);
 
+// PIZERO-165: save the w x h RGB565 screen `fb` as the next
+// /coco/screendumps/SCRnnnn.PNG; its path goes to `name` if given.
+bool coco_boot_screenshot(const uint16_t *fb, int w, int h, char *name, size_t name_sz);
+
 // Disk attach. `path` is the full resolved FatFs path (use
 // coco_boot_resolve("dsk", name, ...) to build it).
 bool coco_boot_attach_dsk(const char *path);

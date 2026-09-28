@@ -31,6 +31,8 @@ extern "C" {
 #include "coco_boot.h"
 #include "dsk_catalog.h"        // PIZERO-81a, host-tested
 #include "settings.h"           // PIZERO-145, host-tested
+#include "png_write.h"          // PIZERO-165, host-tested
+#include "hardware/watchdog.h"   // PIZERO-165: fed while a screenshot writes
 
 // Panel native — must match src/main.cpp.
 #define LCD_W   368
@@ -307,6 +309,98 @@ extern "C" bool coco_boot_save_text(const char *path, const char *buf, uint32_t 
     fr = f_rename(tmp, path);
     if (fr != FR_OK) { Serial.printf("[save] %s: rename failed (%d)\r\n", path, fr); return false; }
     Serial.printf("[save] %s: %lu bytes\r\n", path, (unsigned long)len);
+    return true;
+}
+
+// PIZERO-165: save the screen as the next /coco/screendumps/SCRnnnn.PNG.
+// Written straight through FatFS a 512-byte buffer at a time, so it needs no
+// big buffer; the caller pauses the machine while it runs (about 77 KB).
+#define SHOT_DIR "0:/coco/screendumps"
+struct shot_ctx {
+    FIL      f;
+    uint8_t  buf[512];
+    uint16_t used;
+    bool     failed;
+    const uint16_t *fb;
+    int      w;
+    uint16_t pal[256];
+    int      npal;
+};
+
+static void shot_flush(struct shot_ctx *c) {
+    if (!c->used || c->failed) { c->used = 0; return; }
+    UINT bw = 0;
+    if (f_write(&c->f, c->buf, c->used, &bw) != FR_OK || bw != c->used) c->failed = true;
+    c->used = 0;
+    watchdog_update();                         // a slow card must not look like a hang
+}
+
+static void shot_sink(void *ctx, const uint8_t *p, size_t n) {
+    struct shot_ctx *c = (struct shot_ctx *)ctx;
+    while (n) {
+        size_t k = sizeof c->buf - c->used;
+        if (k > n) k = n;
+        memcpy(c->buf + c->used, p, k);
+        c->used = (uint16_t)(c->used + k);
+        p += k; n -= k;
+        if (c->used == sizeof c->buf) shot_flush(c);
+    }
+}
+
+static void shot_row(void *ctx, int y, uint8_t *out) {
+    struct shot_ctx *c = (struct shot_ctx *)ctx;
+    const uint16_t *px = c->fb + (size_t)y * (size_t)c->w;
+    for (int x = 0; x < c->w; x++) {
+        int i = png_palette_index(c->pal, &c->npal, 256, px[x]);
+        out[x] = (uint8_t)(i < 0 ? 0 : i);
+    }
+}
+
+extern "C" bool coco_boot_screenshot(const uint16_t *fb, int w, int h, char *name, size_t name_sz) {
+    FRESULT fr = f_mkdir(SHOT_DIR);
+    if (fr != FR_OK && fr != FR_EXIST) { Serial.printf("[shot] %s: cannot create (%d)\r\n", SHOT_DIR, fr); return false; }
+    char path[64];
+    FILINFO fi;
+    unsigned k;
+    for (k = 1; k <= 9999; k++) {
+        snprintf(path, sizeof path, SHOT_DIR "/SCR%04u.PNG", k);
+        if (f_stat(path, &fi) != FR_OK) break;
+    }
+    if (k > 9999) { Serial.printf("[shot] %s is full\r\n", SHOT_DIR); return false; }
+    // The FIL and buffers (about 2 KB) come from the heap only while saving:
+    // the double-buffered builds have no static RAM to spare.
+    struct shot_ctx *cp = (struct shot_ctx *)malloc(sizeof *cp);
+    uint8_t *row = (uint8_t *)malloc((size_t)w + 256 * 3);
+    if (!cp || !row) { free(cp); free(row); Serial.printf("[shot] no memory\r\n"); return false; }
+    struct shot_ctx &c = *cp;
+    uint8_t *pal_rgb = row + w;
+    // The palette first, so the PLTE chunk can go ahead of the pixels.
+    c.npal = 0;
+    for (int i = 0; i < w * h; i++) png_palette_index(c.pal, &c.npal, 256, fb[i]);
+    for (int i = 0; i < c.npal; i++) png_rgb565_to_888(c.pal[i], &pal_rgb[i * 3]);
+    fr = f_open(&c.f, path, FA_WRITE | FA_CREATE_ALWAYS);
+    if (fr != FR_OK) {
+        Serial.printf("[shot] %s: open failed (%d)\r\n", path, fr);
+        free(cp); free(row);
+        return false;
+    }
+    c.used = 0; c.failed = false; c.fb = fb; c.w = w;
+    uint32_t t0 = millis();
+    size_t n = png_write_indexed(shot_sink, &c, w, h, pal_rgb, c.npal ? c.npal : 1,
+                                 shot_row, &c, row);
+    shot_flush(&c);
+    FRESULT fc = f_close(&c.f);
+    bool ok = !c.failed && fc == FR_OK;
+    unsigned npal = (unsigned)c.npal;
+    free(cp); free(row);
+    if (!ok) {
+        Serial.printf("[shot] %s: write failed\r\n", path);
+        f_unlink(path);
+        return false;
+    }
+    Serial.printf("[shot] %s: %lu bytes, %u colors, %lu ms\r\n", path, (unsigned long)n,
+                  npal, (unsigned long)(millis() - t0));
+    if (name) snprintf(name, name_sz, "%s", path);
     return true;
 }
 
@@ -711,7 +805,7 @@ extern "C" void coco_boot_card_text(int col, int row, const char *s) {
 }
 
 // PIZERO-81b: inverse video for a whole row (the overlay's selection and
-// title bars), as the 6847 draws it: paper-coloured glyphs on an ink bar.
+// title bars), as the 6847 draws it: paper-colored glyphs on an ink bar.
 // Bit 7 of a card cell is free, since glyph indexes are $00-$7F.
 #define CARD_INVERSE 0x80
 extern "C" void coco_boot_card_invert_row(int row) {
@@ -733,7 +827,7 @@ extern "C" void coco_boot_card_center(int row, const char *s) {
 }
 
 // Render the card into the framebuffer, ink on paper, using the live palette
-// so a recoloured machine recolours the diagnostic too.
+// so a recolored machine recolors the diagnostic too.
 // Draw `s` wrapped into the card from `row` down, at most `max_rows` rows.
 // Returns the row after the last one used, so a caller can stack blocks.
 extern "C" int coco_boot_card_wrap(int col, int row, int width, int max_rows,

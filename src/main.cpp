@@ -228,6 +228,10 @@ static void core1_main() {
 // until it is read, which is also what a card without the file gets).
 static struct coco_settings g_settings;     // settings_defaults() at the top of setup()
 
+// PIZERO-165: a screenshot asked for (Print Screen, the pad's M button, or
+// Ctrl-P over serial), taken by loop() after the next frame is drawn.
+static volatile bool g_shot_request = false;
+
 static const char *g_autotype        = nullptr;
 static int         g_autotype_warmup = 0;
 
@@ -261,6 +265,7 @@ static void pump_keyboard() {
     if (g_kb_gap > 0) { g_kb_gap--; return; }
     int c = next_keychar();
     if (c < 0) return;
+    if (c == 0x10) { g_shot_request = true; return; }   // PIZERO-165: Ctrl-P, a screenshot
     uint8_t dscan, shift;
     if (!kt_chord((char)c, &dscan, &shift)) return;
     if (shift == KT_SHIFT_ON) coco_machine_press_key_src(COCO_KEYS_TYPED, K_SHIFT);
@@ -300,6 +305,7 @@ static void hid_keys_present(uint8_t mods) {
 }
 
 static uint8_t g_hid_mods = 0;               // the last report's modifiers
+static bool g_prtsc_held = false;              // PIZERO-165
 
 // PIZERO-167: once a frame while the machine runs: auto-repeat the newest
 // held USB key (key_translate.h kt_repeat), per the key_repeat settings.
@@ -328,6 +334,13 @@ static void hid_keyboard_apply(const uint8_t *report) {
         kt_resync(&g_kt, codes);
         return;
     }
+
+    // PIZERO-165: Print Screen saves the screen, overlay or not (0x46 presses
+    // no CoCo key, so it passes on harmlessly).
+    bool prtsc = false;
+    for (int i = 0; i < 6; i++) if (codes[i] == 0x46) prtsc = true;
+    if (prtsc && !g_prtsc_held) g_shot_request = true;
+    g_prtsc_held = prtsc;
 
     // PIZERO-81c: the F12 overlay sees every report first. Open, it takes all
     // of them, so nothing reaches BASIC; closed, it takes only its F keys.
@@ -1658,6 +1671,16 @@ void loop() {
 #endif
     d = micros();
     }
+    if (g_shot_request) {
+        // PIZERO-165: save what is on the screen now. The machine and its
+        // sound pause while the card is written, then pacing starts afresh
+        // so the emulator does not race to catch up.
+        g_shot_request = false;
+        g_audio_paused = true;
+        coco_boot_screenshot((const uint16_t *)g_front, FRAME_WIDTH, FRAME_HEIGHT, nullptr, 0);
+        g_audio_paused = disk_overlay_is_open();
+        next_us = micros();
+    }
     wd_phase(WP_AUDIO);
 #if defined(HDMI_DATA_ISLAND) && !defined(HDMI_AUDIO_SWAPTEST) && !defined(HDMI_AUDIO_STATIC) && !defined(HDMI_STREAM_AUDIO)
     audio_encode_frame();                          // M2 (bank path): refill the OFF bank's audio islands
@@ -1881,6 +1904,15 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
     // PIZERO-13: the bound pad goes to the joysticks. Any known pad identity
     // is kept off the keyboard path: its 64-byte reports would type junk.
     if (pad_addr(daddr)) {
+        // PIZERO-165: the GameSir's M button sends Print Screen (usage 0x46) as
+        // a keyboard report (ID 3) from its second interface: a screenshot.
+        if (len >= 9 && report[0] == 0x03) {
+            static bool m_held = false;
+            bool m = false;
+            for (int i = 3; i < 9; i++) if (report[i] == 0x46) m = true;
+            if (m && !m_held) g_shot_request = true;
+            m_held = m;
+        }
         bool mine = g_pad_daddr && daddr == g_pad_daddr && idx == g_pad_idx;
         struct pad_out ps;
         if ((mine || !g_pad_daddr) &&
