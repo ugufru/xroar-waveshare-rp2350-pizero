@@ -30,6 +30,7 @@ extern "C" {
 
 #include "coco_boot.h"
 #include "dsk_catalog.h"        // PIZERO-81a, host-tested
+#include "settings.h"           // PIZERO-145, host-tested
 
 // Panel native — must match src/main.cpp.
 #define LCD_W   368
@@ -234,6 +235,53 @@ extern "C" int coco_boot_rescan(int kind) {
 
 extern "C" const struct dsk_catalog *coco_boot_dsk_catalog(void) {
     return &g_dsk_cat;
+}
+
+// PIZERO-145: read /coco/settings.txt into *out, starting from the defaults.
+// Every bad line is reported on serial and skipped; nothing here is fatal.
+// Returns false (with defaults in *out) when there is no file.
+extern "C" bool coco_boot_load_settings(struct coco_settings *out) {
+    settings_defaults(out);
+    FIL f;
+    if (f_open(&f, "0:/coco/settings.txt", FA_READ) != FR_OK) return false;
+    char line[96], name[32];
+    int n = 0;
+    while (f_gets(line, sizeof line, &f)) {
+        n++;
+        name[0] = '\0';
+        int r = settings_parse_line(out, line, name, sizeof name);
+        if (r == SET_UNKNOWN)   Serial.printf("[settings] line %d: unknown setting '%s', ignored\r\n", n, name);
+        if (r == SET_BAD_VALUE) Serial.printf("[settings] line %d: bad value for '%s', ignored\r\n", n, name);
+        if (r == SET_SYNTAX)    Serial.printf("[settings] line %d: expected 'name = value', ignored\r\n", n);
+    }
+    f_close(&f);
+    return true;
+}
+
+// PIZERO-145: read /coco/pal/NAME.pal into rgb565[16]; *mask gets a bit per
+// index the file sets. Returns false if the file cannot be opened.
+extern "C" bool coco_boot_load_palette(const char *name, uint16_t rgb565[16], uint16_t *mask) {
+    char path[64];
+    snprintf(path, sizeof path, "0:/coco/pal/%s.pal", name);
+    FIL f;
+    *mask = 0;
+    if (f_open(&f, path, FA_READ) != FR_OK) {
+        Serial.printf("[settings] palette %s not found\r\n", path);
+        return false;
+    }
+    char line[64];
+    int n = 0;
+    while (f_gets(line, sizeof line, &f)) {
+        n++;
+        int idx; uint32_t rgb;
+        int r = pal_parse_line(line, &idx, &rgb);
+        if (r != SET_OK) { Serial.printf("[settings] %s line %d: expected 'N = #RRGGBB', ignored\r\n", path, n); continue; }
+        if (idx < 0) continue;
+        rgb565[idx] = settings_rgb565(rgb);
+        *mask |= (uint16_t)(1u << idx);
+    }
+    f_close(&f);
+    return true;
 }
 
 // PIZERO-92: the caller needs to tell a MISSING ROM from a DAMAGED one, because

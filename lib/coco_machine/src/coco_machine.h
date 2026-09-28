@@ -46,6 +46,18 @@ uint32_t coco_machine_cart_csg_dropped(void);   /* ...of which too fast, ignored
  * the settings page (PIZERO-53) will expose it. */
 void coco_machine_csg_always(_Bool on);
 
+/* PIZERO-145: runtime switches set from /coco/settings.txt. Each takes
+ * effect at once. volume 0-15 (10 = the old fixed level); artifact 0 off
+ * (mono PMODE 4), 1 on, 2 swapped phase; the GIME palette and timer can be
+ * removed from the bus. set_default(NULL, 0) restores the factory palette,
+ * else entries with their mask bit set take the given RGB565 colour; it
+ * becomes what a reset and the cold reset restore. */
+void coco_machine_set_volume(int v);
+void coco_machine_set_artifact(int mode);
+void coco_machine_set_gime_palette(_Bool on);
+void coco_machine_set_gime_timer(_Bool on);
+void coco_machine_palette_set_default(const uint16_t *rgb565, uint16_t mask);
+
 /* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,
  * SAM reset), keeping the installed cartridge, disk reader and drives. */
 void coco_machine_cold_reset(void);

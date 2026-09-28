@@ -116,6 +116,7 @@ extern "C" {
 #include "disk_overlay.h"  // PIZERO-81/114: F12 disk drives overlay
 #include "rsdos_dir.h"     // PIZERO-81d: find the program to run on a disk
 #include "cart_gmc.h"      // PIZERO-142: bank-switched cartridges
+#include "settings.h"      // PIZERO-145: /coco/settings.txt
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -214,6 +215,10 @@ static void core1_main() {
 }
 
 // ---- Keyboard (serial + autotype, same as the AMOLED port) ---------------
+// PIZERO-145: the settings in force, from /coco/settings.txt (defaults
+// until it is read, which is also what a card without the file gets).
+static struct coco_settings g_settings;     // settings_defaults() at the top of setup()
+
 static const char *g_autotype        = nullptr;
 static int         g_autotype_warmup = 0;
 
@@ -281,7 +286,7 @@ static int next_keychar() {
         g_autotype++;
         return (unsigned char)c;
     }
-    if (Serial.available()) return Serial.read();
+    if (g_settings.serial_keyboard && Serial.available()) return Serial.read();
     return -1;
 }
 
@@ -863,6 +868,29 @@ static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 //   title    one line, centred, the headline the reader repeats on the phone
 //   body     what happened and what to do, wrapped
 //   detail   the evidence, so the next person does not have to guess
+// PIZERO-145: put every setting into effect. Called at boot and again
+// whenever settings.txt is re-read (the on-screen editor, PIZERO-146).
+static void settings_apply(void) {
+    const struct coco_settings *st = &g_settings;
+    coco_machine_csg_always(st->sn76489);
+    coco_machine_set_volume(st->volume);
+    coco_machine_set_artifact(st->artifact);
+    coco_machine_set_gime_palette(st->gime_palette);
+    coco_machine_set_gime_timer(st->gime_timer);
+    uint16_t rgb[16], mask = 0;
+    if (st->palette[0] && coco_boot_load_palette(st->palette, rgb, &mask))
+        coco_machine_palette_set_default(rgb, mask);
+    else
+        coco_machine_palette_set_default(nullptr, 0);
+    Serial.printf("[settings] sn76489=%s volume=%u artifact=%s gime_palette=%s gime_timer=%s "
+                  "run_skips_autorun=%s serial_keyboard=%s palette=%s\r\n",
+                  st->sn76489 ? "on" : "off", st->volume,
+                  st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
+                  st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
+                  st->run_skips_autorun ? "on" : "off", st->serial_keyboard ? "on" : "off",
+                  st->palette[0] ? st->palette : "factory");
+}
+
 // Put the finished card on screen. Shared by the boot pages and the F12
 // overlay (PIZERO-81), which both draw while the machine is not running.
 static void present_card(void) {
@@ -1052,6 +1080,7 @@ static void bin_settle_tick(void) {
 }
 
 void setup() {
+    settings_defaults(&g_settings);   // PIZERO-145: in force until settings.txt is read
     Serial.begin(115200);
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
     // boot banners. (loop() also repeats a recap for the first ~5 s.)
@@ -1383,6 +1412,12 @@ void setup() {
         return;
     }
 
+    // PIZERO-145: settings from the card, now that the machine exists to
+    // take them and before AUTORUN, which run_skips_autorun governs.
+    if (!coco_boot_load_settings(&g_settings))
+        Serial.print("[settings] no /coco/settings.txt: defaults\r\n");
+    settings_apply();
+
     // PIZERO-92: a missing extbas11.rom is NOT fatal, it just silently costs
     // Extended and Disk BASIC. Someone who notices DISK commands failing has
     // no way to connect that to a file they never copied, so say it once, on
@@ -1424,7 +1459,7 @@ void setup() {
     // Ignore autorun.txt entirely, so boot takes exactly the path a card
     // without one takes: Disk BASIC, the default disk attached, nothing
     // typed. Say so on screen, but only when there was something to skip.
-    if (g_run_button_reset && have_autorun) {
+    if (g_run_button_reset && have_autorun && g_settings.run_skips_autorun) {
         Serial.print("[autorun] skipped: RUN button reset (PIZERO-116)\r\n");
         boot_page(MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL);
         delay(2500);

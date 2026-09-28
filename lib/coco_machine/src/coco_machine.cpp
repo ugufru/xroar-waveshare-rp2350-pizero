@@ -125,6 +125,12 @@ static const uint16_t g_pal_factory[COCO_PAL_COUNT] = {
     0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
     0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
 };
+// PIZERO-145: the palette a reset (and the cold reset) restores. Starts as
+// the factory colours; 'palette = NAME' in settings.txt overrides entries.
+static uint16_t g_pal_default[COCO_PAL_COUNT] = {
+    0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
+    0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000,
+};
 static coco_palette_t g_pal = {
     { 0x07E0, 0xFFE0, 0x001F, 0xF800, 0xFFFF, 0x07FF, 0xF81F, 0xFC00,
       0x0000, 0x0320, 0x8200, 0xFCA0, 0x0000, 0x0000, 0x0000, 0x0000 },
@@ -138,7 +144,16 @@ static coco_palette_t g_pal = {
 extern "C" const uint16_t *coco_machine_palette(void) { return g_pal.rgb565; }
 
 extern "C" void coco_machine_palette_reset(void) {
-    coco_pal_reset(&g_pal, g_pal_factory);
+    coco_pal_reset(&g_pal, g_pal_default);
+}
+
+// PIZERO-145: set the default palette. NULL restores the factory colours;
+// otherwise entries whose bit is set in `mask` take the given colour and the
+// rest are factory. The live palette follows at once.
+extern "C" void coco_machine_palette_set_default(const uint16_t *rgb565, uint16_t mask) {
+    for (int i = 0; i < COCO_PAL_COUNT; i++)
+        g_pal_default[i] = (rgb565 && (mask & (1u << i))) ? rgb565[i] : g_pal_factory[i];
+    coco_machine_palette_reset();
 }
 
 extern "C" void coco_machine_palette_set(uint8_t idx, uint16_t rgb565) {
@@ -195,6 +210,15 @@ static uint8_t g_kb_col_row_mask[8] = {
 // truly in PMODE 4 / RG6 (¬A/G + GM2 + GM1 + GM0). When non-zero, the LUT
 // emits NTSC artifact colours instead of plain fg/bg pixel duplicates.
 extern "C" _Bool g_artifact_active = 0;
+// PIZERO-145: runtime switches, set from /coco/settings.txt.
+static uint8_t g_artifact_mode =           // 0 off (mono), 1 on, 2 swapped phase
+#ifdef ARTIFACT_PHASE_LEGACY
+    2;
+#else
+    1;
+#endif
+static bool g_gime_pal_on = true;           // $FFB0-$FFBF palette registers
+static bool g_gime_timer_on = true;         // $FF90-$FF95 timer and interrupts
 extern "C" _Bool g_artifact_css    = 0;
 
 // AMOLED-26: PIA1 PB bits 7..3 are the VDG mode lines (¬A/G, GM2, GM1, GM0,
@@ -565,11 +589,11 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         case 6:  g_m.cpu->D = g_m.cart_banked ? 0xFF : fdc_io_read(A); break;
         default:
 #ifdef GIME_PALETTE
-                 if (coco_pal_owns(A)) { g_m.cpu->D = coco_pal_read(&g_pal, A); break; }
+                 if (g_gime_pal_on && coco_pal_owns(A)) { g_m.cpu->D = coco_pal_read(&g_pal, A); break; }
 #endif
 #ifdef GIME_TIMER
                  { uint8_t gv;
-                   if (gime_timer_owns(A) && gime_timer_read(&g_gime, A, &gv)) {
+                   if (g_gime_timer_on && gime_timer_owns(A) && gime_timer_read(&g_gime, A, &gv)) {
                        g_m.cpu->D = gv;
                        // Reading the enable registers acknowledges, which can
                        // drop the line.
@@ -591,10 +615,10 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
             audio_update_level();   // DAC / single-bit may have changed -> recache
         }
 #ifdef GIME_PALETTE
-        else if (coco_pal_owns(A)) coco_pal_write(&g_pal, A, g_m.cpu->D);
+        else if (g_gime_pal_on && coco_pal_owns(A)) coco_pal_write(&g_pal, A, g_m.cpu->D);
 #endif
 #ifdef GIME_TIMER
-        else if (gime_timer_owns(A)) {
+        else if (g_gime_timer_on && gime_timer_owns(A)) {
             if (gime_timer_write(&g_gime, A, g_m.cpu->D)) gime_timer_restart();
             g_m.pia_irq_dirty = true;
         }
@@ -883,12 +907,15 @@ static int32_t  g_lp1 = 0, g_lp2 = 0;                  // 2-pole TV-bandwidth LP
 // 480). Quieter = more sink headroom / less fatiguing harshness (does NOT change
 // the off-spec delivery distortion). Lower to soften, raise for louder.
 #define AUDIO_DAC_GAIN   60
+// PIZERO-145: the gain is the volume setting, 0-15; 10 is AUDIO_DAC_GAIN.
+static int32_t g_dac_gain = AUDIO_DAC_GAIN;
+static int32_t g_volume = 10;
 static inline void audio_update_level(void) {
     if (!g_m.pia1) return;
     int dac6 = (PIA_VALUE_A(g_m.pia1) >> 2) & 0x3F;    // 6-bit DAC, 0..63
     // NB: the real CoCo single-bit sound is PIA1 CB2, not PB1 -- the old PB1 tap
     // was bogus and only injected a constant DC offset, so it's dropped.
-    g_dac_level = (dac6 - 32) * AUDIO_DAC_GAIN;        // ~ -7680..+7440, centered
+    g_dac_level = (dac6 - 32) * g_dac_gain;            // centred; +-1920 at volume 10
 }
 
 static inline void audio_emit(int s) {
@@ -934,7 +961,7 @@ static inline void audio_integrate(uint32_t ticks) {
         int32_t  acc = g_aud_acc - over_val;
         uint32_t tk  = g_aud_tk  - over_tk;
         int s = tk ? (int)(acc / (int32_t)tk) : g_dac_level;
-        if (g_csg_active) s += sn_render(&g_csg, tk);   // PIZERO-143: GMC sound
+        if (g_csg_active) s += sn_render(&g_csg, tk) * g_volume / 10;   // PIZERO-143/145
         audio_emit(s);
         g_aud_acc = over_val;
         g_aud_tk  = over_tk;
@@ -1099,9 +1126,36 @@ extern "C" void coco_machine_install_cart_banked(const uint8_t *rom, uint32_t le
 
 extern "C" uint32_t coco_machine_cart_csg_writes(void) { return g_m.csg_writes; }
 extern "C" uint32_t coco_machine_cart_csg_dropped(void) { return g_csg_dropped; }
-extern "C" void coco_machine_csg_always(bool on) {   // PIZERO-143, for the settings page
+extern "C" void coco_machine_csg_always(bool on) {   // PIZERO-143/145: the sn76489 setting
     g_csg_always = on;
     if (!on && !g_m.cart_banked) csg_reset();
+}
+
+// PIZERO-145: the rest of the settings.txt switches.
+extern "C" void coco_machine_set_volume(int v) {
+    if (v < 0) v = 0; else if (v > 15) v = 15;
+    g_volume = v;
+    g_dac_gain = AUDIO_DAC_GAIN * v / 10;
+    audio_update_level();
+}
+
+extern "C" void coco_machine_set_artifact(int mode) {
+    g_artifact_mode = (uint8_t)(mode >= 0 && mode <= 2 ? mode : 1);
+}
+
+// Off: the registers vanish from the bus and the palette returns to the
+// default, so a program that recoloured the screen cannot leave it so.
+extern "C" void coco_machine_set_gime_palette(bool on) {
+    g_gime_pal_on = on;
+    if (!on) coco_machine_palette_reset();
+}
+
+// Off: the registers vanish from the bus and the timer stops.
+extern "C" void coco_machine_set_gime_timer(bool on) {
+    g_gime_timer_on = on;
+#ifdef GIME_TIMER
+    if (!on) { gime_timer_reset(&g_gime); g_m.pia_irq_dirty = true; }
+#endif
 }
 
 // PIZERO-81d: a power-on restart without a power cycle, for launching from
@@ -1283,20 +1337,17 @@ static void HOT_FUNC(render_rg6_frame)(uint16_t base) {
     // rows advance and repeat as the SAM says (e.g. V4 doubles each row).
     int stride, lines;
     vdg_gfx_geometry(7, g_m.sam_v, &stride, &lines);
-    if (g_artifact_active) {
+    if (g_artifact_active && g_artifact_mode != 0) {
         // AMOLED-22 NTSC artifact colours: PMODE 4 (RG6, PB[7:4]=1111)
         // produces colour from adjacent bit PAIRS. CSS picks the pair.
         //   00→BLACK  01→c01  10→c10  11→WHITE
         // PIZERO-43: the artifact red/blue PHASE is arbitrary on real hardware
         // (power-on dependent). Default to the orientation Space Warp assumes;
         // build -DARTIFACT_PHASE_LEGACY for the previous (opposite) phase.
-#ifdef ARTIFACT_PHASE_LEGACY
-        const uint8_t c01 = g_artifact_css ? PAL_ORANGE : PAL_BLUE;
-        const uint8_t c10 = g_artifact_css ? PAL_BLUE   : PAL_ORANGE;
-#else
-        const uint8_t c01 = g_artifact_css ? PAL_BLUE   : PAL_ORANGE;
-        const uint8_t c10 = g_artifact_css ? PAL_ORANGE : PAL_BLUE;
-#endif
+        // PIZERO-145: the phase is the artifact_colours setting ('swapped').
+        const bool swap = (g_artifact_mode == 2);
+        const uint8_t c01 = (g_artifact_css != swap) ? PAL_BLUE   : PAL_ORANGE;
+        const uint8_t c10 = (g_artifact_css != swap) ? PAL_ORANGE : PAL_BLUE;
         if (g_rg6a_key != (uint8_t)((c01 << 4) | c10)) build_rg6a_lut(c01, c10);
         for (int row = 0; row < COCO_VDG_H; row++) {
             const uint8_t *src = &g_m.ram[(base + (row / lines) * stride) & 0xFFFF];
