@@ -97,8 +97,9 @@ same HDMI cable**. Only joystick input remains open.
    beside `ORBIT.BIN`, `ORBIT.CCC` or `ORBIT.DSK` overrides settings.txt while
    that game runs (**TAB** on it in its list). See [`SETTINGS.md`](SETTINGS.md).
 7. **USB gamepad as the CoCo joysticks.** Plug a pad in instead of the
-   keyboard (one USB port; both at once needs a hub, PIZERO-54) and switch the
-   power on. The left stick or D-pad is the right joystick, the one nearly all
+   keyboard, or both through a simple USB hub, and switch the power on. (A
+   multi-port USB-C hub with several hub chips inside does not work yet,
+   PIZERO-159.) The left stick or D-pad is the right joystick, the one nearly all
    software reads; the right stick is the left joystick. The bottom or right
    face button, or R1, is the right fire button; the left face button or L1 is
    the left one. `PRINT JOYSTK(0)` reads 0-63. Tested with a GameSir
