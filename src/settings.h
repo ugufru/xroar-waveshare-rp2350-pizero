@@ -16,6 +16,7 @@
 //   run_skips_autorun = on | off              RUN goes straight to BASIC
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
 //   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
+//   font              = classic | 6847t1 | 6847t2   text font set (6847t2 default)
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -39,6 +40,8 @@
 #include <strings.h>
 
 enum { ART_OFF = 0, ART_ON = 1, ART_SWAPPED = 2 };
+// PIZERO-166: font sets, the same numbers as VDG_FONT_* in vdg_pack.h.
+enum { FONT_CLASSIC = 0, FONT_6847T1 = 1, FONT_6847T2 = 2 };
 
 struct coco_settings {
     bool    sn76489;
@@ -49,6 +52,7 @@ struct coco_settings {
     bool    run_skips_autorun;
     bool    serial_keyboard;
     bool    joystick_swap;            // PIZERO-160: pad sticks to the other ports
+    uint8_t font;                     // PIZERO-166: FONT_*
     uint16_t color[16];               // RGB565 overrides, by palette index
     uint16_t color_set;               // bit i: color[i] overrides the default
 };
@@ -68,6 +72,7 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->gime_timer = true;
     s->run_skips_autorun = true;
     s->serial_keyboard = true;
+    s->font = FONT_6847T2;
 }
 
 // Parse results. SET_OK covers blank and comment lines too.
@@ -158,6 +163,11 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
         char *end; long n = strtol(v, &end, 10);
         if (*end || n < 0 || n > 15) return SET_BAD_VALUE;
         s->volume = (uint8_t)n;
+    } else if (!strcmp(name, "font")) {
+        if (!strcmp(v, "classic"))     s->font = FONT_CLASSIC;
+        else if (!strcmp(v, "6847t1")) s->font = FONT_6847T1;
+        else if (!strcmp(v, "6847t2")) s->font = FONT_6847T2;
+        else return SET_BAD_VALUE;
     } else if (!strcmp(name, "artifact_colors")) {
         if (!strcmp(v, "on"))           s->artifact = ART_ON;
         else if (!strcmp(v, "off"))     s->artifact = ART_OFF;
@@ -211,13 +221,15 @@ static inline int settings_template(char *out, size_t n) {
         "run_skips_autorun = %s\n"
         "serial_keyboard = %s\n"
         "joystick_swap = %s\n"
+        "font = %s\n"
         "# color_green = #00FF00\n"
         "# color_dark_green = #006500\n",
         d.sn76489 ? "on" : "off", d.volume,
         d.artifact == ART_OFF ? "off" : d.artifact == ART_SWAPPED ? "swapped" : "on",
         d.gime_palette ? "on" : "off", d.gime_timer ? "on" : "off",
         d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off",
-        d.joystick_swap ? "on" : "off");
+        d.joystick_swap ? "on" : "off",
+        d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2");
     return (k < 0) ? 0 : (k >= (int)n ? (int)n - 1 : k);
 }
 

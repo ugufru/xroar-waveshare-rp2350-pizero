@@ -238,6 +238,10 @@ static uint8_t g_artifact_mode =           // 0 off (mono), 1 on, 2 swapped phas
 static bool g_gime_pal_on = true;           // $FFB0-$FFBF palette registers
 static bool g_gime_timer_on = true;         // $FF90-$FF95 timer and interrupts
 extern "C" _Bool g_artifact_css    = 0;
+// PIZERO-166: the font set (VDG_FONT_* in vdg_pack.h), and the T1's EXT line
+// (PIA1 PB bit 4), which switches the T1 and T2 to true lower case.
+static int  g_font = VDG_FONT_T2;
+static bool g_vdg_ext = false;
 
 // AMOLED-26: PIA1 PB bits 7..3 are the VDG mode lines (¬A/G, GM2, GM1, GM0,
 // CSS). Demos write PIA1 PB to switch to PMODE 4 / RG6. Match upstream
@@ -253,6 +257,7 @@ extern "C" void coco_pia1b_postwrite(void *sptr) {
     // all set. CSS (PB bit 3) chooses the colour pair.
     g_artifact_active = ((pb & 0xF0) == 0xF0);
     g_artifact_css    = (pb & 0x08) != 0;
+    g_vdg_ext         = (pb & 0x10) != 0;   // PIZERO-166: T1 EXT (lower case) = GM0
 }
 
 // PIZERO-13: two joysticks, ported from the Fruit Jam port (FRUITJAM-18).
@@ -906,14 +911,8 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
     return 1;
 }
 
-// AMOLED-38: link-time stub for the unused original-6847 font. The
-// !is_t1 branch in mc6847.c:427 still references font_6847[] even though
-// it's dead at runtime (we always pick the T1 variant). We exclude the
-// real 1.5 KB font-6847.c from the build and provide this 1-byte
-// placeholder so the linker is satisfied. Reaching this array would mean
-// is_t1 got flipped to false — that's a configuration bug, not a data
-// lookup, so a single zero is fine.
-extern "C" const uint8_t font_6847[1] = { 0 };
+// PIZERO-166: the original 6847 font (font-6847.c) is now built for the
+// font = classic setting; it used to be a 1-byte link stub here.
 
 // - - - audio (PIZERO-18) -----------------------------------------
 //
@@ -1305,6 +1304,7 @@ extern "C" const uint8_t *coco_machine_get_vdg_buffer(void) {
 //   (see PIZERO-55 / PIZERO-85 for making this LUT programmable).
 
 extern "C" const uint8_t font_6847t1[];  // 128 chars × 12 rows = 1.5 KB
+extern "C" const uint8_t font_6847[];    // PIZERO-166: 64 chars, font = classic
 
 // Palette indices — match g_vdg_rgb565[] in coco_boot.cpp.
 #define PAL_GREEN       0
@@ -1361,9 +1361,29 @@ static void build_sg4_lut() {
     g_sg4_lut_ready = true;
 }
 
+// PIZERO-166: glyph and colour pair for each of the 128 alpha codes, for the
+// current font set and EXT line, rebuilt only when either changes.
+static uint8_t g_alpha_glyph[128];
+static uint8_t g_alpha_pair[128];
+static int     g_alpha_map_key = -1;
+
+static void build_alpha_map(int key) {
+    for (int ch = 0; ch < 128; ch++)
+        g_alpha_glyph[ch] = vdg_alpha_glyph((uint8_t)ch, key & 1, key >> 1, &g_alpha_pair[ch]);
+    g_alpha_map_key = key;
+}
+
+extern "C" void coco_machine_set_font(int font) {
+    if (font < VDG_FONT_CLASSIC || font > VDG_FONT_T2) font = VDG_FONT_T2;
+    g_font = font;
+}
+
 static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
     if (!g_alpha_lut_ready) build_alpha_lut();
     if (!g_sg4_lut_ready) build_sg4_lut();
+    int key = (g_font << 1) | (g_vdg_ext ? 1 : 0);
+    if (key != g_alpha_map_key) build_alpha_map(key);
+    const uint8_t *font = (g_font == VDG_FONT_CLASSIC) ? font_6847 : font_6847t1;
     // 32 chars wide × 16 text rows × 12 pixel rows = 192 lines.
     // Each glyph is 8 px wide → 32 chars × 8 = 256 px per line.
     for (int text_row = 0; text_row < 16; text_row++) {
@@ -1380,10 +1400,10 @@ static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
                     uint8_t sg = (sub_row < 6) ? (ch >> 2) : ch;
                     *(uint32_t *)(dst + col * 4) = g_sg4_lut[(ch >> 4) & 7][sg & 3];
                 } else {
-                    // Alpha: 6-bit screen code → T1 font glyph $40-$7F.
-                    // Bit 6 = inverse (the iconic black-on-green BASIC look).
-                    uint8_t glyph = font_6847t1[(((ch & 0x3F) | 0x40)) * 12 + sub_row];
-                    *(uint32_t *)(dst + col * 4) = g_alpha_lut[(ch >> 6) & 1][glyph];
+                    // Alpha: the font set picks the glyph and colour pair
+                    // (PIZERO-166, vdg_alpha_glyph in vdg_pack.h).
+                    uint8_t glyph = font[g_alpha_glyph[ch] * 12 + sub_row];
+                    *(uint32_t *)(dst + col * 4) = g_alpha_lut[g_alpha_pair[ch]][glyph];
                 }
             }
         }

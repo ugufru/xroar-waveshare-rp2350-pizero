@@ -126,6 +126,35 @@ static inline uint8_t vdg_alpha_glyph_index(uint8_t ch) {
     return (uint8_t)((ch & 0x3F) | 0x40);
 }
 
+// PIZERO-166: which font set the machine's text uses (the font setting).
+//   CLASSIC  the original MC6847 (font_6847, 64 glyphs): codes 0-63 are the
+//            inverse characters, ^ is an up arrow and _ a left arrow.
+//   T1       the MC6847T1 of the CoCo 2B (font_6847t1, 128 glyphs): the same
+//            until a program sets EXT (PIA1 PB bit 4, POKE 65314,16); then
+//            the full 7-bit code picks the glyph, giving true lower case and
+//            { | } ~, all drawn with INV set (upstream mc6847.c:470-497).
+//   T2       ours, the default: the T1, but ^ is a caret and _ an underscore
+//            at all times (the T1's own glyphs $00 and $1F).
+enum { VDG_FONT_CLASSIC = 0, VDG_FONT_T1 = 1, VDG_FONT_T2 = 2 };
+
+// The glyph a character code shows, as an index into font_6847 (CLASSIC) or
+// font_6847t1 (T1, T2), and in *pair which colour pair (bit 6 of the code, or
+// forced on under EXT), matching vdg_build_alpha_table's rows.
+static inline uint8_t vdg_alpha_glyph(uint8_t ch, bool ext, int font, uint8_t *pair) {
+    if (font == VDG_FONT_CLASSIC) {
+        *pair = (uint8_t)((ch >> 6) & 1);
+        return (uint8_t)(ch & 0x3F);
+    }
+    uint8_t g;
+    if (ext) { g = (uint8_t)(ch & 0x7F); *pair = 1; }
+    else     { g = vdg_alpha_glyph_index(ch); *pair = (uint8_t)((ch >> 6) & 1); }
+    if (font == VDG_FONT_T2) {
+        if (g == 0x5E) g = 0x00;           // ^ : the T1's caret, not an up arrow
+        else if (g == 0x5F) g = 0x1F;      // _ : its underscore, not a left arrow
+    }
+    return g;
+}
+
 // --- SAM display base -----------------------------------------------------
 // PIZERO-100: the renderer treats a SAM F value of zero as "never set" and
 // substitutes $0400, so a program that legitimately puts the display at

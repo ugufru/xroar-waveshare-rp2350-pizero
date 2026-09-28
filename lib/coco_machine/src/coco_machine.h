@@ -56,6 +56,8 @@ void coco_machine_set_volume(int v);
 void coco_machine_set_artifact(int mode);
 void coco_machine_set_gime_palette(_Bool on);
 void coco_machine_set_gime_timer(_Bool on);
+/* PIZERO-166: the text font set, VDG_FONT_CLASSIC / _T1 / _T2 (vdg_pack.h). */
+void coco_machine_set_font(int font);
 void coco_machine_palette_set_default(const uint16_t *rgb565, uint16_t mask);
 
 /* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,

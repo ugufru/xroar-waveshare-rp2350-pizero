@@ -15,6 +15,11 @@
 #include <cstring>
 
 #include "../../lib/coco_machine/src/vdg_pack.h"
+// PIZERO-166: the real glyph shapes. The font asks for an RP2350 RAM section,
+// which the host compiler rejects, so the attribute is dropped here only.
+#define __attribute__(x)
+#include "../../lib/xroar_core/src/mc6847/font-6847t1.c"
+#undef __attribute__
 
 // --- reference implementation --------------------------------------------
 // The original put2(): nibble-packed, low nibble = even pixel. Every fast
@@ -318,6 +323,77 @@ static void test_popcorn_gm5_with_sam_v3_is_double_height(void) {
     }
 }
 
+// --- PIZERO-166: font sets ---------------------------------------------------
+
+static void test_classic_is_the_original_6847(void) {
+    uint8_t pair;
+    TEST_ASSERT_EQUAL_UINT8(0x01, vdg_alpha_glyph(0x41, false, VDG_FONT_CLASSIC, &pair));  // A
+    TEST_ASSERT_EQUAL_UINT8(1, pair);
+    TEST_ASSERT_EQUAL_UINT8(0x01, vdg_alpha_glyph(0x01, false, VDG_FONT_CLASSIC, &pair));  // inverse A
+    TEST_ASSERT_EQUAL_UINT8(0, pair);
+    TEST_ASSERT_EQUAL_UINT8(0x1F, vdg_alpha_glyph(0x5F, true, VDG_FONT_CLASSIC, &pair));   // no EXT
+}
+
+static void test_t1_without_ext_is_the_6847_behaviour(void) {
+    uint8_t pair;
+    TEST_ASSERT_EQUAL_UINT8(0x5F, vdg_alpha_glyph(0x5F, false, VDG_FONT_T1, &pair));       // left arrow
+    TEST_ASSERT_EQUAL_UINT8(0x41, vdg_alpha_glyph(0x01, false, VDG_FONT_T1, &pair));       // inverse A
+    TEST_ASSERT_EQUAL_UINT8(0, pair);
+}
+
+static void test_t1_with_ext_has_true_lower_case_and_braces(void) {
+    uint8_t pair;
+    TEST_ASSERT_EQUAL_UINT8(0x01, vdg_alpha_glyph(0x01, true, VDG_FONT_T1, &pair));        // a
+    TEST_ASSERT_EQUAL_UINT8(1, pair);                                                      // INV set
+    TEST_ASSERT_EQUAL_UINT8(0x1B, vdg_alpha_glyph(0x1B, true, VDG_FONT_T1, &pair));        // {
+    TEST_ASSERT_EQUAL_UINT8(0x41, vdg_alpha_glyph(0x41, true, VDG_FONT_T1, &pair));        // A
+    TEST_ASSERT_EQUAL_UINT8(1, pair);
+}
+
+static void test_t2_fixes_caret_and_underscore_always(void) {
+    uint8_t pair;
+    for (int ext = 0; ext < 2; ext++) {
+        TEST_ASSERT_EQUAL_UINT8(0x00, vdg_alpha_glyph(0x5E, ext, VDG_FONT_T2, &pair));     // ^
+        TEST_ASSERT_EQUAL_UINT8(0x1F, vdg_alpha_glyph(0x5F, ext, VDG_FONT_T2, &pair));     // _
+        TEST_ASSERT_EQUAL_UINT8(0x41, vdg_alpha_glyph(0x41, ext, VDG_FONT_T2, &pair));     // A unchanged
+    }
+    TEST_ASSERT_EQUAL_UINT8(0x41, vdg_alpha_glyph(0x01, false, VDG_FONT_T2, &pair));       // inverse A kept
+    TEST_ASSERT_EQUAL_UINT8(0, pair);
+}
+
+static void test_every_code_stays_inside_its_font(void) {
+    uint8_t pair;
+    for (int ch = 0; ch < 128; ch++)
+        for (int ext = 0; ext < 2; ext++) {
+            TEST_ASSERT_TRUE(vdg_alpha_glyph((uint8_t)ch, ext, VDG_FONT_CLASSIC, &pair) < 64);
+            TEST_ASSERT_TRUE(vdg_alpha_glyph((uint8_t)ch, ext, VDG_FONT_T1, &pair) < 128);
+            TEST_ASSERT_TRUE(vdg_alpha_glyph((uint8_t)ch, ext, VDG_FONT_T2, &pair) < 128);
+            TEST_ASSERT_TRUE(pair <= 1);
+        }
+}
+
+static int rows_used(uint8_t glyph, int *first, int *last) {
+    int n = 0; *first = -1; *last = -1;
+    for (int r = 0; r < 12; r++)
+        if (font_6847t1[glyph * 12 + r]) { if (*first < 0) *first = r; *last = r; n++; }
+    return n;
+}
+
+static void test_t2_glyphs_really_are_a_caret_and_an_underscore(void) {
+    // Checked against the font data, not the index: the underscore is one
+    // low bar, the caret sits in the top half, and the braces mirror.
+    int first, last;
+    TEST_ASSERT_EQUAL_INT(1, rows_used(0x1F, &first, &last));
+    TEST_ASSERT_TRUE(first >= 6);
+    TEST_ASSERT_TRUE(rows_used(0x00, &first, &last) > 0);
+    TEST_ASSERT_TRUE(last <= 5);
+    for (int r = 0; r < 12; r++) {
+        uint8_t l = font_6847t1[0x1B * 12 + r], rt = font_6847t1[0x1D * 12 + r], m = 0;
+        for (int b = 0; b < 7; b++) if (l & (1 << b)) m |= (uint8_t)(1 << (6 - b));
+        TEST_ASSERT_EQUAL_UINT8(m, rt);
+    }
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_pack8_matches_put2);
@@ -336,5 +412,11 @@ int main(void) {
     RUN_TEST(test_gm_every_byte_value_in_every_mode);
     RUN_TEST(test_sam_mode_sets_the_row_geometry);
     RUN_TEST(test_popcorn_gm5_with_sam_v3_is_double_height);
+    RUN_TEST(test_classic_is_the_original_6847);
+    RUN_TEST(test_t1_without_ext_is_the_6847_behaviour);
+    RUN_TEST(test_t1_with_ext_has_true_lower_case_and_braces);
+    RUN_TEST(test_t2_fixes_caret_and_underscore_always);
+    RUN_TEST(test_every_code_stays_inside_its_font);
+    RUN_TEST(test_t2_glyphs_really_are_a_caret_and_an_underscore);
     return UNITY_END();
 }

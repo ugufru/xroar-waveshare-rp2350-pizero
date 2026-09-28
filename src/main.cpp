@@ -830,14 +830,16 @@ static void settings_apply(void) {
     coco_machine_set_artifact(st->artifact);
     coco_machine_set_gime_palette(st->gime_palette);
     coco_machine_set_gime_timer(st->gime_timer);
+    coco_machine_set_font(st->font);          // PIZERO-166
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s colors_overridden=%04x\r\n",
+                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
                   st->run_skips_autorun ? "on" : "off", st->serial_keyboard ? "on" : "off",
                   st->joystick_swap ? "on" : "off",
+                  st->font == FONT_CLASSIC ? "classic" : st->font == FONT_6847T1 ? "6847t1" : "6847t2",
                   (unsigned)st->color_set);
 }
 
