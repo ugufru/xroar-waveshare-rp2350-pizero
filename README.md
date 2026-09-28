@@ -66,12 +66,14 @@ same HDMI cable**. Only joystick input remains open.
    the microSD, then apply USB-C power. The CoCo boots to the BASIC `OK` prompt;
    type directly on the keyboard. `pio device monitor` (115200) shows `[run]`
    telemetry over serial.
-4. **F12 for disks, programs and cartridges.** Press **F12** to pause the
-   machine and open a list over it. **Left/Right** switch between three lists:
-   **disks** (`.dsk` in `/coco/dsk`), **programs** (`.bin` in `/coco/bin`) and
-   **cartridges** (2 to 16 KB `.ccc` in `/coco/cart`); each also looks in
-   `/coco`. **Up/Down**, **PgUp/PgDn** and **Home/End** move. **ESC** or
-   **F12** go back to the running program untouched.
+4. **F9 to F12: disks, programs, cartridges and files.** Each key pauses the
+   machine and opens a list over it: **F12** disks (`.dsk` in `/coco/dsk`),
+   **F9** programs (`.bin` in `/coco/bin`), **F10** cartridges (2 to 16 KB
+   `.ccc` in `/coco/cart`) and **F11** files (`settings.txt`, `autorun.txt`);
+   each list also looks in `/coco`. Another F key switches list, and the key
+   of the list on show closes it; **Left/Right** step through the lists too.
+   **Up/Down**, **PgUp/PgDn** and **Home/End** move. **ESC** goes back to the
+   running program untouched.
    - *Disks:* **0** to **3** put the highlighted disk in that drive, or take it
      out if it is already there (the first four columns show which drives
      hold it). **ENTER** restarts with it in drive 0 and runs its first program.
@@ -88,7 +90,7 @@ same HDMI cable**. Only joystick input remains open.
 6. **Settings: `/coco/settings.txt`.** Sound chip, volume, artifact colors,
    the CoCo 3-style extras, RUN and serial typing behavior, and any of the
    palette colors, one `name = value` per line. Edit it on the CoCo Zero
-   itself (F12, the **< FILES >** list, ENTER on `SETTINGS.TXT`, Ctrl-S to
+   itself (**F11** for the files list, ENTER on `SETTINGS.TXT`, Ctrl-S to
    save and apply) or on a computer. See [`SETTINGS.md`](SETTINGS.md).
 
 Full build details, the env/flag matrix, and toolchain notes are in

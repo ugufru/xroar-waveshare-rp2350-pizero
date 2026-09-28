@@ -9,7 +9,9 @@
 //               runs its first program.
 //   PROGRAMS    ENTER cold-boots and loads and runs the .bin directly.
 //   CARTRIDGES  ENTER installs the cartridge and cold-boots into it.
-//   All         ESC or F12 go back to the running program untouched.
+//   All         ESC goes back to the running program untouched, as does the
+//               F key of the list on show (F9 programs, F10 cartridges,
+//               F11 files, F12 disks; PIZERO-153).
 //
 // Layout on the 32x16 card, after the Fruit Jam overlay
 // (src/coco/coco_main.cpp:1092-1175) but drawn with our own card:
@@ -44,6 +46,10 @@
 // The three catalogue lists, then FILES (PIZERO-146): text files to edit.
 #define OVL_FILES  CAT_KINDS
 #define OVL_LISTS  (CAT_KINDS + 1)
+// PIZERO-153: the F keys name lists by overlay_keys.h's numbers.
+static_assert(OVK_LIST_DSK == CAT_DSK && OVK_LIST_BIN == CAT_BIN &&
+              OVK_LIST_CART == CAT_CART && OVK_LIST_FILES == OVL_FILES,
+              "overlay_keys.h list numbers must match the overlay's lists");
 static const char *const k_title[OVL_LISTS]  = { OVL_TITLE_DSK,  OVL_TITLE_BIN,  OVL_TITLE_CART,  OVL_TITLE_FILES };
 static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES };
 
@@ -148,11 +154,18 @@ static void open_now(void) {
     Serial.printf("[overlay] open: list %d, %d entries\r\n", g_kind, g_ovk.n);
 }
 
-static void switch_kind(int dir) {
-    g_kind = (g_kind + dir + OVL_LISTS) % OVL_LISTS;
+// Show list `kind`, from its top. The key logic is told, so the F key of
+// the list now on show closes the overlay.
+static void go_to_list(int kind) {
+    g_kind = kind;
+    g_ovk.list = kind;
     g_ovk.sel = 0;
     g_top = 0;
     load_list();
+}
+
+static void switch_kind(int dir) {
+    go_to_list((g_kind + dir + OVL_LISTS) % OVL_LISTS);
 }
 
 static void toggle_drive(int d) {
@@ -218,6 +231,7 @@ bool disk_overlay_is_open(void) {
 void disk_overlay_open(void) {
     if (g_ovk.open) return;
     g_ovk.open = true;
+    g_ovk.list = g_kind;
     g_ovk.held = 0;
     open_now();
 }
@@ -239,7 +253,11 @@ bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool
     struct ovk_result r = ovk_report(&g_ovk, codes, frame);
     bool shut = (r.action == OVK_CLOSE);
     switch (r.action) {
-    case OVK_OPEN:   open_now(); break;
+    case OVK_OPEN:                          // PIZERO-153: opened on the F key's list
+        if (r.drive != g_kind) { g_kind = r.drive; g_ovk.sel = 0; g_top = 0; }
+        open_now();
+        break;
+    case OVK_GOTO:   go_to_list(r.drive); break;
     case OVK_CLOSE:  Serial.print("[overlay] close\r\n"); break;
     case OVK_MOVED:  legend(); break;
     case OVK_DRIVE:  toggle_drive(r.drive); break;

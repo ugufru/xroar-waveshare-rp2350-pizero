@@ -130,10 +130,10 @@ These five items account for essentially every question you will be asked.
 > required. `extbas11.rom` and `disk11.rom` are strongly recommended. We do not
 > distribute them; they are still under copyright, so dump or source your own.
 >
-> **5. Press F12 to pick what to run.** Put disks (`.dsk`) in `/coco/dsk/`,
-> programs (`.bin`) in `/coco/bin/` and cartridges (`.ccc`) in `/coco/cart/`. F12 shows
-> them, LEFT/RIGHT switch list, ENTER starts the highlighted one, ESC goes back
-> to what was running.
+> **5. F12 disks, F9 programs, F10 cartridges, F11 settings.** Put disks
+> (`.dsk`) in `/coco/dsk/`, programs (`.bin`) in `/coco/bin/` and cartridges
+> (`.ccc`) in `/coco/cart/`. The key shows its list, ENTER starts the
+> highlighted one, and ESC (or the same key) goes back to what was running.
 >
 > Everything else — the source, the build instructions, the SD layout, and how
 > to update the firmware — is at:

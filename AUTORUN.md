@@ -10,8 +10,8 @@ This is the implemented behavior — the parser lives in `src/coco_boot.cpp`
 
 ## Editing it on the CoCo Zero
 
-Press **F12**, then **Right** until the title reads **< FILES >**, and
-**ENTER** on `AUTORUN.TXT` (PIZERO-147). The same editor as `settings.txt`:
+Press **F11** for the **< FILES >** list and **ENTER** on `AUTORUN.TXT`
+(PIZERO-147). The same editor as `settings.txt`:
 arrows and typing to edit, **Ctrl-S** to save, **ESC** to leave (a second ESC
 discards unsaved changes). If there is no file yet it opens a template of
 commented-out examples, so saving it unchanged does nothing. A saved

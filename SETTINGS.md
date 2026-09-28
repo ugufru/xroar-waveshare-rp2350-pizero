@@ -7,8 +7,7 @@ settings.
 
 ## Editing it on the CoCo Zero
 
-Press **F12**, then **Right** until the title reads **< FILES >**, and
-**ENTER** on `SETTINGS.TXT`. The file opens as text on the screen. If there
+Press **F11** for the **< FILES >** list and **ENTER** on `SETTINGS.TXT`. The file opens as text on the screen. If there
 is no file yet, it opens a template listing every setting at its default.
 
 - Arrows, Home/End and PgUp/PgDn move; typing inserts; Backspace, Delete and

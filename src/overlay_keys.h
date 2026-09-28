@@ -1,22 +1,26 @@
-// overlay_keys.h: what the keyboard does to the F12 disk overlay
-// (PIZERO-81c, PIZERO-114). Pure logic, host-tested: fed the 6 keycodes of
+// overlay_keys.h: what the keyboard does to the F12 overlay
+// (PIZERO-81c, PIZERO-114, PIZERO-153). Pure logic, host-tested: fed the 6 keycodes of
 // each USB HID boot report, it says whether the report belongs to the
 // overlay (and so must never reach the CoCo) and what it asks for.
 //
 // The rules that keep keys out of BASIC, most learned by the Fruit Jam port
 // (src/coco/coco_main.cpp:1512-1644):
-//   * CLOSED, only F12 is claimed. Everything else, ESC included (it is the
-//     CoCo's BREAK key), passes through untouched.
+//   * CLOSED, only F9-F12 are claimed. Everything else, ESC included (it is
+//     the CoCo's BREAK key), passes through untouched.
 //   * OPEN, every report is swallowed.
 //   * Presses are edges against the overlay's OWN previous report, so a key
 //     held across the open or close is not a fresh press to either side.
 //     The caller copies the live report into its own previous-codes on close
 //     (FRUITJAM-68: otherwise the ESC that closed it arrives as a BREAK).
 //
+// The F keys go straight to a list (PIZERO-153): F9 programs, F10 cartridges,
+// F11 files, F12 disks. Closed, the key opens the overlay on its list; open
+// on another list, it switches; open on its own list, it closes.
+//
 // Keys while open: Up/Down move (wrapping), PgUp/PgDn/Home/End jump
-// (clamped), Left/Right switch list (disks, programs, cartridges), ENTER
-// starts the highlighted entry, 0-3 toggle the highlighted disk in that
-// drive, F12 or ESC close. Held Up/Down repeat.
+// (clamped), Left/Right step through the lists, ENTER starts the highlighted
+// entry, 0-3 toggle the highlighted disk in that drive, ESC closes. Held
+// Up/Down repeat.
 
 #ifndef OVERLAY_KEYS_H
 #define OVERLAY_KEYS_H
@@ -29,6 +33,9 @@
 #define HK_0      0x27
 #define HK_ENTER  0x28
 #define HK_ESC    0x29
+#define HK_F9     0x42
+#define HK_F10    0x43
+#define HK_F11    0x44
 #define HK_F12    0x45
 #define HK_HOME   0x4A
 #define HK_PGUP   0x4B
@@ -56,6 +63,10 @@
 #define OVL_EMPTY_CART   "NO CARTRIDGES FOUND. PUT .CCC FILES IN /COCO/CART ON THE SD CARD."
 #define OVL_SKIPPED      "%d NAME(S) TOO LONG, NOT SHOWN"
 
+// The lists, in Left/Right order. The catalogue lists share enum cat_kind's
+// numbers (disk_overlay.cpp checks).
+enum { OVK_LIST_DSK = 0, OVK_LIST_BIN = 1, OVK_LIST_CART = 2, OVK_LIST_FILES = 3 };
+
 #define OVK_ROWS          14   // list rows on screen: one page
 #define OVK_REPEAT_DELAY  24   // frames (~400 ms at 60 Hz) before a held key repeats
 #define OVK_REPEAT_RATE    5   // frames (~83 ms) between repeats
@@ -68,16 +79,19 @@ enum ovk_action {
     OVK_DRIVE,       // toggle the highlighted disk in drive `drive`
     OVK_KIND,        // switch list: `drive` holds the direction, -1 or +1
     OVK_LAUNCH,      // ENTER: start the highlighted entry
+    OVK_GOTO,        // an F key: switch to list `drive` (already set in list)
 };
 
 struct ovk_result {
     uint8_t action;
-    int8_t  drive;       // OVK_DRIVE: 0-3; OVK_KIND: -1 or +1
+    int8_t  drive;       // OVK_DRIVE: 0-3; OVK_KIND: -1 or +1; OVK_OPEN/GOTO: list
     bool    swallow;     // true: this report must not reach the CoCo
 };
 
 struct ovk_state {
     bool     open;
+    int      list;       // OVK_LIST_*: the list on show (the caller keeps it
+                         // current when Left/Right change it)
     uint8_t  prev[6];    // the last report, for edge detection
     int      sel;        // highlighted row, 0..n-1
     int      n;          // entries in the list
@@ -114,6 +128,26 @@ static inline void ovk_step(struct ovk_state *s, int delta, bool wrap) {
     s->sel = v;
 }
 
+// The list an F key goes to, or -1.
+static inline int ovk_fkey_list(uint8_t k) {
+    switch (k) {
+    case HK_F9:  return OVK_LIST_BIN;
+    case HK_F10: return OVK_LIST_CART;
+    case HK_F11: return OVK_LIST_FILES;
+    case HK_F12: return OVK_LIST_DSK;
+    default:     return -1;
+    }
+}
+
+// The list of the first F key newly pressed in this report, or -1.
+static inline int ovk_newly_fkey(const struct ovk_state *s, const uint8_t codes[6]) {
+    for (int i = 0; i < 6; i++) {
+        int l = ovk_fkey_list(codes[i]);
+        if (l >= 0 && !ovk_has(s->prev, codes[i])) return l;
+    }
+    return -1;
+}
+
 // Set the list size (after a rescan) and keep the selection in range.
 static inline void ovk_set_count(struct ovk_state *s, int n) {
     s->n = n < 0 ? 0 : n;
@@ -127,11 +161,14 @@ static inline struct ovk_result ovk_report(struct ovk_state *s,
                                            const uint8_t codes[6], uint32_t frame) {
     struct ovk_result r = { OVK_NONE, -1, false };
 
+    int fk = ovk_newly_fkey(s, codes);
     if (!s->open) {
-        if (ovk_newly(s, codes, HK_F12)) {
+        if (fk >= 0) {
             s->open = true;
             s->held = 0;
+            s->list = fk;
             r.action = OVK_OPEN;
+            r.drive = (int8_t)fk;
             r.swallow = true;
         }
         memcpy(s->prev, codes, 6);
@@ -139,10 +176,18 @@ static inline struct ovk_result ovk_report(struct ovk_state *s,
     }
 
     r.swallow = true;              // open: nothing reaches the CoCo
-    if (ovk_newly(s, codes, HK_F12) || ovk_newly(s, codes, HK_ESC)) {
+    if (ovk_newly(s, codes, HK_ESC) || (fk >= 0 && fk == s->list)) {
         s->open = false;
         s->held = 0;
         r.action = OVK_CLOSE;
+        memcpy(s->prev, codes, 6);
+        return r;
+    }
+    if (fk >= 0) {                 // another list's F key: go there
+        s->list = fk;
+        s->held = 0;
+        r.action = OVK_GOTO;
+        r.drive = (int8_t)fk;
         memcpy(s->prev, codes, 6);
         return r;
     }

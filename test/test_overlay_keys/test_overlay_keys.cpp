@@ -243,6 +243,57 @@ static void test_enter_on_an_empty_list_does_nothing(void) {
     TEST_ASSERT_EQUAL_UINT8(OVK_KIND, press(HK_RIGHT).action);   // can still switch
 }
 
+static void test_f_keys_go_straight_to_a_list(void) {
+    // PIZERO-153: F9 programs, F10 cartridges, F11 files, F12 disks.
+    const uint8_t key[4]  = { HK_F9, HK_F10, HK_F11, HK_F12 };
+    const int     list[4] = { OVK_LIST_BIN, OVK_LIST_CART, OVK_LIST_FILES, OVK_LIST_DSK };
+    for (int i = 0; i < 4; i++) {
+        ovk_init(&s); frame = 1000;
+        struct ovk_result r = press(key[i]);             // closed: opens on its list
+        TEST_ASSERT_EQUAL_UINT8(OVK_OPEN, r.action);
+        TEST_ASSERT_EQUAL_INT8(list[i], r.drive);
+        TEST_ASSERT_EQUAL_INT(list[i], s.list);
+        TEST_ASSERT_TRUE(r.swallow);
+        none();
+        r = press(key[i]);                                // its own list: closes
+        TEST_ASSERT_EQUAL_UINT8(OVK_CLOSE, r.action);
+        TEST_ASSERT_FALSE(s.open);
+        none();
+    }
+}
+
+static void test_another_f_key_switches_list(void) {
+    ovk_init(&s); frame = 1000;
+    press(HK_F12); none();                                // open on disks
+    struct ovk_result r = press(HK_F9);                   // go to programs
+    TEST_ASSERT_EQUAL_UINT8(OVK_GOTO, r.action);
+    TEST_ASSERT_EQUAL_INT8(OVK_LIST_BIN, r.drive);
+    TEST_ASSERT_TRUE(s.open);
+    TEST_ASSERT_TRUE(r.swallow);
+    none();
+    TEST_ASSERT_EQUAL_UINT8(OVK_GOTO, press(HK_F11).action);   // then files
+    none();
+    TEST_ASSERT_EQUAL_UINT8(OVK_CLOSE, press(HK_F11).action);  // files again: close
+    none();
+    // Left/Right move the list; the caller records it, and the F key of the
+    // list it landed on then closes.
+    press(HK_F10); none();                                // open on cartridges
+    s.list = OVK_LIST_FILES;                              // as if Right was pressed
+    TEST_ASSERT_EQUAL_UINT8(OVK_CLOSE, press(HK_F11).action);
+}
+
+static void test_closed_f_keys_are_claimed_other_keys_are_not(void) {
+    ovk_init(&s);
+    TEST_ASSERT_TRUE(press(HK_F9).swallow);               // opened
+    none(); press(HK_ESC); none();                        // closed again
+    const uint8_t fkeys_not_ours[] = { 0x3A /*F1*/, 0x41 /*F8*/, 0x46 /*PrtSc*/ };
+    for (unsigned i = 0; i < sizeof fkeys_not_ours; i++) {
+        TEST_ASSERT_FALSE(press(fkeys_not_ours[i]).swallow);
+        none();
+    }
+    TEST_ASSERT_FALSE(s.open);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_closed_passes_everything_but_f12);
@@ -261,5 +312,8 @@ int main(void) {
     RUN_TEST(test_overlay_words_fit_and_print);
     RUN_TEST(test_left_right_switch_list_and_enter_launches);
     RUN_TEST(test_enter_on_an_empty_list_does_nothing);
+    RUN_TEST(test_f_keys_go_straight_to_a_list);
+    RUN_TEST(test_another_f_key_switches_list);
+    RUN_TEST(test_closed_f_keys_are_claimed_other_keys_are_not);
     return UNITY_END();
 }
