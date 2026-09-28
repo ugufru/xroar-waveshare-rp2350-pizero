@@ -85,8 +85,25 @@ take effect during boot setup (before BASIC starts typing).
 
 ## Directives
 
+A name in `@DISK`, `@CART` or `@DIRECT` that is not on the card is reported
+on screen ("AUTORUN.TXT: NOT FOUND", naming it) and on serial, and boot
+carries on as if that line were not there: Disk BASIC for a missing `@CART`,
+the default disk for a missing `@DISK`, a normal boot for a missing
+`@DIRECT` (PIZERO-152). File names are not case-sensitive.
+
 ### `@DISK filename.dsk`
 Mount this disk image as drive 0.
+
+If the file has **no typed lines**, the disk's first program is run as well,
+the same way the F12 overlay's ENTER does: the machine reads the disk's
+directory and types `RUN"NAME"` for a BASIC program or `LOADM"NAME":EXEC`
+for machine code (PIZERO-152). So a one-line `autorun.txt` is enough:
+
+```
+@DISK SPACEWARP.DSK
+```
+
+With typed lines present, only those are typed, as before.
 
 If absent: the loader mounts the first `.dsk` found in `/coco/dsk/`
 or `/coco/` (alphabetical). If no disks exist, no disk is mounted.

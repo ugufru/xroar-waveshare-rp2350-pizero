@@ -10,6 +10,7 @@
 
 #include <unity.h>
 
+#include <cstdio>
 #include <cstring>
 
 #include "../../src/text_card.h"
@@ -178,6 +179,22 @@ static void test_every_message_is_printable_on_the_card(void) {
             TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
 }
 
+static void test_autorun_missing_page_fits_with_a_long_name(void) {
+    // The name comes from the user's file, so try the longest a catalogue
+    // entry can be (63 characters) with the longest directive.
+    char name[64];
+    memset(name, 'X', 63); name[63] = 0;
+    char body[160];
+    snprintf(body, sizeof body, MSG_ARMISS_BODY, "@DIRECT", name);
+    TEST_ASSERT_TRUE(layout_rows(body, 28) <= 7);
+    TEST_ASSERT_TRUE(layout_rows(MSG_ARMISS_DETAIL, 28) <= 3);
+    TEST_ASSERT_TRUE(strlen(MSG_ARMISS_TITLE) <= CARD_COLS);
+    const char *all[] = { MSG_ARMISS_TITLE, MSG_ARMISS_DETAIL, body };
+    for (unsigned i = 0; i < 3; i++)
+        for (const char *p = all[i]; *p; p++)
+            TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_letters_fold_to_upper_case);
@@ -196,5 +213,6 @@ int main(void) {
     RUN_TEST(test_the_two_rom_failures_do_not_read_alike);
     RUN_TEST(test_messages_name_the_exact_path);
     RUN_TEST(test_every_message_is_printable_on_the_card);
+    RUN_TEST(test_autorun_missing_page_fits_with_a_long_name);
     return UNITY_END();
 }

@@ -51,4 +51,11 @@
                            "AT THE BASIC PROMPT AND IGNORES /COCO/AUTORUN.TXT."
 #define MSG_RUNSKIP_DETAIL "TO USE AUTORUN, SWITCH THE POWER OFF AND ON AGAIN."
 
+// PIZERO-152: autorun.txt named something that is not on the card. The body
+// is a format: the directive (@DISK, @CART, @DIRECT) and the name as written.
+#define MSG_ARMISS_TITLE  "AUTORUN.TXT: NOT FOUND"
+#define MSG_ARMISS_BODY   "%s %s IS NOT ON THE SD CARD, SO THE MACHINE " \
+                          "STARTS WITHOUT IT."
+#define MSG_ARMISS_DETAIL "FIX THE NAME WITH F12, THEN THE FILES LIST."
+
 #endif  // BOOT_MESSAGES_H

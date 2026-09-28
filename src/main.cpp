@@ -1481,8 +1481,21 @@ void setup() {
         have_autorun = false;
     }
 
-    bool direct = have_autorun && autorun.direct_name[0]
-                  && coco_boot_resolve("bin", autorun.direct_name, path, sizeof(path));
+    // PIZERO-152: a name autorun.txt gives that is not on the card is
+    // reported (serial, and a boot page for the first one), and boot carries
+    // on as if that line were not there: Disk BASIC for a missing @CART, the
+    // default disk for a missing @DISK, a normal boot for a missing @DIRECT.
+    const char *miss_kind = nullptr, *miss_name = nullptr;
+    auto missing = [&](const char *kind, const char *name) {
+        Serial.printf("[autorun] %s %s: not found on the card, skipped\r\n", kind, name);
+        if (!miss_kind) { miss_kind = kind; miss_name = name; }
+    };
+
+    bool direct = false;
+    if (have_autorun && autorun.direct_name[0]) {
+        direct = coco_boot_resolve("bin", autorun.direct_name, path, sizeof(path));
+        if (!direct) missing("@DIRECT", autorun.direct_name);
+    }
     if (direct) {
         for (int i = 0; i < 30; i++) coco_machine_run_cycles(15000);  // let PIA DDRs settle
         uint16_t entry = 0;
@@ -1491,14 +1504,26 @@ void setup() {
             coco_machine_jump(entry);
         }
     } else {
-        const char *cart = (have_autorun && autorun.cart_name[0]) ? autorun.cart_name : "disk11.rom";
         char cart_path[80];
-        if (coco_boot_resolve_cart(cart, cart_path, sizeof cart_path) && install_cart_file(cart_path)) {
-            bool dsk = have_autorun && autorun.disk_name[0]
-                       ? (coco_boot_resolve("dsk", autorun.disk_name, path, sizeof(path))
-                          && coco_boot_attach_dsk(path))
-                       : (coco_boot_find_default_dsk(path, sizeof(path))
-                          && coco_boot_attach_dsk(path));
+        bool cart_ok = false;
+        if (have_autorun && autorun.cart_name[0]) {
+            cart_ok = coco_boot_resolve_cart(autorun.cart_name, cart_path, sizeof cart_path)
+                      && install_cart_file(cart_path);
+            if (!cart_ok) missing("@CART", autorun.cart_name);
+        }
+        if (!cart_ok)
+            cart_ok = coco_boot_resolve_cart("disk11.rom", cart_path, sizeof cart_path)
+                      && install_cart_file(cart_path);
+        if (cart_ok) {
+            bool named_dsk = false, dsk = false;
+            if (have_autorun && autorun.disk_name[0]) {
+                named_dsk = coco_boot_resolve("dsk", autorun.disk_name, path, sizeof(path))
+                            && coco_boot_attach_dsk(path);
+                if (!named_dsk) missing("@DISK", autorun.disk_name);
+                dsk = named_dsk;
+            }
+            if (!dsk)
+                dsk = coco_boot_find_default_dsk(path, sizeof(path)) && coco_boot_attach_dsk(path);
             // PIZERO-114: install the reader even with nothing mounted, so
             // the four drives work when filled later from the F12 overlay;
             // an empty drive reports NOT READY rather than having no FDC.
@@ -1507,8 +1532,21 @@ void setup() {
             if (have_autorun && autorun.autotype[0]) {
                 g_autotype = autorun.autotype;
                 g_autotype_warmup = 180;
+            } else if (named_dsk && disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
+                // PIZERO-152: @DISK with nothing to type runs the disk's
+                // first program, as the F12 overlay's ENTER does. Only for a
+                // disk autorun.txt named; the default disk never auto-runs.
+                g_autotype = g_launch_cmd;
+                g_autotype_warmup = 180;
+                Serial.printf("[autorun] no typed lines: will type %s\n", g_launch_cmd);
             }
         }
+    }
+    if (miss_kind) {
+        char body[160];
+        snprintf(body, sizeof body, MSG_ARMISS_BODY, miss_kind, miss_name);
+        boot_page(MSG_ARMISS_TITLE, body, MSG_ARMISS_DETAIL);
+        delay(3000);              // long enough to read; boot then carries on
     }
 #endif // AUDIO_WAV_DUMP
     disk_overlay_init(present_card, overlay_launch_request);   // PIZERO-81: F12 overlay
