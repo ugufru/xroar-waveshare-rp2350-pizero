@@ -223,15 +223,21 @@ Work is tracked in `issues.jsonl` (use `/issues` to list). Phases:
 | 1 | HDMI bring-up: DVI test pattern | PIZERO-04..05 | ✅ done |
 | 2 | XRoar boots to Color BASIC "OK" on HDMI | PIZERO-06..09 | ✅ done |
 | 3 | Autonomous self-running demo | PIZERO-10 | ✅ done |
-| 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13 | 🟡 keyboard done; joystick + hot-replug open |
+| 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13/54 | 🟡 keyboard, gamepad and hub done; hot-replug open |
 | 5 | Dual-core split + performance | PIZERO-14..15 | ✅ done |
 | 6 | HDMI audio over the existing cable (CoCo 6-bit DAC + 1-bit sound) | PIZERO-18, 26–35, 38/39 | ✅ done — streaming per-active-line delivery (warble fixed) |
 | 7 | Clean audio + stability | PIZERO-33 (watchdog), PIZERO-35/38 (delivery re-arch) | ✅ done |
 | 8 | True in-spec 640×480p60 + audio + USB at 252 MHz | PIZERO-44/45 | ✅ done — now the default build |
 
-USB host enumeration + keyboard input verified on hardware; remaining open work in Phase 4 is
-`PIZERO-13` (joystick) and `PIZERO-11b` (hot-replug bug — USB devices only enumerate on a cold
-boot; unplugging and re-plugging doesn't re-attach).
+USB keyboard, gamepad and hub verified on hardware (`docs/usb-retrospective.md`); the remaining
+open work in Phase 4 is hot-replug (`PIZERO-51`): straight into the board, a device must be
+attached at power-on.
+
+**Stability, measured (`PIZERO-98`, 2026-09-17/18).** A soak of the default build logged 13 h of
+wall clock, about 7.5 h of it observed (the host slept through the rest). Video: 0.38 short sync
+windows an hour and no second-long dropouts, against the Fruit Jam port's 7.6 dropouts an hour.
+Freezes: about 0.46 an hour, all in the emulation phase, every one recovered by the watchdog
+(`PIZERO-33`). A soak of the current firmware is `PIZERO-168`.
 
 **Phase 6/7 — HDMI audio (working).** XRoar's 6-bit DAC + single-bit sound are encoded as HDMI
 **data-island audio-sample packets** by an extended `libdvi` and played over the existing cable.
