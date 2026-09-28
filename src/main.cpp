@@ -43,6 +43,11 @@ static volatile uint32_t g_usb_devices = 0;
 // unplug (a removed device can't answer IN polls). rpts climbs while a device
 // streams reports; rfail counts tuh_hid_receive_report() rejections.
 static volatile uint32_t g_hid_reports   = 0;
+// PIZERO-13: the bound pad's decoded reports, and its last state, for the
+// once-a-second [pad] line (proves input reaches the emulated joysticks).
+static volatile uint32_t g_pad_decoded = 0;
+static volatile uint16_t g_pad_x = 32767, g_pad_y = 32767;
+static volatile uint8_t  g_pad_fire = 0;
 static volatile uint32_t g_hid_recv_fail = 0;
 extern "C" uint32_t pio_usb_host_get_frame_number(void);
 
@@ -1826,6 +1831,13 @@ void loop() {
                       (unsigned long)g_freeze_count,
                       g_freeze_count ? wd_phase_name(g_last_freeze_phase) : "none");
         (void)dp; (void)dm;
+        { static uint32_t last_pad = 0;      // PIZERO-13: only while a pad talks
+          uint32_t n = g_pad_decoded;
+          if (n != last_pad)
+              Serial.printf("[pad] reports=%lu/s right-joystick x=%u y=%u fire=%u\r\n",
+                            (unsigned long)(n - last_pad), (unsigned)(g_pad_x >> 10),
+                            (unsigned)(g_pad_y >> 10), (unsigned)g_pad_fire);
+          last_pad = n; }
 #ifdef HDMI_STREAM_AUDIO
         // PIZERO-38/39 audio-ring health: fill should hover near AUDIO_RING/2 with
         // skips (overflow) and under (underrun) staying ~flat once primed.
@@ -1958,6 +1970,10 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
                 coco_machine_set_joystick_axis(p, 1, ps.axis[p][1]);
                 coco_machine_set_joystick_fire(p, ps.fire[p]);
             }
+            g_pad_decoded++;
+            g_pad_x = ps.axis[0][0];
+            g_pad_y = ps.axis[0][1];
+            g_pad_fire = (uint8_t)((ps.fire[0] ? 1 : 0) | (ps.fire[1] ? 2 : 0));
         }
     } else if (len >= 8) {
         hid_keyboard_apply(report);
