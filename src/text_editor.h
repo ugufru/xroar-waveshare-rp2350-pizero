@@ -11,8 +11,9 @@
 #include <stdint.h>
 
 typedef void (*text_editor_present_fn)(void);
-// Called after a successful save, so the owner can re-read the file.
-typedef void (*text_editor_saved_fn)(const char *path);
+// Called after a successful save, so the owner can re-read the file. It
+// returns what the status row should say (NULL: just "SAVED").
+typedef const char *(*text_editor_saved_fn)(const char *path);
 
 void text_editor_init(text_editor_present_fn present, text_editor_saved_fn saved);
 

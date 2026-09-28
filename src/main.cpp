@@ -118,6 +118,7 @@ extern "C" {
 #include "cart_gmc.h"      // PIZERO-142: bank-switched cartridges
 #include "settings.h"      // PIZERO-145: /coco/settings.txt
 #include "text_editor.h"   // PIZERO-146: on-screen editor for it
+#include "text_edit_keys.h" // PIZERO-146/147: the editor's status words
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -871,12 +872,17 @@ static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 //   detail   the evidence, so the next person does not have to guess
 static void settings_apply(void);
 
-// PIZERO-146: after the editor saves settings.txt, re-read it and apply it
-// at once, so a change needs no reboot.
-static void on_file_saved(const char *path) {
-    if (strcmp(path, "0:/coco/settings.txt") != 0) return;
-    coco_boot_load_settings(&g_settings);
-    settings_apply();
+// PIZERO-146/147: after the editor saves a file. settings.txt is re-read
+// and applied at once, so a change needs no reboot. autorun.txt only matters
+// at power-on: running it now would restart the machine unannounced.
+static const char *on_file_saved(const char *path) {
+    if (strcmp(path, "0:/coco/settings.txt") == 0) {
+        coco_boot_load_settings(&g_settings);
+        settings_apply();
+        return TEK_MSG_APPLIED;
+    }
+    if (strcmp(path, "0:/coco/autorun.txt") == 0) return TEK_MSG_NEXT;
+    return nullptr;
 }
 
 // PIZERO-145: put every setting into effect. Called at boot and again
@@ -1461,6 +1467,7 @@ void setup() {
     // DIRECT-loads a game — e.g. spacewarp.bin — and our keystrokes go nowhere.)
     (void)autorun; (void)path;
 #else
+    coco_boot_recover_text("0:/coco/autorun.txt");    // PIZERO-147: finish a cut-off save
     bool have_autorun = coco_boot_load_autorun(&autorun);
 
     // PIZERO-116: a RUN press is a cold start straight to the BASIC prompt.

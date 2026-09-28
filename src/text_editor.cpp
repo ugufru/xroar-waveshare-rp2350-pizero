@@ -102,8 +102,8 @@ void text_editor_key(uint8_t mods, const uint8_t codes[6], uint32_t frame) {
     case TEK_SAVE:
         if (coco_boot_save_text(g_path, g_t->buf, (uint32_t)g_t->len)) {
             g_t->dirty = false;
-            status(TEK_MSG_SAVED);
-            if (g_saved) g_saved(g_path);
+            const char *msg = g_saved ? g_saved(g_path) : nullptr;
+            status(msg ? msg : TEK_MSG_SAVED);
         } else {
             status(TEK_MSG_FAILED);
         }

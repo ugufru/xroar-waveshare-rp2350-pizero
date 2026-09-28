@@ -22,6 +22,8 @@
 // 32-column card and use only characters the 6847 can draw.
 #define TEK_HINT        "CTRL-S SAVE   ESC EXIT"
 #define TEK_MSG_SAVED   "SAVED"
+#define TEK_MSG_APPLIED "SAVED AND APPLIED"
+#define TEK_MSG_NEXT    "SAVED: USED AT NEXT POWER-ON"
 #define TEK_MSG_FAILED  "SAVE FAILED: CHECK THE SD CARD"
 #define TEK_MSG_WARN    "NOT SAVED: ESC AGAIN DISCARDS"
 #define TEK_MSG_FULL    "FILE FULL: 4096 CHARACTERS"

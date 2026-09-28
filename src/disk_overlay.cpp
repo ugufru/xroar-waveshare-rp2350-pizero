@@ -37,6 +37,7 @@
 #include "coco_machine.h"
 #include "text_editor.h"
 #include "settings.h"
+#include "file_templates.h"
 
 #define OVL_NDRIVE 4
 
@@ -47,10 +48,12 @@ static const char *const k_title[OVL_LISTS]  = { OVL_TITLE_DSK,  OVL_TITLE_BIN, 
 static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES };
 
 // The files the editor can open. Listed whether or not they exist yet: the
-// editor starts a missing one from a template. autorun.txt: PIZERO-147.
-struct ovl_file { const char *name, *path; };
+// editor starts a missing one from a template (NULL: the settings template,
+// generated from the defaults).
+struct ovl_file { const char *name, *path, *tmpl; };
 static const struct ovl_file k_files[] = {
-    { "SETTINGS.TXT", "0:/coco/settings.txt" },
+    { "SETTINGS.TXT", "0:/coco/settings.txt", nullptr },
+    { "AUTORUN.TXT",  "0:/coco/autorun.txt",  AUTORUN_TEMPLATE },   // PIZERO-147
 };
 #define OVL_NFILES ((int)(sizeof k_files / sizeof k_files[0]))
 static const char *const k_empty[CAT_KINDS]  = { OVL_EMPTY_DSK,  OVL_EMPTY_BIN,  OVL_EMPTY_CART };
@@ -172,13 +175,15 @@ static void toggle_drive(int d) {
     set_status(msg);
 }
 
-// PIZERO-146: ENTER in FILES opens the editor over the list. A missing
-// settings.txt starts from a template of every setting at its default.
+// PIZERO-146/147: ENTER in FILES opens the editor over the list. A missing
+// file starts from its template: every setting at its default for
+// settings.txt, commented examples for autorun.txt.
 static void edit_file(const uint8_t codes[6]) {
     int i = g_ovk.sel;
     if (i < 0 || i >= OVL_NFILES) return;
-    static char tmpl[512];
-    settings_template(tmpl, sizeof tmpl);
+    static char gen[512];
+    const char *tmpl = k_files[i].tmpl;
+    if (!tmpl) { settings_template(gen, sizeof gen); tmpl = gen; }
     if (text_editor_open(k_files[i].path, k_files[i].name, tmpl))
         text_editor_hold(codes);            // the ENTER that opened it is not typed
 }

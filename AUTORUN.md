@@ -8,6 +8,17 @@ what gets typed into Disk BASIC (or whether to bypass BASIC entirely).
 This is the implemented behavior — the parser lives in `src/coco_boot.cpp`
 (`coco_boot_load_autorun`). A few future directives are noted as such below.
 
+## Editing it on the CoCo Zero
+
+Press **F12**, then **Right** until the title reads **< FILES >**, and
+**ENTER** on `AUTORUN.TXT` (PIZERO-147). The same editor as `settings.txt`:
+arrows and typing to edit, **Ctrl-S** to save, **ESC** to leave (a second ESC
+discards unsaved changes). If there is no file yet it opens a template of
+commented-out examples, so saving it unchanged does nothing. A saved
+`autorun.txt` is used at the **next power-on**; saving does not restart the
+machine. Directives are not case-sensitive, and autotype lines come out in
+the CoCo's upper case whatever case they are typed in.
+
 ---
 
 ## SD card layout
@@ -20,12 +31,14 @@ The loader accepts both a flat layout and an organized one:
     bas12.rom                ← Color BASIC          (REQUIRED, BYO)
     extbas11.rom             ← Extended Color BASIC (recommended, BYO)
     disk11.rom               ← Disk BASIC cart      (recommended, BYO)
-    *.ccc / *.rom            ← cartridge ROMs (optional)
+  cart/                      (optional)
+    *.ccc                    ← cartridge ROMs, 2 to 16 KB or bank-switched
   dsk/                       (optional)
     *.dsk                    ← JVC disk images
   bin/                       (optional)
     *.bin                    ← DECB load-module binaries (direct-load)
   autorun.txt                ← optional, boot configuration (this spec)
+  settings.txt               ← optional, settings (see SETTINGS.md)
   README.txt                 ← optional, ships with the device
 ```
 
