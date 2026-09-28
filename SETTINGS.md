@@ -16,8 +16,8 @@ is no file yet, it opens a template listing every setting at its default.
 - **ESC** leaves. With unsaved changes, the first ESC warns and a second one
   discards them.
 
-The screen shows upper case only (the CoCo's font has no lower case), which
-is fine: settings are not case-sensitive. The save writes a new copy and
+The editor shows text as typed, lower case included (settings are not
+case-sensitive either way). The save writes a new copy and
 then swaps it in, so pulling the power mid-save cannot leave a broken file.
 You can also edit the file on a computer.
 

@@ -188,7 +188,7 @@ static void test_editor_words_fit_and_print(void) {
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++) {
         TEST_ASSERT_TRUE_MESSAGE(strlen(all[i]) <= CARD_COLS, all[i]);
         for (const char *p = all[i]; *p; p++)
-            TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
+            TEST_ASSERT_TRUE_MESSAGE(card_printable(*p), all[i]);
     }
 }
 

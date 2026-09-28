@@ -5,9 +5,9 @@
 //   rows 1-14  the text, scrolling to follow the cursor (an inverse cell)
 //   row 15     the key hint, or what just happened
 //
-// The 6847 has no lower case on screen: text is stored as typed and shown in
-// upper case, and the settings parser does not care about case. Characters
-// the font cannot draw ({ } | ~ `) show as spaces but are kept.
+// Text is shown as typed, lower case included, using the 6847T1 font's extra
+// glyphs (PIZERO-162): { | } ~ and _ draw as themselves. Only the backtick
+// has no glyph; it shows as an apostrophe but is kept as typed.
 
 #include <Arduino.h>
 #include <stdio.h>

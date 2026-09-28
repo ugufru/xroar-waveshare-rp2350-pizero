@@ -5,20 +5,40 @@
 #ifndef TEXT_CARD_H
 #define TEXT_CARD_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define CARD_COLS 32
 #define CARD_ROWS 16
 
-// ASCII in, 6847 screen code out. The machine has no lower case and the
-// font's alpha block is $40-$7F, so fold case and drop anything unprintable
-// to a space rather than drawing a random glyph at someone in a failure
-// screen.
+// ASCII in, glyph index into font_6847t1 out (PIZERO-162). The firmware's own
+// screens draw with the 128-glyph 6847T1 font, which is richer than what a
+// CoCo program can show:
+//   $00        caret ^         $01-$1A  lower case a-z
+//   $1B-$1E    { | } ~         $1F      underscore _
+//   $40-$5D    @ A-Z [ \ ]     ($5E/$5F are the 6847's up and left arrows,
+//   $60-$7F    space to ?       which is how a CoCo shows ^ and _; not used)
+// Only the backtick has no glyph; it borrows the apostrophe. Anything else
+// unprintable becomes a space rather than a random glyph on a failure screen.
+// CoCo programs are unaffected: this is only the card.
+#define CARD_SPACE 0x60
+
 static inline uint8_t card_code(char c) {
     uint8_t u = (uint8_t)c;
-    if (u >= 'a' && u <= 'z') u = (uint8_t)(u - 'a' + 'A');
-    if (u < 0x20 || u > 0x5F) u = 0x20;
-    return u;
+    if (u >= 0x20 && u <= 0x3F) return (uint8_t)(u + 0x40);
+    if (u >= 0x40 && u <= 0x5D) return u;
+    if (u == '^') return 0x00;
+    if (u == '_') return 0x1F;
+    if (u == '`') return (uint8_t)('\'' + 0x40);
+    if (u >= 'a' && u <= 'z') return (uint8_t)(u - 'a' + 0x01);
+    if (u >= '{' && u <= '~') return (uint8_t)(u - '{' + 0x1B);
+    return CARD_SPACE;
+}
+
+// True when `c` has a glyph of its own on the card (not the fallback space).
+static inline bool card_printable(char c) {
+    uint8_t u = (uint8_t)c;
+    return u == ' ' || (u > 0x20 && u <= 0x7E);
 }
 
 // Left column for a centred string, clamped so an over-long line starts at 0

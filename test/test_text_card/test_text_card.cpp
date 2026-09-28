@@ -15,42 +15,72 @@
 
 #include "../../src/text_card.h"
 #include "../../src/boot_messages.h"
-#include "../../lib/coco_machine/src/vdg_pack.h"
 
 void setUp(void) {}
 void tearDown(void) {}
 
-static void test_letters_fold_to_upper_case(void) {
-    TEST_ASSERT_EQUAL_UINT8('A', card_code('a'));
-    TEST_ASSERT_EQUAL_UINT8('Z', card_code('z'));
-    TEST_ASSERT_EQUAL_UINT8('A', card_code('A'));
+// PIZERO-162: the card indexes the 6847T1 font directly. Each character
+// must land on its own glyph, checked against the font's layout.
+static void test_upper_case_and_punctuation_keep_their_glyphs(void) {
+    TEST_ASSERT_EQUAL_UINT8(0x41, card_code('A'));   // font $40-$5D: @ A-Z [ \ ]
+    TEST_ASSERT_EQUAL_UINT8(0x5A, card_code('Z'));
+    TEST_ASSERT_EQUAL_UINT8(0x40, card_code('@'));
+    TEST_ASSERT_EQUAL_UINT8(0x5B, card_code('['));
+    TEST_ASSERT_EQUAL_UINT8(0x5C, card_code('\\'));
+    TEST_ASSERT_EQUAL_UINT8(0x5D, card_code(']'));
+    TEST_ASSERT_EQUAL_UINT8(0x60, card_code(' '));   // font $60-$7F: space to ?
+    TEST_ASSERT_EQUAL_UINT8(0x6F, card_code('/'));
+    TEST_ASSERT_EQUAL_UINT8(0x7F, card_code('?'));
+}
+
+static void test_lower_case_is_real_lower_case(void) {
+    TEST_ASSERT_EQUAL_UINT8(0x01, card_code('a'));   // font $01-$1A
+    TEST_ASSERT_EQUAL_UINT8(0x1A, card_code('z'));
+}
+
+static void test_the_characters_a_coco_cannot_show(void) {
+    // A CoCo shows _ and ^ as arrows; the card shows the characters.
+    TEST_ASSERT_EQUAL_UINT8(0x1F, card_code('_'));
+    TEST_ASSERT_EQUAL_UINT8(0x00, card_code('^'));
+    TEST_ASSERT_EQUAL_UINT8(0x1B, card_code('{'));
+    TEST_ASSERT_EQUAL_UINT8(0x1C, card_code('|'));
+    TEST_ASSERT_EQUAL_UINT8(0x1D, card_code('}'));
+    TEST_ASSERT_EQUAL_UINT8(0x1E, card_code('~'));
+    TEST_ASSERT_EQUAL_UINT8(card_code('\''), card_code('`'));   // no glyph: borrows '
 }
 
 static void test_the_characters_the_messages_use_survive(void) {
     // The ROM message contains a path, so these in particular must not turn
     // into spaces: / . : digits.
     const char *msg = "/COCO/ROMS/BAS12.ROM";
-    for (const char *p = msg; *p; p++)
-        TEST_ASSERT_EQUAL_UINT8((uint8_t)*p, card_code(*p));
+    for (const char *p = msg; *p; p++) {
+        TEST_ASSERT_TRUE(card_printable(*p));
+        TEST_ASSERT_NOT_EQUAL(CARD_SPACE, card_code(*p));
+    }
 }
 
 static void test_unprintables_become_spaces_not_random_glyphs(void) {
-    TEST_ASSERT_EQUAL_UINT8(0x20, card_code('\n'));
-    TEST_ASSERT_EQUAL_UINT8(0x20, card_code('\t'));
-    TEST_ASSERT_EQUAL_UINT8(0x20, card_code((char)0x00));
-    TEST_ASSERT_EQUAL_UINT8(0x20, card_code((char)0x7F));
-    TEST_ASSERT_EQUAL_UINT8(0x20, card_code((char)0xE9));   // an accented byte
-    TEST_ASSERT_EQUAL_UINT8(0x20, card_code('`'));          // 0x60, past the block
+    TEST_ASSERT_EQUAL_UINT8(CARD_SPACE, card_code('\n'));
+    TEST_ASSERT_EQUAL_UINT8(CARD_SPACE, card_code('\t'));
+    TEST_ASSERT_EQUAL_UINT8(CARD_SPACE, card_code((char)0x00));
+    TEST_ASSERT_EQUAL_UINT8(CARD_SPACE, card_code((char)0x7F));
+    TEST_ASSERT_EQUAL_UINT8(CARD_SPACE, card_code((char)0xE9));   // an accented byte
+    TEST_ASSERT_FALSE(card_printable('\n'));
+    TEST_ASSERT_FALSE(card_printable((char)0xE9));
 }
 
-static void test_every_accepted_code_lands_in_the_font_block(void) {
-    // card_code feeds vdg_alpha_glyph_index, which indexes a 128-glyph font.
-    // Anything outside $40-$7F would read the wrong glyph or run off the end.
-    for (int c = 0; c < 256; c++) {
-        uint8_t code = card_code((char)c);
-        uint8_t idx = vdg_alpha_glyph_index(code);
-        TEST_ASSERT_TRUE(idx >= 0x40 && idx <= 0x7F);
+static void test_every_code_is_a_glyph_and_no_two_characters_share_one(void) {
+    // Indexes must stay in the 128-glyph font with bit 7 free for inverse,
+    // and every printable character except the backtick needs its own glyph.
+    bool used[128] = { false };
+    for (int c = 0x20; c <= 0x7E; c++) {
+        uint8_t g = card_code((char)c);
+        TEST_ASSERT_TRUE(g < 0x80);
+        if (c == '`') continue;
+        TEST_ASSERT_FALSE_MESSAGE(used[g], "two characters share a glyph");
+        used[g] = true;
     }
+    for (int c = 0; c < 256; c++) TEST_ASSERT_TRUE(card_code((char)c) < 0x80);
 }
 
 static void test_centring_is_symmetric(void) {
@@ -176,7 +206,7 @@ static void test_every_message_is_printable_on_the_card(void) {
                           MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++)
         for (const char *p = all[i]; *p; p++)
-            TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
+            TEST_ASSERT_TRUE_MESSAGE(card_printable(*p), all[i]);
 }
 
 static void test_autorun_missing_page_fits_with_a_long_name(void) {
@@ -192,15 +222,17 @@ static void test_autorun_missing_page_fits_with_a_long_name(void) {
     const char *all[] = { MSG_ARMISS_TITLE, MSG_ARMISS_DETAIL, body };
     for (unsigned i = 0; i < 3; i++)
         for (const char *p = all[i]; *p; p++)
-            TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
+            TEST_ASSERT_TRUE_MESSAGE(card_printable(*p), all[i]);
 }
 
 int main(void) {
     UNITY_BEGIN();
-    RUN_TEST(test_letters_fold_to_upper_case);
+    RUN_TEST(test_upper_case_and_punctuation_keep_their_glyphs);
+    RUN_TEST(test_lower_case_is_real_lower_case);
+    RUN_TEST(test_the_characters_a_coco_cannot_show);
     RUN_TEST(test_the_characters_the_messages_use_survive);
     RUN_TEST(test_unprintables_become_spaces_not_random_glyphs);
-    RUN_TEST(test_every_accepted_code_lands_in_the_font_block);
+    RUN_TEST(test_every_code_is_a_glyph_and_no_two_characters_share_one);
     RUN_TEST(test_centring_is_symmetric);
     RUN_TEST(test_an_over_long_line_starts_at_the_left_not_off_screen);
     RUN_TEST(test_wrap_breaks_at_a_space);

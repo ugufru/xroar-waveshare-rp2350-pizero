@@ -212,7 +212,7 @@ static void test_overlay_words_fit_and_print(void) {
                           OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART, skipped };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++)
         for (const char *p = all[i]; *p; p++)
-            TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)*p, card_code(*p), all[i]);
+            TEST_ASSERT_TRUE_MESSAGE(card_printable(*p), all[i]);
 }
 
 static void test_left_right_switch_list_and_enter_launches(void) {
