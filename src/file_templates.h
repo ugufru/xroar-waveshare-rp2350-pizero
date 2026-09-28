@@ -28,6 +28,7 @@
     "#\n" \
     "# artifact_colors = swapped\n" \
     "# volume = 8\n" \
+    "# joystick_swap = on\n" \
     "# color_green = #1ED01E\n"
 
 #endif  // FILE_TEMPLATES_H

@@ -15,6 +15,7 @@
 //   gime_timer        = on | off              CoCo 3-style timer at $FF90
 //   run_skips_autorun = on | off              RUN goes straight to BASIC
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
+//   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -47,6 +48,7 @@ struct coco_settings {
     bool    gime_timer;
     bool    run_skips_autorun;
     bool    serial_keyboard;
+    bool    joystick_swap;            // PIZERO-160: pad sticks to the other ports
     uint16_t color[16];               // RGB565 overrides, by palette index
     uint16_t color_set;               // bit i: color[i] overrides the default
 };
@@ -151,6 +153,7 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     else if (!strcmp(name, "gime_timer"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_timer = b; }
     else if (!strcmp(name, "run_skips_autorun")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->run_skips_autorun = b; }
     else if (!strcmp(name, "serial_keyboard"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->serial_keyboard = b; }
+    else if (!strcmp(name, "joystick_swap"))     { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_swap = b; }
     else if (!strcmp(name, "volume")) {
         char *end; long n = strtol(v, &end, 10);
         if (*end || n < 0 || n > 15) return SET_BAD_VALUE;
@@ -207,12 +210,14 @@ static inline int settings_template(char *out, size_t n) {
         "gime_timer = %s\n"
         "run_skips_autorun = %s\n"
         "serial_keyboard = %s\n"
+        "joystick_swap = %s\n"
         "# color_green = #00FF00\n"
         "# color_dark_green = #006500\n",
         d.sn76489 ? "on" : "off", d.volume,
         d.artifact == ART_OFF ? "off" : d.artifact == ART_SWAPPED ? "swapped" : "on",
         d.gime_palette ? "on" : "off", d.gime_timer ? "on" : "off",
-        d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off");
+        d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off",
+        d.joystick_swap ? "on" : "off");
     return (k < 0) ? 0 : (k >= (int)n ? (int)n - 1 : k);
 }
 

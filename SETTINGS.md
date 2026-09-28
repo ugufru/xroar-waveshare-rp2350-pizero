@@ -57,6 +57,7 @@ gime_palette      = on
 gime_timer        = on
 run_skips_autorun = on
 serial_keyboard   = on
+joystick_swap     = off
 ```
 
 That file sets everything to its default, so it behaves exactly like having
@@ -73,6 +74,7 @@ no file at all. Change the lines you care about and delete the rest.
 | `gime_timer` | `on` / `off` | `on` | The CoCo 3-style timer and interrupts at `$FF90`-`$FF95`. `off` removes them and stops the timer. |
 | `run_skips_autorun` | `on` / `off` | `on` | Whether pressing RUN restarts straight to the BASIC prompt, skipping `autorun.txt`. `off` makes RUN behave like power-on. |
 | `serial_keyboard` | `on` / `off` | `on` | Whether characters sent over the USB serial port are typed into the CoCo. |
+| `joystick_swap` | `on` / `off` | `off` | Which USB gamepad stick is which CoCo joystick. `off`: the pad's left stick (and D-pad) is the right joystick, `JOYSTK(0)` and `JOYSTK(1)`, the one most games read, and the right stick is the left joystick. `on` swaps them, fire buttons included: the right stick steers `JOYSTK(0)`/`(1)` and the left-hand buttons (L1, square) fire it. Handy in a game's own settings file. |
 | `color_NAME` | `#RRGGBB` | the 6847's | Overrides one palette color. See below. |
 
 Names and values are not case-sensitive, so `VOLUME = 12` works too. A `#`

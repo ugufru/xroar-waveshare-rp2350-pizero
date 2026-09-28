@@ -942,11 +942,12 @@ static void settings_apply(void) {
     coco_machine_set_gime_timer(st->gime_timer);
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s colors_overridden=%04x\r\n",
+                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
                   st->run_skips_autorun ? "on" : "off", st->serial_keyboard ? "on" : "off",
+                  st->joystick_swap ? "on" : "off",
                   (unsigned)st->color_set);
 }
 
@@ -1965,15 +1966,18 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
                 g_pad_idx = idx;
                 Serial.printf("[usb] gamepad bound addr=%u idx=%u\r\n", daddr, idx);
             }
+            // PIZERO-160: joystick_swap sends each pad stick, with its fire
+            // buttons, to the other CoCo joystick.
+            int sw = g_settings.joystick_swap ? 1 : 0;
             for (int p = 0; p < 2; p++) {
-                coco_machine_set_joystick_axis(p, 0, ps.axis[p][0]);
-                coco_machine_set_joystick_axis(p, 1, ps.axis[p][1]);
-                coco_machine_set_joystick_fire(p, ps.fire[p]);
+                coco_machine_set_joystick_axis(p ^ sw, 0, ps.axis[p][0]);
+                coco_machine_set_joystick_axis(p ^ sw, 1, ps.axis[p][1]);
+                coco_machine_set_joystick_fire(p ^ sw, ps.fire[p]);
             }
             g_pad_decoded++;
-            g_pad_x = ps.axis[0][0];
-            g_pad_y = ps.axis[0][1];
-            g_pad_fire = (uint8_t)((ps.fire[0] ? 1 : 0) | (ps.fire[1] ? 2 : 0));
+            g_pad_x = ps.axis[sw][0];                  // what CoCo port 0 now holds
+            g_pad_y = ps.axis[sw][1];
+            g_pad_fire = (uint8_t)((ps.fire[sw] ? 1 : 0) | (ps.fire[sw ^ 1] ? 2 : 0));
         }
     } else if (len >= 8) {
         hid_keyboard_apply(report);
