@@ -105,7 +105,8 @@ same HDMI cable**. Only joystick input remains open.
    the left one. `PRINT JOYSTK(0)` reads 0-63. Tested with a GameSir
    Tegenaria Lite in Android mode (hold Home + A), and in its automatic mode;
    its Switch mode (Home + Y) sends nothing and does not work. A pad plugged
-   in after power-on is not seen yet (PIZERO-51).
+   in after power-on is not seen yet (PIZERO-51). How USB input got here, and
+   the lessons: [`docs/usb-retrospective.md`](docs/usb-retrospective.md).
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).

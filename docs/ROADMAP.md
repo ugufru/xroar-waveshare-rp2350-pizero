@@ -5,7 +5,7 @@ map over `issues.jsonl` — it sequences the open work and links the tickets; it
 does **not** restate ticket detail. Authoritative status always lives in the
 ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`).
 
-_Last updated: 2026-09-26 (overlay milestone, CoCo 3 plan)._
+_Last updated: 2026-09-28 (USB workstream refreshed after the gamepad and hub)._
 
 ## Shipped / working (V1.0 core)
 
@@ -16,8 +16,10 @@ The end-to-end product path is up and hardware-validated:
 - **Audio** — streaming HDMI data-island audio, no warble (`PIZERO-35`/`38`/`39`),
   pitch-matched at the in-spec 60 Hz clock.
 - **Storage** — microSD ROM/disk load + AUTORUN (`PIZERO-08`/`10`).
-- **Input (keyboard)** — USB HID keyboard works **when attached at cold boot**
-  (`PIZERO-11`/`12`); keystrokes reach the emulator cleanly.
+- **Input**: USB keyboard (`PIZERO-11`/`12`) and USB gamepad as both CoCo
+  joysticks (`PIZERO-13`, `joystick_swap` `PIZERO-160`), together through a
+  simple hub (`PIZERO-54`). Straight into the board, a device must be attached
+  at power-on (`PIZERO-51`). History and lessons: `docs/usb-retrospective.md`.
 - **Stability** — hardware-watchdog freeze auto-recovery + cross-reset phase
   log deployed (`PIZERO-33`).
 - **Compatibility** — default env `pizero_stream_60` confirmed stable across
@@ -27,33 +29,25 @@ The end-to-end product path is up and hardware-validated:
 
 ## Now: Input / USB workstream (active focus)
 
-This is the current push. Order reflects value × independence.
+Updated 2026-09-28. The gamepad (`PIZERO-13`), hub (`PIZERO-54`) and stick
+swap (`PIZERO-160`) are done; `docs/usb-retrospective.md` records how, and the
+lessons. What is left, in order:
 
-1. **`PIZERO-11b` → `PIZERO-51` — USB hot-replug recovery.** Root cause is now
-   fully diagnosed on hardware (rev3 silicon, E9 workaround off, PIO SM pins the
-   line at J/FS → disconnect is invisible; an unplugged device floods ~180
-   phantom HID reports/sec rather than erroring). `PIZERO-51` implements the fix:
-   detect the phantom-report flood and force `pio_usb_host_stop()/restart()` to
-   re-enumerate. Unblocks reliable device swapping (and easier gamepad testing).
-2. **`PIZERO-50` — Header-pin joystick (now the PREFERRED player-1 route).**
-   Bumped low→high: wire a **real CoCo joystick** (2× 500k pots + 1–2 buttons)
-   straight to the RP2350 header as a "hat" — authentic feel, sidesteps the USB
-   CPU budget entirely (no hub needed), lands in the same DAC-comparator
-   injection API. Ticket carries the full wiring recipe (3V3-not-5V pot dividers,
-   ADC0/ADC1 source-impedance + filter-cap notes, player-2 mux/I²C options).
-   **Build its `coco_machine` joystick-injection API first** — `PIZERO-13` reuses
-   it.
-3. **`PIZERO-49` — Numeric keypad.** Pure software keymap fix (extend
-   `hid_table_init` for HID usages 0x53–0x63). Independent of the hotplug work;
-   cheapest win.
-4. **`PIZERO-13` — USB gamepad → CoCo joystick.** The user's PS2-style USB
-   controller. Needs HID report-descriptor parsing (gamepads have no boot
-   protocol) + the joystick-injection API. Easier to test once `PIZERO-51` lands.
-5. **`PIZERO-54` — USB hub support (`CFG_TUH_HUB`).** No internal hub; an external
-   hub is required to run keyboard **and** a second device (keypad `PIZERO-49` or
-   gamepad `PIZERO-13`) at once. Watch the core-0 headroom (`PIZERO-48`) and that
-   it composes with the `PIZERO-51` stop/restart. Header-joystick (`PIZERO-50`)
-   sidesteps this for player 1.
+1. **`PIZERO-162`: Firmware screens draw `_ { | } ~` and lower case.** The
+   6847T1 font we already use has the glyphs; the card code cannot reach them.
+   Small and independent.
+2. **`PIZERO-163`: Keyboard types what the keycaps say.** Replaces the
+   positional mapping; gives the key matrix one mask per source first.
+3. **`PIZERO-164`: Pad buttons press CoCo keys** (`pad_start = ENTER`,
+   `dpad = arrows`), per game too. Reuses 163's per-source matrix.
+4. **`PIZERO-49`: Numeric keypad.** Folds into 163's translation table.
+5. **`PIZERO-51`: Hot-plug straight into the board.** The software fixes are
+   disproved (VBUS is hardwired); needs a switched VBUS. Through a hub, a
+   keyboard plugged in while running did mount, which may be enough.
+6. **`PIZERO-50`: A real CoCo joystick on the header pins.** Uses the
+   joystick API that `PIZERO-13` built.
+7. Lower: `PIZERO-157` (pad Switch mode), `PIZERO-158` (serial typing drops a
+   character), `PIZERO-159` (chained USB-C hubs).
 
 ## Next: BIOS / launcher & VDG extensions
 
