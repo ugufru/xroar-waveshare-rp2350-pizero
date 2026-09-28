@@ -29,24 +29,22 @@ The end-to-end product path is up and hardware-validated:
 
 ## Now: Input / USB workstream (active focus)
 
-Updated 2026-09-28. The gamepad (`PIZERO-13`), hub (`PIZERO-54`) and stick
-swap (`PIZERO-160`) are done; `docs/usb-retrospective.md` records how, and the
-lessons. What is left, in order:
+Updated 2026-09-28. Done: the gamepad (`PIZERO-13`), hub (`PIZERO-54`),
+stick swap (`PIZERO-160`), keycap keyboard and keypad (`PIZERO-163`, `49`),
+auto-repeat (`PIZERO-167`), screen glyphs (`PIZERO-162`) and the font setting
+with our 6847T2 (`PIZERO-166`). `docs/usb-retrospective.md` records how, and
+the lessons. What is left, in order:
 
-1. **`PIZERO-162`: Firmware screens draw `_ { | } ~` and lower case.** The
-   6847T1 font we already use has the glyphs; the card code cannot reach them.
-   Small and independent.
-2. **`PIZERO-163`: Keyboard types what the keycaps say.** Replaces the
-   positional mapping; gives the key matrix one mask per source first.
-3. **`PIZERO-164`: Pad buttons press CoCo keys** (`pad_start = ENTER`,
-   `dpad = arrows`), per game too. Reuses 163's per-source matrix.
-4. **`PIZERO-49`: Numeric keypad.** Folds into 163's translation table.
-5. **`PIZERO-51`: Hot-plug straight into the board.** The software fixes are
+1. **`PIZERO-164`: Pad buttons press CoCo keys** (`pad_start = ENTER`,
+   `dpad = arrows`), per game too. Reuses the key matrix's per-source layers
+   from `PIZERO-163`; starts with one button sweep on the pad.
+2. **`PIZERO-165`: Print Screen saves a PNG** to `/coco/screendumps`.
+3. **`PIZERO-51`: Hot-plug straight into the board.** The software fixes are
    disproved (VBUS is hardwired); needs a switched VBUS. Through a hub, a
    keyboard plugged in while running did mount, which may be enough.
-6. **`PIZERO-50`: A real CoCo joystick on the header pins.** Uses the
+4. **`PIZERO-50`: A real CoCo joystick on the header pins.** Uses the
    joystick API that `PIZERO-13` built.
-7. Lower: `PIZERO-157` (pad Switch mode), `PIZERO-158` (serial typing drops a
+5. Lower: `PIZERO-157` (pad Switch mode), `PIZERO-158` (serial typing drops a
    character), `PIZERO-159` (chained USB-C hubs).
 
 ## Next: BIOS / launcher & VDG extensions
