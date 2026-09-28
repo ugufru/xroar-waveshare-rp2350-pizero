@@ -19,6 +19,7 @@
 #include "vdg_pack.h"
 #include "cart_gmc.h"          // PIZERO-142, host-tested
 #include "csg_sn76489.h"       // PIZERO-143, host-tested
+#include "joy_compare.h"       // PIZERO-13, host-tested
 #include "coco_palette.h"
 #include "audio_servo.h"
 #ifdef GIME_TIMER
@@ -237,6 +238,30 @@ extern "C" void coco_pia1b_postwrite(void *sptr) {
     g_artifact_css    = (pb & 0x08) != 0;
 }
 
+// PIZERO-13: two joysticks, ported from the Fruit Jam port (FRUITJAM-18).
+// Port 0 = RIGHT joystick (fire on PIA0 PA0), port 1 = LEFT (PA1), as XRoar
+// numbers them. Axis 0 = X (0 left), 1 = Y (0 up); 16-bit, because the
+// comparator is (joy_compare.h). Centered and released until a pad reports.
+static uint16_t g_joy_axis[2][2] = { { 32767, 32767 }, { 32767, 32767 } };
+static uint8_t  g_joy_fire = 0;      // bit0 = port 0 (PA0), bit1 = port 1 (PA1)
+
+extern "C" void coco_machine_set_joystick_axis(int port, int axis, uint16_t value) {
+    if ((unsigned)port > 1 || (unsigned)axis > 1) return;
+    g_joy_axis[port][axis] = value;
+}
+
+extern "C" void coco_machine_set_joystick_fire(int port, _Bool pressed) {
+    if ((unsigned)port > 1) return;
+    if (pressed) g_joy_fire |=  (uint8_t)(1u << port);
+    else         g_joy_fire &= (uint8_t)~(1u << port);
+}
+
+extern "C" void coco_machine_release_all_joysticks(void) {
+    g_joy_axis[0][0] = g_joy_axis[0][1] = 32767;
+    g_joy_axis[1][0] = g_joy_axis[1][1] = 32767;
+    g_joy_fire = 0;
+}
+
 extern "C" void HOT_FUNC(coco_pia0_preread_a)(void *sptr) {
     (void)sptr;
     if (!g_m.pia0) return;
@@ -246,6 +271,19 @@ extern "C" void HOT_FUNC(coco_pia0_preread_a)(void *sptr) {
         if (!(col_sel & (1u << c))) {
             rows &= g_kb_col_row_mask[c];
         }
+    }
+    // Fire buttons pull PA0/PA1 low whichever column is strobed (upstream:
+    // row_sink &= ~(buttons & 3)).
+    rows &= (uint8_t)~(g_joy_fire & 3);
+    // Comparator on PA7: CB2 picks the port, CA2 the axis (two separate
+    // selects, unlike the sound mux, which reads them as one 2-bit code).
+    if (g_m.pia1) {
+        unsigned port = PIA_VALUE_CB2(g_m.pia0) ? 1u : 0u;
+        unsigned axis = PIA_VALUE_CA2(g_m.pia0) ? 1u : 0u;
+        if (joy_comparator_high(g_joy_axis[port][axis], (uint8_t)PIA_VALUE_A(g_m.pia1)))
+            rows |= 0x80;
+        else
+            rows &= 0x7F;
     }
     g_m.pia0->a.in_sink = rows;
 }

@@ -147,6 +147,13 @@ void coco_machine_press_key(uint8_t dscan);
 void coco_machine_release_key(uint8_t dscan);
 void coco_machine_release_all_keys(void);
 
+/* PIZERO-13: joysticks. Port 0 = RIGHT (fire on PIA0 PA0), port 1 = LEFT
+ * (PA1); axis 0 = X (0 left, 65535 right), axis 1 = Y (0 up, 65535 down).
+ * Center is 32767; all start centered with fire released. */
+void coco_machine_set_joystick_axis(int port, int axis, uint16_t value);
+void coco_machine_set_joystick_fire(int port, _Bool pressed);
+void coco_machine_release_all_joysticks(void);
+
 /* PIZERO-55/85: the 16-entry palette register file the blit reads per pixel.
  * Writable, so a guest's writes to the GIME registers at $FFB0-$FFBF recolour
  * the machine live (build with -DGIME_PALETTE), and so the BIOS editor can

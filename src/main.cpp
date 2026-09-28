@@ -119,6 +119,7 @@ extern "C" {
 #include "settings.h"      // PIZERO-145: /coco/settings.txt
 #include "text_editor.h"   // PIZERO-146: on-screen editor for it
 #include "text_edit_keys.h" // PIZERO-146/147: the editor's status words
+#include "gamepad.h"        // PIZERO-13: USB gamepad -> CoCo joysticks
 #include "boot_messages.h"
 extern "C" {
 #include "events.h"   // PIZERO-33 runaway guard counters
@@ -1861,6 +1862,24 @@ void loop() {
     }
 }
 
+// PIZERO-13: the bound gamepad (0 = none), and the pad identity of each
+// device address, so no pad's reports reach the keyboard. A pad binds on the
+// first interface whose report its decoder accepts: the GameSir identities
+// carry the gamepad on a different interface in different modes.
+#define USB_PAD_MAX_DADDR 15
+// PIZERO-13 bring-up: print a known pad's report descriptor at mount and its
+// reports as they change. Build with -DPAD_PROBE=1 to measure a new identity.
+#ifndef PAD_PROBE
+#define PAD_PROBE 0
+#endif
+static uint8_t g_pad_daddr = 0;
+static uint8_t g_pad_idx = 0;
+static enum pad_kind g_pad_kind_of[USB_PAD_MAX_DADDR + 1];
+
+static bool pad_addr(uint8_t daddr) {
+    return daddr <= USB_PAD_MAX_DADDR && g_pad_kind_of[daddr] != PAD_NONE;
+}
+
 // ---- USB host HID callbacks (PIZERO-11) ---------------------------------
 // TinyUSB looks up these weak symbols by C name; extern "C" prevents mangling.
 extern "C" {
@@ -1879,11 +1898,27 @@ void tuh_hid_mount_cb(uint8_t daddr, uint8_t idx,
                       uint8_t const *desc_report, uint16_t desc_len) {
     (void)desc_report;
     uint8_t proto = tuh_hid_interface_protocol(daddr, idx);
-    const char *kind = (proto == HID_ITF_PROTOCOL_KEYBOARD) ? "keyboard"
+    uint16_t vid = 0, pid = 0;
+    tuh_vid_pid_get(daddr, &vid, &pid);
+    enum pad_kind pad = pad_identify(vid, pid);
+    const char *kind = pad == PAD_DS4    ? "gamepad, DS4"
+                     : pad == PAD_XINPUT ? "gamepad, XInput"
+                     : pad == PAD_HIDGP  ? "gamepad, HID"
+                     : pad == PAD_SILENT ? "gamepad, no input in this mode"
+                     : (proto == HID_ITF_PROTOCOL_KEYBOARD) ? "keyboard"
                      : (proto == HID_ITF_PROTOCOL_MOUSE)    ? "mouse"
                                                             : "generic";
-    Serial.printf("[usb] HID mount addr=%u idx=%u proto=%u (%s) desc_len=%u\r\n",
-                  daddr, idx, proto, kind, desc_len);
+    Serial.printf("[usb] HID mount addr=%u idx=%u vid=%04X pid=%04X proto=%u (%s) desc_len=%u\r\n",
+                  daddr, idx, vid, pid, proto, kind, desc_len);
+    if (daddr <= USB_PAD_MAX_DADDR) g_pad_kind_of[daddr] = pad;
+#if PAD_PROBE
+    if (pad != PAD_NONE) {                     // the layout, for decoding by hand
+        Serial.printf("[pad] descriptor %u bytes:", desc_len);
+        for (uint16_t i = 0; i < desc_len; i++)
+            Serial.printf("%s%02X", (i % 32) ? " " : "\r\n[pad]   ", desc_report[i]);
+        Serial.printf("\r\n");
+    }
+#endif
     if (!tuh_hid_receive_report(daddr, idx)) {
         Serial.printf("[usb] tuh_hid_receive_report FAILED idx=%u\r\n", idx);
     } else {
@@ -1893,6 +1928,12 @@ void tuh_hid_mount_cb(uint8_t daddr, uint8_t idx,
 
 void tuh_hid_umount_cb(uint8_t daddr, uint8_t idx) {
     Serial.printf("[usb] HID unmount addr=%u idx=%u\r\n", daddr, idx);
+    if (daddr <= USB_PAD_MAX_DADDR) g_pad_kind_of[daddr] = PAD_NONE;
+    // PIZERO-13: an unplugged pad must not leave a stick held over or fire down.
+    if (g_pad_daddr && daddr == g_pad_daddr && idx == g_pad_idx) {
+        g_pad_daddr = 0;
+        coco_machine_release_all_joysticks();
+    }
 }
 
 void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
@@ -1900,15 +1941,51 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
     // PIZERO-12: treat any 8-byte report as boot keyboard (our test dongle
     // mislabels its keyboard interface as proto=2/mouse). 3-byte report is
     // a boot mouse (no consumer yet — PIZERO-13). Other lengths: ignore.
-    if (len >= 8) {
+    // PIZERO-13: the bound pad goes to the joysticks. Any known pad identity
+    // is kept off the keyboard path: its 64-byte reports would type junk.
+    if (pad_addr(daddr)) {
+        bool mine = g_pad_daddr && daddr == g_pad_daddr && idx == g_pad_idx;
+        struct pad_state ps;
+        if ((mine || !g_pad_daddr) &&
+            pad_decode(g_pad_kind_of[daddr], report, len, &ps)) {
+            if (!mine) {                       // first decodable report: bind
+                g_pad_daddr = daddr;
+                g_pad_idx = idx;
+                Serial.printf("[usb] gamepad bound addr=%u idx=%u\r\n", daddr, idx);
+            }
+            for (int p = 0; p < 2; p++) {
+                coco_machine_set_joystick_axis(p, 0, ps.axis[p][0]);
+                coco_machine_set_joystick_axis(p, 1, ps.axis[p][1]);
+                coco_machine_set_joystick_fire(p, ps.fire[p]);
+            }
+        }
+    } else if (len >= 8) {
         hid_keyboard_apply(report);
     }
+#if PAD_PROBE
+    // Any known pad: print each report that differs from the last, so moving
+    // one control at a time shows which bytes it owns.
+    if (pad_addr(daddr) && idx < 4) {
+        static uint8_t last[4][64];
+        static uint16_t last_len[4];
+        uint16_t n = len < sizeof last[0] ? len : (uint16_t)sizeof last[0];
+        if (n != last_len[idx] || memcmp(report, last[idx], n) != 0) {
+            memcpy(last[idx], report, n);
+            last_len[idx] = n;
+            Serial.printf("[pad] i%u %u:", idx, len);
+            for (uint16_t i = 0; i < n; i++) Serial.printf(" %02X", report[i]);
+            Serial.printf("\r\n");
+        }
+    }
+#endif
     g_hid_reports++;   // PIZERO-11b diag: proves the device is alive & polled
 #ifdef USB_HOTPLUG_RECOVER
     // PIZERO-51: detect the unplug phantom-flood (byte-identical reports) and ask
     // loop() to re-enumerate. Kept OUT of hid_keyboard_apply so real keystrokes
     // (which change the report, resetting the run) never trip it.
-    if (hotplug_note_report(daddr, idx, report, len)) g_usb_recover_pending = true;
+    // A pad at rest sends identical reports without end, which is not a flood.
+    if (!(g_pad_daddr && daddr == g_pad_daddr) &&
+        hotplug_note_report(daddr, idx, report, len)) g_usb_recover_pending = true;
 #endif
     if (!tuh_hid_receive_report(daddr, idx)) g_hid_recv_fail++;
 }
