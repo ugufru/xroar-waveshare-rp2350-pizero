@@ -42,6 +42,7 @@ buildable on its own.
 | **`pizero_stream_60`** | `pizero_stream` | `-DHDMI_60HZ -DGIME_TIMER -DGIME_PALETTE` | single-buffered | **THE PRODUCT: streaming audio @ true 640x480p60 + USB (PIZERO-45)** | ~75% |
 | **`pizero_stream`** | `pizero_base` | `-DHDMI_DATA_ISLAND -DHDMI_STREAM_AUDIO` | single-buffered | streaming audio at the older ~52 Hz timing: the fallback | ~75% |
 | `pizero_hotplug` | `pizero_stream_60` | `-DUSB_HOTPLUG_RECOVER` | single-buffered | product + USB hot-replug recovery (PIZERO-51) | ~75% |
+| `pizero_usbdebug` | `pizero_stream_60` | `-DCFG_TUSB_DEBUG=2 -DCFG_TUD_LOG_LEVEL=3 -DCFG_TUSB_DEBUG_PRINTF=tusb_debug_printf -DSERIAL_TUSB_DEBUG=Serial` | single-buffered | product + TinyUSB host log on the serial console, for hub and enumeration faults (PIZERO-54) | ~75% |
 | `pizero_stream_synth` | `pizero_stream` | `-DHDMI_AUDIO_SYNTH` | single-buffered | 440 Hz test tone: tests the HDMI sound path alone (PIZERO-99) | ~75% |
 | `pizero_stream_std` | `pizero_stream` | `-DHDMI_STD_TIMING` | single-buffered | standard blanking timing, no USB host (PIZERO-99/120) | ~75% |
 | `pizero_stream_lpf` | `pizero_stream` | `-DAUDIO_OUTPUT_LPF` | single-buffered | TV-bandwidth output filter on (PIZERO-41) | ~75% |
