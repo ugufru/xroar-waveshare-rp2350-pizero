@@ -28,6 +28,7 @@ static void test_defaults_match_todays_behaviour(void) {
     TEST_ASSERT_TRUE(s.serial_keyboard);
     TEST_ASSERT_FALSE(s.joystick_swap);             // PIZERO-160: off by default
     TEST_ASSERT_EQUAL_UINT8(FONT_6847T2, s.font);   // PIZERO-166: ours by default
+    TEST_ASSERT_FALSE(s.lowercase);                 // PIZERO-166: inverse text by default
     TEST_ASSERT_EQUAL_UINT16(0, s.color_set);                        // default palette
 }
 
@@ -47,6 +48,7 @@ static void test_every_setting(void) {
     TEST_ASSERT_EQUAL_INT(SET_OK, line("FONT = 6847T1"));   TEST_ASSERT_EQUAL_UINT8(FONT_6847T1, s.font);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("font = 6847t2"));   TEST_ASSERT_EQUAL_UINT8(FONT_6847T2, s.font);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("font = comic"));
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("lowercase = on"));  TEST_ASSERT_TRUE(s.lowercase);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("color_green = #1ED01E"));
     TEST_ASSERT_EQUAL_UINT16(0x0001, s.color_set);
     TEST_ASSERT_EQUAL_HEX16(settings_rgb565(0x1ED01E), s.color[0]);

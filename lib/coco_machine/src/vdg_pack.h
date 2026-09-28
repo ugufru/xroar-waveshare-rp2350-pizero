@@ -137,6 +137,16 @@ static inline uint8_t vdg_alpha_glyph_index(uint8_t ch) {
 //            at all times (the T1's own glyphs $00 and $1F).
 enum { VDG_FONT_CLASSIC = 0, VDG_FONT_T1 = 1, VDG_FONT_T2 = 2 };
 
+// PIZERO-166: whether true lower case is on. The T1 follows its EXT line,
+// which Color BASIC rewrites to 0 at the prompt and on every PRINT, so a
+// POKE 65314,16 rarely survives. The T2 adds the lowercase setting, which
+// holds it on regardless (codes 0-31 then show as lower case and { | } ~
+// instead of inverse capitals). CLASSIC has no lower case at all.
+static inline bool vdg_lower_case(bool ext, int font, bool lowercase_setting) {
+    if (font == VDG_FONT_CLASSIC) return false;
+    return ext || (font == VDG_FONT_T2 && lowercase_setting);
+}
+
 // The glyph a character code shows, as an index into font_6847 (CLASSIC) or
 // font_6847t1 (T1, T2), and in *pair which colour pair (bit 6 of the code, or
 // forced on under EXT), matching vdg_build_alpha_table's rows.

@@ -242,14 +242,25 @@ extern "C" _Bool g_artifact_css    = 0;
 // (PIA1 PB bit 4), which switches the T1 and T2 to true lower case.
 static int  g_font = VDG_FONT_T2;
 static bool g_vdg_ext = false;
+static bool g_lowercase = false;              // the lowercase setting (T2 only)
 
 // AMOLED-26: PIA1 PB bits 7..3 are the VDG mode lines (¬A/G, GM2, GM1, GM0,
 // CSS). Demos write PIA1 PB to switch to PMODE 4 / RG6. Match upstream
 // dragon/coco wiring: extract the value, mirror GM0 into the INT/EXT bit,
 // hand to mc6847_set_mode. Fired from PIA1 PB postwrite.
+// PIZERO-166 diagnostic: writes to PIA1 port B and the last value, for [vdg].
+static uint32_t g_pb_writes = 0;
+static uint8_t  g_pb_last = 0;
+extern "C" void coco_machine_pia1b_trace(uint32_t *writes, uint8_t *last, _Bool *ext) {
+    *writes = g_pb_writes; *last = g_pb_last;
+    *ext = vdg_lower_case(g_vdg_ext, g_font, g_lowercase);   // lower case in effect
+}
+
 extern "C" void coco_pia1b_postwrite(void *sptr) {
     (void)sptr;
     if (!g_m.pia1 || !g_m.vdg) return;
+    g_pb_writes++;
+    g_pb_last = (uint8_t)(g_m.pia1->b.out_source & g_m.pia1->b.out_sink);
     unsigned pb = (g_m.pia1->b.out_source & g_m.pia1->b.out_sink) & 0xf8;
     unsigned vmode = pb | ((pb & 0x10) << 4);   // GM0 -> INT/EXT
     mc6847_set_mode(g_m.vdg, vmode);
@@ -1378,10 +1389,12 @@ extern "C" void coco_machine_set_font(int font) {
     g_font = font;
 }
 
+extern "C" void coco_machine_set_lowercase(_Bool on) { g_lowercase = on; }
+
 static void HOT_FUNC(render_alpha_frame)(uint16_t base) {
     if (!g_alpha_lut_ready) build_alpha_lut();
     if (!g_sg4_lut_ready) build_sg4_lut();
-    int key = (g_font << 1) | (g_vdg_ext ? 1 : 0);
+    int key = (g_font << 1) | (vdg_lower_case(g_vdg_ext, g_font, g_lowercase) ? 1 : 0);
     if (key != g_alpha_map_key) build_alpha_map(key);
     const uint8_t *font = (g_font == VDG_FONT_CLASSIC) ? font_6847 : font_6847t1;
     // 32 chars wide × 16 text rows × 12 pixel rows = 192 lines.

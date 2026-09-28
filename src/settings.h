@@ -17,6 +17,7 @@
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
 //   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
 //   font              = classic | 6847t1 | 6847t2   text font set (6847t2 default)
+//   lowercase         = on | off              6847t2: true lower case always
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -53,6 +54,7 @@ struct coco_settings {
     bool    serial_keyboard;
     bool    joystick_swap;            // PIZERO-160: pad sticks to the other ports
     uint8_t font;                     // PIZERO-166: FONT_*
+    bool    lowercase;                // PIZERO-166: 6847t2 holds true lower case on
     uint16_t color[16];               // RGB565 overrides, by palette index
     uint16_t color_set;               // bit i: color[i] overrides the default
 };
@@ -159,6 +161,7 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     else if (!strcmp(name, "run_skips_autorun")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->run_skips_autorun = b; }
     else if (!strcmp(name, "serial_keyboard"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->serial_keyboard = b; }
     else if (!strcmp(name, "joystick_swap"))     { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_swap = b; }
+    else if (!strcmp(name, "lowercase"))         { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->lowercase = b; }
     else if (!strcmp(name, "volume")) {
         char *end; long n = strtol(v, &end, 10);
         if (*end || n < 0 || n > 15) return SET_BAD_VALUE;
@@ -222,6 +225,7 @@ static inline int settings_template(char *out, size_t n) {
         "serial_keyboard = %s\n"
         "joystick_swap = %s\n"
         "font = %s\n"
+        "lowercase = %s\n"
         "# color_green = #00FF00\n"
         "# color_dark_green = #006500\n",
         d.sn76489 ? "on" : "off", d.volume,
@@ -229,7 +233,8 @@ static inline int settings_template(char *out, size_t n) {
         d.gime_palette ? "on" : "off", d.gime_timer ? "on" : "off",
         d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off",
         d.joystick_swap ? "on" : "off",
-        d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2");
+        d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
+        d.lowercase ? "on" : "off");
     return (k < 0) ? 0 : (k >= (int)n ? (int)n - 1 : k);
 }
 

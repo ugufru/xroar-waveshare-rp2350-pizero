@@ -831,15 +831,17 @@ static void settings_apply(void) {
     coco_machine_set_gime_palette(st->gime_palette);
     coco_machine_set_gime_timer(st->gime_timer);
     coco_machine_set_font(st->font);          // PIZERO-166
+    coco_machine_set_lowercase(st->lowercase);
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s colors_overridden=%04x\r\n",
+                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
                   st->run_skips_autorun ? "on" : "off", st->serial_keyboard ? "on" : "off",
                   st->joystick_swap ? "on" : "off",
                   st->font == FONT_CLASSIC ? "classic" : st->font == FONT_6847T1 ? "6847t1" : "6847t2",
+                  st->lowercase ? "on" : "off",
                   (unsigned)st->color_set);
 }
 
@@ -1701,8 +1703,11 @@ void loop() {
         if (!(vdg & 0x80)) snprintf(mode, sizeof mode, "alpha");
         else snprintf(mode, sizeof mode, "gm%u%s", (unsigned)((vdg >> 4) & 7),
                       (vdg & 0x08) ? "c" : "");
-        Serial.printf("[vdg] mode=%s bits=%02x sam=%u\r\n", mode, (unsigned)vdg,
-                      (unsigned)coco_machine_sam_v());
+        uint32_t pbw; uint8_t pbl; bool ext;
+        coco_machine_pia1b_trace(&pbw, &pbl, &ext);
+        Serial.printf("[vdg] mode=%s bits=%02x sam=%u pb_writes=%lu pb_last=%02x lower=%u\r\n",
+                      mode, (unsigned)vdg, (unsigned)coco_machine_sam_v(),
+                      (unsigned long)pbw, (unsigned)pbl, (unsigned)ext);
         // PIZERO-143: only while a program is using the GMC's sound chip.
         if (coco_machine_cart_csg_writes())
             Serial.printf("[csg] writes=%lu dropped=%lu\r\n",

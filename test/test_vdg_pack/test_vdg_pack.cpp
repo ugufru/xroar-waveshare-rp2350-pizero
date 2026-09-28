@@ -372,6 +372,15 @@ static void test_every_code_stays_inside_its_font(void) {
         }
 }
 
+static void test_lowercase_setting_holds_t2_lower_case(void) {
+    TEST_ASSERT_TRUE(vdg_lower_case(false, VDG_FONT_T2, true));    // BASIC reset EXT: still on
+    TEST_ASSERT_FALSE(vdg_lower_case(false, VDG_FONT_T2, false));
+    TEST_ASSERT_TRUE(vdg_lower_case(true, VDG_FONT_T2, false));    // a program's POKE still works
+    TEST_ASSERT_FALSE(vdg_lower_case(false, VDG_FONT_T1, true));   // the T1 stays authentic
+    TEST_ASSERT_TRUE(vdg_lower_case(true, VDG_FONT_T1, false));
+    TEST_ASSERT_FALSE(vdg_lower_case(true, VDG_FONT_CLASSIC, true));
+}
+
 static int rows_used(uint8_t glyph, int *first, int *last) {
     int n = 0; *first = -1; *last = -1;
     for (int r = 0; r < 12; r++)
@@ -418,5 +427,6 @@ int main(void) {
     RUN_TEST(test_t2_fixes_caret_and_underscore_always);
     RUN_TEST(test_every_code_stays_inside_its_font);
     RUN_TEST(test_t2_glyphs_really_are_a_caret_and_an_underscore);
+    RUN_TEST(test_lowercase_setting_holds_t2_lower_case);
     return UNITY_END();
 }
