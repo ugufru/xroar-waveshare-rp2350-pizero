@@ -37,8 +37,10 @@ a build flag.
 
 - **You build it (the agent), not the user.** The product firmware is the default env
   `pizero_stream_60` (PIZERO-45: true 640×480p60 + streaming HDMI audio + USB), so a
-  bare `pio run` builds it. `pizero` (silent), `pizero_stream` (off-spec 52 Hz audio)
-  and `pizero_60hz` (video-only test) are kept as fallbacks. Use a real env, never a
+  bare `pio run` builds it. `pizero_stream` (off-spec 52 Hz audio) is kept as the
+  fallback; the rest are diagnostics tied to open issues. Before committing a
+  change that adds RAM, also build `pizero_stream` and the double-buffered
+  `pizero_wavmeas` (~99% RAM). Use a real env, never a
   one-off `PLATFORMIO_BUILD_FLAGS` (it links stale objects — see BUILD.md §4b).
 
 ## Build gotchas to remember

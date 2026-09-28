@@ -230,13 +230,13 @@ toolchain gotchas — in short:
 
 ```
 pio run                 -t upload   # DEFAULT: true 640x480p60 + HDMI audio + USB
-pio run -e pizero       -t upload   # fallback: silent, double-buffered, tear-free
+pio run -e pizero_stream -t upload  # fallback: older ~52 Hz timing, for a picky display
 pio device monitor                  # serial @ 115200 — prints per-second [run] fps/cpu/blit
 ```
 
 A bare `pio run` builds the default `pizero_stream_60` env (60 Hz, streaming HDMI
-audio, USB host). The silent `pizero` baseline and the off-spec 52 Hz envs are kept
-as fallbacks. Don't enable flags via the `PLATFORMIO_BUILD_FLAGS` env var — it links
+audio, USB host). The off-spec 52 Hz `pizero_stream` is kept as the fallback for
+displays that reject 60 Hz. Don't enable flags via the `PLATFORMIO_BUILD_FLAGS` env var — it links
 stale objects (see BUILD.md §4b).
 
 A microSD card is required, with the CoCo ROMs at **`/coco/bas12.rom`** (and optionally
@@ -294,7 +294,8 @@ How we got from the first boot (54 fps) to a locked 60 fps:
   read-modify-write: **~6.4 ms → ~0.56 ms** per frame. (Graphics modes still use the per-pixel path.)
 - **Double buffering** (`PIZERO-14`): two 320×240 RGB565 buffers with a `volatile` front-buffer
   handoff from core 0 to core 1, so `libdvi` never samples a half-rendered frame. Costs **96.8% RAM**
-  (507,340 / 524,288 bytes) in the double-buffered envs `pizero` and `pizero_60hz`. The default
+  (507,340 / 524,288 bytes) in the double-buffered envs `pizero` and `pizero_60hz`, since retired
+  (PIZERO-150). The default
   `pizero_stream_60` **single**-buffers instead — the HDMI data islands need the framebuffer's
   ~150 KB — and sits at **70.4%** (368,964 bytes), leaving ~155 KB free. Measured 2026-08-17.
 

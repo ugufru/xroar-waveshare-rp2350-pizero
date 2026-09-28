@@ -156,9 +156,9 @@ Authoritative reference is [`BUILD.md`](BUILD.md); this is the orientation table
 | Env                 | Video            | Audio                       | Notes                              |
 |---------------------|------------------|-----------------------------|------------------------------------|
 | `pizero_stream_60`  | true 640×480p60  | streaming HDMI audio        | **product default** (PIZERO-45)    |
-| `pizero`            | 640×480 (~52 Hz) | silent                      | video-only baseline                |
 | `pizero_stream`     | 640×480 (~52 Hz) | streaming, off-spec 52 Hz   | fallback                           |
-| `pizero_60hz`       | true 640×480p60  | silent                      | 60 Hz video-only test              |
+
+The silent `pizero` and `pizero_60hz` envs were retired in PIZERO-150.
 
 ## Source map
 

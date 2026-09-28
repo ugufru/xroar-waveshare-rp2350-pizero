@@ -19,13 +19,9 @@ pio run                                 # == pio run -e pizero_stream_60
 pio run -t upload                       # flash (hold BOOT if upload fails)
 pio device monitor                      # serial @ 115200, prints [run] telemetry
 
-# Fallback envs (kept until 60Hz is validated on more displays — PIZERO-42):
-pio run -e pizero -t upload             # silent baseline (no audio, double-buffered)
-pio run -e pizero_stream -t upload      # off-spec 24MHz/~52Hz streaming audio
-pio run -e pizero_60hz -t upload        # 60Hz video-only test (no audio)
-
-# Stage-0 encode benchmark (PIZERO-36):
-pio run -e pizero_bench -t upload && pio device monitor   # prints [bench] ns/encode
+# Fallback for a display that rejects 60 Hz (kept until PIZERO-99 proves 60 Hz
+# widely): the same machine on the older off-spec 24 MHz / ~52 Hz timing.
+pio run -e pizero_stream -t upload
 ```
 
 Upload puts the RP2350 into BOOTSEL automatically via `picotool`; if it won't,
@@ -37,25 +33,31 @@ hold the **BOOT** button while plugging USB-C, then re-run upload.
 
 We define **one env per configuration**. Do **not** toggle features with one-off
 `-D` flags passed through the `PLATFORMIO_BUILD_FLAGS` env var — see the cache
-trap in §4. Add a new `extends = env:pizero` env instead.
+trap in §4. Add a new env that extends `pizero_base` (or `env:pizero_stream`)
+instead. `pizero_base` holds the settings every firmware env shares; it is not
+buildable on its own.
 
 | Env | Extends | Adds | Framebuffer | Audio | RAM |
 |-----|---------|------|-------------|-------|-----|
-| **`pizero`** | — | (base) | double-buffered, tear-free | **off (silent)** | ~94.4% |
-| **`pizero_audio`** | `pizero` | `-DHDMI_DATA_ISLAND` | single-buffered | bank audio (legacy 77-line) | ~92.5% |
-| **`pizero_stream`** | `pizero_audio` | `-DHDMI_STREAM_AUDIO` | single-buffered | **streaming audio (current; warble-fixed)** | ~70% |
-| `pizero_stream_synth` | `pizero_stream` | `-DHDMI_AUDIO_SYNTH` | single-buffered | 440 Hz test tone (transport test) | ~70% |
-| **`pizero_stream_60`** | `pizero_stream` | `-DHDMI_60HZ` | single-buffered | **streaming audio @ true 640x480p60 + USB (PIZERO-45)** | ~70% |
-| `pizero_hotplug` | `pizero_stream_60` | `-DUSB_HOTPLUG_RECOVER` | single-buffered | product build + USB hot-replug recovery (PIZERO-51) | ~71% |
-| **`pizero_60hz`** | `pizero` | `-DHDMI_60HZ_TEST` | double-buffered | none (test) | ~96.8% |
-| `pizero_bench` / `pizero_wdtest` / `pizero_wavmeas` / `pizero_stream_std` / `pizero_stream_lpf` | various | (diagnostics) | — | — | — |
-| `waveshare_demo` | — | (stock USB demo) | — | — | — |
+| **`pizero_stream_60`** | `pizero_stream` | `-DHDMI_60HZ -DGIME_TIMER -DGIME_PALETTE` | single-buffered | **THE PRODUCT: streaming audio @ true 640x480p60 + USB (PIZERO-45)** | ~75% |
+| **`pizero_stream`** | `pizero_base` | `-DHDMI_DATA_ISLAND -DHDMI_STREAM_AUDIO` | single-buffered | streaming audio at the older ~52 Hz timing: the fallback | ~75% |
+| `pizero_hotplug` | `pizero_stream_60` | `-DUSB_HOTPLUG_RECOVER` | single-buffered | product + USB hot-replug recovery (PIZERO-51) | ~75% |
+| `pizero_stream_synth` | `pizero_stream` | `-DHDMI_AUDIO_SYNTH` | single-buffered | 440 Hz test tone: tests the HDMI sound path alone (PIZERO-99) | ~75% |
+| `pizero_stream_std` | `pizero_stream` | `-DHDMI_STD_TIMING` | single-buffered | standard blanking timing, no USB host (PIZERO-99/120) | ~75% |
+| `pizero_stream_lpf` | `pizero_stream` | `-DAUDIO_OUTPUT_LPF` | single-buffered | TV-bandwidth output filter on (PIZERO-41) | ~75% |
+| `pizero_wdtest` | `pizero_stream` | `-DWATCHDOG_SELFTEST` | single-buffered | wedges core 0 to prove watchdog recovery (PIZERO-33) | ~75% |
+| `pizero_wavmeas` | `pizero_base` | `-DAUDIO_WAV_DUMP` | double-buffered | no HDMI audio: dumps the emulator's sound as WAV over USB (PIZERO-41) | ~99% |
+| `waveshare_demo` | — | (stock USB demo) | — | Waveshare's USB device_info demo, for USB triage (PIZERO-11/51) | ~6% |
 
-**`pizero_stream_60` is the committed `default_envs` (PIZERO-45)** — true
-640×480p60 + streaming HDMI audio + USB, HW-confirmed. `pizero` (silent baseline),
-`pizero_stream` (off-spec 24 MHz/~52 Hz audio) and `pizero_60hz` (60 Hz video-only
-test) are KEPT as fallbacks until 60 Hz is validated across more displays, then the
-off-spec envs retire (PIZERO-42). See [`hdmi-audio-notes.md`](hdmi-audio-notes.md)
+PIZERO-150 retired `pizero` and `pizero_60hz` (silent, double-buffered, ~99%
+RAM, no use as a fallback for a machine with sound) and the finished
+`pizero_audio` (legacy bank audio) and `pizero_bench` (PIZERO-36). Their flags
+still exist in the source; an env is only a preset, so any can be recreated.
+
+**`pizero_stream_60` is the committed `default_envs` (PIZERO-45)**: true
+640×480p60 + streaming HDMI audio + USB, HW-confirmed. `pizero_stream` (off-spec
+24 MHz/~52 Hz audio) is kept as the fallback until 60 Hz is validated across more
+displays (PIZERO-99). See [`hdmi-audio-notes.md`](hdmi-audio-notes.md)
 for the audio engineering notes. The remaining envs are diagnostics —
 see the comments by each `[env:…]` in `platformio.ini`.
 
@@ -83,7 +85,7 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 ### Core
 | Flag | Effect | Set by |
 |------|--------|--------|
-| `HDMI_DATA_ISLAND` | Master enable: HDMI data-island path — AVI + Audio InfoFrame + ACR in vblank, live audio sample packets on active lines; single-buffers the framebuffer. **Off = silent.** | `pizero_audio` |
+| `HDMI_DATA_ISLAND` | Master enable: HDMI data-island path — AVI + Audio InfoFrame + ACR in vblank, live audio sample packets on active lines; single-buffers the framebuffer. **Off = silent.** | `pizero_stream` |
 
 ### Audio test / diagnostic (layer on top of `HDMI_DATA_ISLAND`)
 | Flag | Effect |
@@ -91,7 +93,7 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 | `HDMI_AUDIO_SYNTH` | Replace the CoCo audio source with a mathematically clean **440 Hz sine** fed straight into the islands. A pure sine has ~no harmonics, so any roughness heard is the **transport**, not the emulator/resampler. Primary signal for the PIZERO-35 warble work. |
 | `HDMI_AUDIO_SWAPTEST` | M0 diagnostic: per-line `read_addr` ping-pong of the vblank island buffers (bypasses the live-audio path). |
 | `HDMI_AUDIO_STATIC` | Static test tone planted in the vblank islands (M4 step). |
-| `HDMI_ENCODE_BENCH` | **(PIZERO-36)** One-shot micro-benchmark at boot: times one RAM-resident per-line audio-island encode and prints `[bench] … ns/encode` + the IRQ-window budget. Go/no-go for in-IRQ encoding. Set by `pizero_bench`. |
+| `HDMI_ENCODE_BENCH` | **(PIZERO-36)** One-shot micro-benchmark at boot: times one RAM-resident per-line audio-island encode and prints `[bench] … ns/encode` + the IRQ-window budget. Go/no-go for in-IRQ encoding. No env since PIZERO-150 (was `pizero_bench`); add one to rerun it. |
 | `HDMI_STREAM_AUDIO` | **(PIZERO-38, CURRENT)** Streaming per-active-line delivery — one metered island/line in the core-1 IRQ (rotating pool + 16.16 sample meter). **This is the warble fix**; it's the recommended audio path (`pizero_stream`). Unset = the legacy bursty 77-line bank path. |
 | `HDMI_EVEN_AUDIO` | **Abandoned (PIZERO-34).** Even delivery via vblank back-porch islands — **breaks video sync on the dev sink**. Kept off behind the flag; do not enable. |
 | `HDMI_ACR_CTS=<n>` | ACR CTS value (default 25176). **Monitor-dependent** (PIZERO-32); inert on sinks that ignore ACR (like the dev monitor). See hdmi-audio-notes.md. |
@@ -140,7 +142,7 @@ void DVI_DI_RAMFUNC dvi_di_encode_header(...) { ... }
 The linker maps `.time_critical*` into RAM. **Verify** placement (don't assume):
 ```bash
 NM=~/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-nm
-$NM .pio/build/pizero_audio/firmware.elf | grep dvi_di_encode_header
+$NM .pio/build/pizero_stream_60/firmware.elf | grep dvi_di_encode_header
 # RAM symbol  -> 2000xxxx   |   flash symbol -> 1001xxxx  (a *_veneer in flash is fine)
 ```
 (The C++ libdvi files get the real macro via other includes and *do* land in RAM,
@@ -171,10 +173,10 @@ in editor — they are **not** real build errors (the actual `pio run` is clean)
 
 ## 5. Verifying a build
 
-- **Size:** the link report prints `RAM: … %`. Measured 2026-08-17: audio envs
-  (`pizero_stream`, `pizero_stream_60`) **70.4%**; silent double-buffered envs
-  (`pizero`, `pizero_60hz`) **96.8%** — the latter have only ~17 KB spare, so
-  adding buffers there can overflow. Check it.
+- **Size:** the link report prints `RAM: … %`. Measured 2026-09-27: the audio
+  envs (`pizero_stream_60`, `pizero_stream` and the diagnostics built on them)
+  **~75%**. `pizero_wavmeas` is double-buffered at **~99%** with ~5 KB spare, so
+  a new static buffer can overflow it; build it too when adding RAM. Check it.
 - **Serial telemetry:** `pio device monitor` (115200). The running emulator prints
   `[run] fps cpu render blit aud …` — confirm `fps≈52`, frame time under budget.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.

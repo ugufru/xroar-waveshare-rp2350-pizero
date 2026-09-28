@@ -148,7 +148,8 @@ needs 25.175 MHz → 251.75 MHz sysclk, long assumed to conflict with USB.
 5.25, /6 = 42, /12 = 21, /96 = 2.625 — all representable in the PIO 16.8 divider),
 so it gets a clean 48 MHz USB bit clock. HW-confirmed: **60 Hz locks on the
 monitor, the USB keyboard enumerates, and game speed is now correct** (NTSC is
-59.92 Hz; at 52 Hz everything ran ~13 % slow). Build: `env:pizero_60hz`.
+59.92 Hz; at 52 Hz everything ran ~13 % slow). Build: `env:pizero_60hz` (retired
+in PIZERO-150; the flag `HDMI_60HZ_TEST` remains).
 
 **Audio at 60 Hz** then fits at the same 252 MHz without a bigger overclock: a
 standard 800-total line split as `h_fp=8 / h_sync=96 / h_bp=56 / h_active=640`
