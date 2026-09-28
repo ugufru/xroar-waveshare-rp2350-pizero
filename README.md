@@ -115,6 +115,7 @@ same HDMI cable**. Only joystick input remains open.
    deletes. The numeric keypad types its characters. The CoCo has no
    `{ } | ~` or backtick, so those keys do nothing. Shift with a letter is
    still the CoCo's other case, and Shift alone is still SHIFT, for games.
+   Held keys auto-repeat (`key_repeat` in [`SETTINGS.md`](SETTINGS.md)).
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).

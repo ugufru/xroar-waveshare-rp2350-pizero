@@ -59,7 +59,10 @@ run_skips_autorun = on
 serial_keyboard   = on
 joystick_swap     = off
 font              = 6847t2
-lowercase         = off
+lowercase         = on
+key_repeat        = on
+key_repeat_delay  = 500
+key_repeat_rate   = 10
 ```
 
 That file sets everything to its default, so it behaves exactly like having
@@ -78,7 +81,10 @@ no file at all. Change the lines you care about and delete the rest.
 | `serial_keyboard` | `on` / `off` | `on` | Whether characters sent over the USB serial port are typed into the CoCo. |
 | `joystick_swap` | `on` / `off` | `off` | Which USB gamepad stick is which CoCo joystick. `off`: the pad's left stick (and D-pad) is the right joystick, `JOYSTK(0)` and `JOYSTK(1)`, the one most games read, and the right stick is the left joystick. `on` swaps them, fire buttons included: the right stick steers `JOYSTK(0)`/`(1)` and the left-hand buttons (L1, square) fire it. Handy in a game's own settings file. |
 | `font` | `classic` / `6847t1` / `6847t2` | `6847t2` | The text font. `classic` is the original CoCo 1 and 2 chip: lower case shows as inverse capitals, `^` as an up arrow and `_` as a left arrow. `6847t1` is the later CoCo 2B chip: the same, until a program turns on true lower case with `POKE 65314,16`, which also shows `{ \| } ~` (BASIC switches it off again at the prompt and on `PRINT`; see `lowercase`). `6847t2` is ours: the 6847T1 with a real caret for `^` and a real underscore for `_`. Inverse text in programs looks the same in all three. |
-| `lowercase` | `on` / `off` | `off` | With the `6847t2` font, shows true lower case and `{ \| } ~` all the time. Color BASIC keeps switching the 6847T1's lower case off (at the prompt and on every `PRINT`), so `POKE 65314,16` alone rarely lasts; this holds it on. With it on, Caps Lock types real lower case at the prompt. The cost: programs that draw inverse text show it as lower case instead, so turn it on for your own BASIC work, or per game. No effect with the other fonts. |
+| `lowercase` | `on` / `off` | `on` | With the `6847t2` font, shows true lower case and `{ \| } ~` all the time. Color BASIC keeps switching the 6847T1's lower case off (at the prompt and on every `PRINT`), so `POKE 65314,16` alone rarely lasts; this holds it on, and Caps Lock types real lower case at the prompt. The cost: programs that draw inverse text show it as lower case instead; put `lowercase = off` in such a game's own settings file. No effect with the other fonts. |
+| `key_repeat` | `on` / `off` | `on` | Auto-repeat for a held USB key, which Color BASIC does not do itself. The newest key held repeats; BREAK never does. Games that read held keys directly may see a key flicker; put `key_repeat = off` in such a game's own settings file. |
+| `key_repeat_delay` | `100`-`2000` | `500` | Milliseconds a key is held before it starts repeating. |
+| `key_repeat_rate` | `1`-`30` | `10` | Repeats a second. Above 12 it is held to 12, so BASIC sees every press. |
 | `color_NAME` | `#RRGGBB` | the 6847's | Overrides one palette color. See below. |
 
 Names and values are not case-sensitive, so `VOLUME = 12` works too. A `#`

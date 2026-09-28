@@ -299,8 +299,20 @@ static void hid_keys_present(uint8_t mods) {
     for (int i = 0; i < n; i++) coco_machine_press_key_src(COCO_KEYS_USB, keys[i]);
 }
 
+static uint8_t g_hid_mods = 0;               // the last report's modifiers
+
+// PIZERO-167: once a frame while the machine runs: auto-repeat the newest
+// held USB key (key_translate.h kt_repeat), per the key_repeat settings.
+static void hid_key_repeat(void) {
+    if (kt_repeat(&g_kt, g_frame_count, g_settings.key_repeat,
+                  kt_repeat_delay_frames(g_settings.key_repeat_delay),
+                  kt_repeat_period_frames(g_settings.key_repeat_rate)))
+        hid_keys_present(g_hid_mods);
+}
+
 static void hid_keyboard_apply(const uint8_t *report) {
     uint8_t mods = report[0];
+    g_hid_mods = mods;
     const uint8_t *codes = &report[2];
 
     // PIZERO-152: before the machine runs, a key only dismisses a boot page;
@@ -834,7 +846,7 @@ static void settings_apply(void) {
     coco_machine_set_lowercase(st->lowercase);
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s colors_overridden=%04x\r\n",
+                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
@@ -842,6 +854,8 @@ static void settings_apply(void) {
                   st->joystick_swap ? "on" : "off",
                   st->font == FONT_CLASSIC ? "classic" : st->font == FONT_6847T1 ? "6847t1" : "6847t2",
                   st->lowercase ? "on" : "off",
+                  st->key_repeat ? "on" : "off", (unsigned)st->key_repeat_delay,
+                  (unsigned)st->key_repeat_rate,
                   (unsigned)st->color_set);
 }
 
@@ -1626,6 +1640,7 @@ void loop() {
     bin_settle_tick();
     wd_phase(WP_KBD);
     pump_keyboard();
+    hid_key_repeat();                  // PIZERO-167
     a = micros();
     wd_phase(WP_EMU);
     coco_machine_run_cycles(CYCLES_PER_FRAME);

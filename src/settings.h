@@ -18,6 +18,9 @@
 //   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
 //   font              = classic | 6847t1 | 6847t2   text font set (6847t2 default)
 //   lowercase         = on | off              6847t2: true lower case always
+//   key_repeat        = on | off              USB keyboard auto-repeat
+//   key_repeat_delay  = 100-2000              milliseconds before it starts
+//   key_repeat_rate   = 1-30                  repeats a second (12 at most in effect)
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -55,6 +58,9 @@ struct coco_settings {
     bool    joystick_swap;            // PIZERO-160: pad sticks to the other ports
     uint8_t font;                     // PIZERO-166: FONT_*
     bool    lowercase;                // PIZERO-166: 6847t2 holds true lower case on
+    bool    key_repeat;               // PIZERO-167: USB keyboard auto-repeat
+    uint16_t key_repeat_delay;        // ms
+    uint8_t key_repeat_rate;          // per second
     uint16_t color[16];               // RGB565 overrides, by palette index
     uint16_t color_set;               // bit i: color[i] overrides the default
 };
@@ -75,6 +81,10 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->run_skips_autorun = true;
     s->serial_keyboard = true;
     s->font = FONT_6847T2;
+    s->lowercase = true;              // improvements are on by default
+    s->key_repeat = true;
+    s->key_repeat_delay = 500;
+    s->key_repeat_rate = 10;
 }
 
 // Parse results. SET_OK covers blank and comment lines too.
@@ -162,6 +172,16 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     else if (!strcmp(name, "serial_keyboard"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->serial_keyboard = b; }
     else if (!strcmp(name, "joystick_swap"))     { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_swap = b; }
     else if (!strcmp(name, "lowercase"))         { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->lowercase = b; }
+    else if (!strcmp(name, "key_repeat"))        { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->key_repeat = b; }
+    else if (!strcmp(name, "key_repeat_delay")) {
+        char *end; long n = strtol(v, &end, 10);
+        if (*end || n < 100 || n > 2000) return SET_BAD_VALUE;
+        s->key_repeat_delay = (uint16_t)n;
+    } else if (!strcmp(name, "key_repeat_rate")) {
+        char *end; long n = strtol(v, &end, 10);
+        if (*end || n < 1 || n > 30) return SET_BAD_VALUE;
+        s->key_repeat_rate = (uint8_t)n;
+    }
     else if (!strcmp(name, "volume")) {
         char *end; long n = strtol(v, &end, 10);
         if (*end || n < 0 || n > 15) return SET_BAD_VALUE;
@@ -226,6 +246,9 @@ static inline int settings_template(char *out, size_t n) {
         "joystick_swap = %s\n"
         "font = %s\n"
         "lowercase = %s\n"
+        "key_repeat = %s\n"
+        "key_repeat_delay = %u\n"
+        "key_repeat_rate = %u\n"
         "# color_green = #00FF00\n"
         "# color_dark_green = #006500\n",
         d.sn76489 ? "on" : "off", d.volume,
@@ -234,7 +257,8 @@ static inline int settings_template(char *out, size_t n) {
         d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off",
         d.joystick_swap ? "on" : "off",
         d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
-        d.lowercase ? "on" : "off");
+        d.lowercase ? "on" : "off", d.key_repeat ? "on" : "off",
+        (unsigned)d.key_repeat_delay, (unsigned)d.key_repeat_rate);
     return (k < 0) ? 0 : (k >= (int)n ? (int)n - 1 : k);
 }
 

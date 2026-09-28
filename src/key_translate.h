@@ -123,10 +123,15 @@ static inline bool kt_translate(uint8_t hid, bool shift, uint8_t *dscan, uint8_t
 // The keys held on the USB keyboard, each with the CoCo key it chose when it
 // went down (so its release lifts the same key even if Shift changed since).
 #define KT_HELD_MAX 6
-struct kt_held { uint8_t hid, dscan, shift; };
+struct kt_held { uint8_t hid, dscan, shift; uint16_t seq; };
 struct kt_state {
     struct kt_held h[KT_HELD_MAX];
     uint8_t n;                          // in press order: h[n-1] is the newest
+    uint16_t seq;                       // counts presses, so a re-press is new
+    // PIZERO-167 auto-repeat of the newest key (kt_repeat).
+    uint16_t rep_seq;                   // the press being repeated
+    uint32_t rep_t0;                    // the frame it went down
+    bool     rep_gap;                   // released for now, to be pressed again
 };
 
 static inline void kt_init(struct kt_state *st) { memset(st, 0, sizeof *st); }
@@ -149,7 +154,7 @@ static inline void kt_update(struct kt_state *st, uint8_t mods, const uint8_t co
         bool known = false;
         for (uint8_t j = 0; j < st->n; j++) if (st->h[j].hid == hid) known = true;
         if (known) continue;
-        struct kt_held e = { hid, K_INVALID, KT_SHIFT_KEEP };
+        struct kt_held e = { hid, K_INVALID, KT_SHIFT_KEEP, ++st->seq };
         if (!kt_translate(hid, shift, &e.dscan, &e.shift)) e.dscan = K_INVALID;
         st->h[st->n++] = e;
     }
@@ -162,7 +167,7 @@ static inline void kt_resync(struct kt_state *st, const uint8_t codes[6]) {
     st->n = 0;
     for (int i = 0; i < 6 && st->n < KT_HELD_MAX; i++)
         if (codes[i]) {
-            struct kt_held e = { codes[i], K_INVALID, KT_SHIFT_KEEP };
+            struct kt_held e = { codes[i], K_INVALID, KT_SHIFT_KEEP, ++st->seq };
             st->h[st->n++] = e;
         }
 }
@@ -175,12 +180,51 @@ static inline int kt_keys(const struct kt_state *st, uint8_t mods, uint8_t *out)
     uint8_t force = KT_SHIFT_KEEP;
     for (uint8_t i = 0; i < st->n; i++) {
         if (st->h[i].dscan == K_INVALID) continue;
+        if (st->rep_gap && i == st->n - 1) continue;      // auto-repeat's gap
         out[n++] = st->h[i].dscan;
         if (st->h[i].shift != KT_SHIFT_KEEP) force = st->h[i].shift;
     }
     bool shift = force == KT_SHIFT_KEEP ? (mods & 0x22) != 0 : force == KT_SHIFT_ON;
     if (shift) out[n++] = K_SHIFT;
     return n;
+}
+
+// PIZERO-167: auto-repeat. Color BASIC on a CoCo 1/2 does not repeat a held
+// key, so the newest held key is released and pressed again on a timer:
+// after `delay` frames, a KT_REPEAT_GAP-frame release every `period` frames,
+// which BASIC sees as a new press each time. BREAK never repeats. Called once
+// a frame; returns true when the keys to hold changed (redraw with kt_keys).
+#define KT_REPEAT_GAP     2    // frames released per repeat
+#define KT_REPEAT_MIN     5    // shortest period: BASIC must see each press
+
+static inline bool kt_repeat(struct kt_state *st, uint32_t frame, bool on,
+                             uint32_t delay, uint32_t period) {
+    bool was = st->rep_gap;
+    const struct kt_held *k = st->n ? &st->h[st->n - 1] : 0;
+    if (!on || !k || k->dscan == K_INVALID || k->dscan == K_BREAK) {
+        st->rep_gap = false;
+        st->rep_seq = k ? k->seq : 0;
+        st->rep_t0 = frame;
+        return was != st->rep_gap;
+    }
+    if (k->seq != st->rep_seq) {                      // a new press: start timing
+        st->rep_seq = k->seq;
+        st->rep_t0 = frame;
+        st->rep_gap = false;
+        return was;
+    }
+    if (period < KT_REPEAT_MIN) period = KT_REPEAT_MIN;
+    uint32_t t = frame - st->rep_t0;
+    st->rep_gap = t >= delay && ((t - delay) % period) < KT_REPEAT_GAP;
+    return was != st->rep_gap;
+}
+
+// Settings to frames at 60 per second: delay in milliseconds, rate in
+// repeats per second (clamped so each press lasts long enough to be seen).
+static inline uint32_t kt_repeat_delay_frames(uint16_t ms) { return (uint32_t)ms * 60u / 1000u; }
+static inline uint32_t kt_repeat_period_frames(uint8_t rate) {
+    uint32_t p = rate ? 60u / rate : 60u;
+    return p < KT_REPEAT_MIN ? KT_REPEAT_MIN : p;
 }
 
 #endif  // KEY_TRANSLATE_H

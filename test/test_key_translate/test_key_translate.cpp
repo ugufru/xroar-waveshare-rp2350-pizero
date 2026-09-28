@@ -161,6 +161,68 @@ static void test_serial_chords_cover_the_new_characters(void) {
     TEST_ASSERT_FALSE(kt_chord('{', &d, &sh));
 }
 
+// --- PIZERO-167: auto-repeat --------------------------------------------------
+
+// Hold one key from frame 0 and record, frame by frame, whether it is down.
+static void run_repeat(uint8_t hid, bool on, uint32_t delay, uint32_t period,
+                       int frames, bool *down) {
+    struct kt_state st; kt_init(&st);
+    uint8_t codes[6] = { hid, 0, 0, 0, 0, 0 }, k[8];
+    kt_update(&st, 0, codes);
+    for (int f = 0; f < frames; f++) {
+        kt_repeat(&st, (uint32_t)f, on, delay, period);
+        int n = kt_keys(&st, 0, k);
+        down[f] = n > 0;
+    }
+}
+
+static void test_repeat_waits_then_releases_and_presses_again(void) {
+    bool d[60];
+    run_repeat(H_A, true, 30, 6, 60, d);
+    for (int f = 0; f < 30; f++) TEST_ASSERT_TRUE(d[f]);          // held through the delay
+    TEST_ASSERT_FALSE(d[30]); TEST_ASSERT_FALSE(d[31]);            // the first gap
+    TEST_ASSERT_TRUE(d[32]);
+    TEST_ASSERT_FALSE(d[36]); TEST_ASSERT_FALSE(d[37]);            // one period later
+    TEST_ASSERT_TRUE(d[38]);
+}
+
+static void test_repeat_off_just_holds(void) {
+    bool d[90];
+    run_repeat(H_A, false, 30, 6, 90, d);
+    for (int f = 0; f < 90; f++) TEST_ASSERT_TRUE(d[f]);
+}
+
+static void test_break_never_repeats(void) {
+    bool d[90];
+    run_repeat(H_ESC, true, 30, 6, 90, d);
+    for (int f = 0; f < 90; f++) TEST_ASSERT_TRUE(d[f]);
+}
+
+static void test_a_new_press_restarts_the_delay(void) {
+    struct kt_state st; kt_init(&st);
+    uint8_t a[6] = { H_A, 0, 0, 0, 0, 0 }, ab[6] = { H_A, H_A + 1, 0, 0, 0, 0 }, k[8];
+    kt_update(&st, 0, a);
+    for (uint32_t f = 0; f < 40; f++) kt_repeat(&st, f, true, 30, 6);
+    kt_update(&st, 0, ab);                        // B pressed at frame 40: B repeats now
+    for (uint32_t f = 40; f < 69; f++) {
+        kt_repeat(&st, f, true, 30, 6);
+        int n = kt_keys(&st, 0, k);
+        TEST_ASSERT_TRUE(has(k, n, K_B));         // no gap until B's own delay is up
+        TEST_ASSERT_TRUE(has(k, n, K_A));         // and the older key is left alone
+    }
+    kt_repeat(&st, 70, true, 30, 6);
+    int n = kt_keys(&st, 0, k);
+    TEST_ASSERT_FALSE(has(k, n, K_B));
+    TEST_ASSERT_TRUE(has(k, n, K_A));
+}
+
+static void test_repeat_settings_to_frames(void) {
+    TEST_ASSERT_EQUAL_UINT32(30, kt_repeat_delay_frames(500));
+    TEST_ASSERT_EQUAL_UINT32(6, kt_repeat_period_frames(10));
+    TEST_ASSERT_EQUAL_UINT32(KT_REPEAT_MIN, kt_repeat_period_frames(30));  // clamped
+    TEST_ASSERT_EQUAL_UINT32(60, kt_repeat_period_frames(0));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_the_keys_the_user_found_unmapped);
@@ -175,5 +237,10 @@ int main(void) {
     RUN_TEST(test_the_newest_key_decides_shift);
     RUN_TEST(test_resync_makes_held_keys_inert);
     RUN_TEST(test_serial_chords_cover_the_new_characters);
+    RUN_TEST(test_repeat_waits_then_releases_and_presses_again);
+    RUN_TEST(test_repeat_off_just_holds);
+    RUN_TEST(test_break_never_repeats);
+    RUN_TEST(test_a_new_press_restarts_the_delay);
+    RUN_TEST(test_repeat_settings_to_frames);
     return UNITY_END();
 }
