@@ -189,6 +189,51 @@ static inline int kt_keys(const struct kt_state *st, uint8_t mods, uint8_t *out)
     return n;
 }
 
+// PIZERO-164: CoCo keys by name, as the settings file writes them
+// (pad_start = enter). A letter, a digit, one of @ : ; , - . / or a word.
+// Names are lower case (the settings parser lower-cases values). Returns
+// K_INVALID for anything else.
+static const struct { const char *name; uint8_t dscan; } KT_KEY_NAMES[] = {
+    { "up", K_UP }, { "down", K_DOWN }, { "left", K_LEFT }, { "right", K_RIGHT },
+    { "space", K_SPACE }, { "enter", K_ENTER }, { "clear", K_CLEAR },
+    { "break", K_BREAK }, { "shift", K_SHIFT },
+};
+
+static inline uint8_t kt_key_by_name(const char *v) {
+    if (v[0] && !v[1]) {
+        char c = v[0];
+        if (c >= 'a' && c <= 'z') return (uint8_t)(K_A + (c - 'a'));
+        if (c >= '0' && c <= '9') return (uint8_t)(K_0 + (c - '0'));
+        switch (c) {
+        case '@': return K_AT;    case ':': return K_COLON; case ';': return K_SEMI;
+        case ',': return K_COMMA; case '-': return K_MINUS; case '.': return K_DOT;
+        case '/': return K_SLASH;
+        default:  return K_INVALID;
+        }
+    }
+    for (unsigned i = 0; i < sizeof KT_KEY_NAMES / sizeof KT_KEY_NAMES[0]; i++)
+        if (!strcmp(v, KT_KEY_NAMES[i].name)) return KT_KEY_NAMES[i].dscan;
+    return K_INVALID;
+}
+
+// The name kt_key_by_name reads back as `dscan`, into out (at least 6 bytes).
+static inline bool kt_key_name(uint8_t dscan, char *out) {
+    for (unsigned i = 0; i < sizeof KT_KEY_NAMES / sizeof KT_KEY_NAMES[0]; i++)
+        if (KT_KEY_NAMES[i].dscan == dscan) { strcpy(out, KT_KEY_NAMES[i].name); return true; }
+    char c = 0;
+    if (dscan >= K_A && dscan <= K_Z) c = (char)('a' + (dscan - K_A));
+    else if (dscan <= K_9) c = (char)('0' + dscan);
+    else switch (dscan) {
+        case K_AT: c = '@'; break;    case K_COLON: c = ':'; break;
+        case K_SEMI: c = ';'; break;  case K_COMMA: c = ','; break;
+        case K_MINUS: c = '-'; break; case K_DOT: c = '.'; break;
+        case K_SLASH: c = '/'; break;
+        default: return false;
+    }
+    out[0] = c; out[1] = 0;
+    return true;
+}
+
 // PIZERO-167: auto-repeat. Color BASIC on a CoCo 1/2 does not repeat a held
 // key, so the newest held key is released and pressed again on a timer:
 // after `delay` frames, a KT_REPEAT_GAP-frame release every `period` frames,

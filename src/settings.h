@@ -21,6 +21,12 @@
 //   key_repeat        = on | off              USB keyboard auto-repeat
 //   key_repeat_delay  = 100-2000              milliseconds before it starts
 //   key_repeat_rate   = 1-30                  repeats a second (12 at most in effect)
+//   dpad              = joystick | arrows     D-pad moves the stick, or presses arrows
+//   pad_<button>      = fire | fire_right | none | a CoCo key   (PIZERO-164)
+//                       buttons: bottom right left top l1 r1 l2 r2
+//                                select start l3 r3 home
+//                       keys: a-z 0-9 @ : ; , - . / space enter clear
+//                             break shift up down left right
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -43,6 +49,9 @@
 #include <string.h>
 #include <strings.h>
 
+#include "gamepad.h"        // PIZERO-164: pad buttons (struct pad_map)
+#include "key_translate.h"  // PIZERO-164: CoCo key names
+
 enum { ART_OFF = 0, ART_ON = 1, ART_SWAPPED = 2 };
 // PIZERO-166: font sets, the same numbers as VDG_FONT_* in vdg_pack.h.
 enum { FONT_CLASSIC = 0, FONT_6847T1 = 1, FONT_6847T2 = 2 };
@@ -61,6 +70,7 @@ struct coco_settings {
     bool    key_repeat;               // PIZERO-167: USB keyboard auto-repeat
     uint16_t key_repeat_delay;        // ms
     uint8_t key_repeat_rate;          // per second
+    struct pad_map pad;               // PIZERO-164: what each pad button does
     uint16_t color[16];               // RGB565 overrides, by palette index
     uint16_t color_set;               // bit i: color[i] overrides the default
 };
@@ -85,6 +95,7 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->key_repeat = true;
     s->key_repeat_delay = 500;
     s->key_repeat_rate = 10;
+    pad_map_defaults(&s->pad);
 }
 
 // Parse results. SET_OK covers blank and comment lines too.
@@ -191,6 +202,21 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
         else if (!strcmp(v, "6847t1")) s->font = FONT_6847T1;
         else if (!strcmp(v, "6847t2")) s->font = FONT_6847T2;
         else return SET_BAD_VALUE;
+    } else if (!strcmp(name, "dpad")) {
+        if (!strcmp(v, "joystick"))    s->pad.dpad_arrows = false;
+        else if (!strcmp(v, "arrows")) s->pad.dpad_arrows = true;
+        else return SET_BAD_VALUE;
+    } else if (!strncmp(name, "pad_", 4)) {
+        int bi = -1;
+        for (int i = 0; i < PAD_BUTTONS; i++)
+            if (!strcmp(name + 4, PAD_BUTTON_NAMES[i])) bi = i;
+        if (bi < 0) return SET_UNKNOWN;
+        uint8_t a;
+        if (!strcmp(v, "fire"))            a = PAD_ACT_FIRE;
+        else if (!strcmp(v, "fire_right")) a = PAD_ACT_FIRE_RIGHT;
+        else if (!strcmp(v, "none"))       a = PAD_ACT_NONE;
+        else if ((a = kt_key_by_name(v)) == K_INVALID) return SET_BAD_VALUE;
+        s->pad.act[bi] = a;
     } else if (!strcmp(name, "artifact_colors")) {
         if (!strcmp(v, "on"))           s->artifact = ART_ON;
         else if (!strcmp(v, "off"))     s->artifact = ART_OFF;
@@ -259,6 +285,17 @@ static inline int settings_template(char *out, size_t n) {
         d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
         d.lowercase ? "on" : "off", d.key_repeat ? "on" : "off",
         (unsigned)d.key_repeat_delay, (unsigned)d.key_repeat_rate);
+    if (k < 0 || k >= (int)n) return (k < 0) ? 0 : (int)n - 1;
+    // PIZERO-164: the pad, every button at its default.
+    k += snprintf(out + k, n - (size_t)k, "dpad = %s\n", d.pad.dpad_arrows ? "arrows" : "joystick");
+    for (int b = 0; b < PAD_BUTTONS && k < (int)n; b++) {
+        uint8_t a = d.pad.act[b];
+        char key[16] = "none";                    // longest is "fire_right"
+        if (a == PAD_ACT_FIRE) strcpy(key, "fire");
+        else if (a == PAD_ACT_FIRE_RIGHT) strcpy(key, "fire_right");
+        else if (a < 0x40) kt_key_name(a, key);
+        k += snprintf(out + k, n - (size_t)k, "pad_%s = %s\n", PAD_BUTTON_NAMES[b], key);
+    }
     return (k < 0) ? 0 : (k >= (int)n ? (int)n - 1 : k);
 }
 

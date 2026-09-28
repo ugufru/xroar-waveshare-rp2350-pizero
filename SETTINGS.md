@@ -85,6 +85,7 @@ no file at all. Change the lines you care about and delete the rest.
 | `key_repeat` | `on` / `off` | `on` | Auto-repeat for a held USB key, which Color BASIC does not do itself. The newest key held repeats; BREAK never does. Games that read held keys directly may see a key flicker; put `key_repeat = off` in such a game's own settings file. |
 | `key_repeat_delay` | `100`-`2000` | `500` | Milliseconds a key is held before it starts repeating. |
 | `key_repeat_rate` | `1`-`30` | `10` | Repeats a second. Above 12 it is held to 12, so BASIC sees every press. |
+| `dpad`, `pad_...` | see below | | What the gamepad's D-pad and each button do. See [Gamepad buttons](#gamepad-buttons). |
 | `color_NAME` | `#RRGGBB` | the 6847's | Overrides one palette color. See below. |
 
 Names and values are not case-sensitive, so `VOLUME = 12` works too. A `#`
@@ -97,6 +98,46 @@ volume = 7   # a bit quieter
 A line that cannot be understood (an unknown name, a value out of range, a
 missing `=`) is reported on the serial console with its line number and
 skipped; the rest of the file still applies.
+
+## Gamepad buttons
+
+Every button on a USB gamepad can do something. Each has a line, named by
+where the button is (so it means the same on Xbox, PlayStation and Nintendo
+style pads), and each can be one of:
+
+- `fire`: the fire button of the joystick the left stick (and D-pad) drives;
+- `fire_right`: the fire button of the joystick the right stick drives;
+- `none`;
+- a CoCo key: a letter, a digit, one of `@ : ; , - . /`, or `space`,
+  `enter`, `clear`, `break`, `shift`, `up`, `down`, `left`, `right`.
+
+| Setting | Button | Default |
+|---|---|---|
+| `pad_bottom` | bottom face button (A on Xbox, cross on PlayStation) | `fire` |
+| `pad_right` | right face button (B, circle) | `fire` |
+| `pad_left` | left face button (X, square) | `fire_right` |
+| `pad_top` | top face button (Y, triangle) | `space` |
+| `pad_l1`, `pad_r1` | shoulder buttons | `fire_right`, `fire` |
+| `pad_l2`, `pad_r2` | triggers | `none` |
+| `pad_select`, `pad_start` | the two small buttons left and right of center | `none`, `enter` |
+| `pad_l3`, `pad_r3` | pressing a stick in | `none` |
+| `pad_home` | the center button | `none` |
+
+`dpad = arrows` makes the D-pad press the arrow keys instead of moving the
+joystick, for the many games that read the arrow keys. `dpad = joystick` is
+the default.
+
+These are most useful in a game's own settings file. A game that starts on
+the S key and moves with the arrows:
+
+```
+# /coco/bin/ORBIT.TXT
+pad_start = s
+dpad      = arrows
+```
+
+`joystick_swap` still swaps the sticks, and each stick's fire buttons go
+with it.
 
 ## Colors
 

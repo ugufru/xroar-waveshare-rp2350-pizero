@@ -1786,6 +1786,18 @@ void loop() {
     }
 }
 
+// PIZERO-164: press exactly these keys on the pad's layer of the key matrix,
+// if they differ from what it holds now (pads report ~60 times a second).
+static uint8_t g_pad_keys[PAD_KEYS_MAX];
+static uint8_t g_pad_nkeys = 0;
+static void pad_keys_present(const uint8_t *keys, uint8_t n) {
+    if (n == g_pad_nkeys && (n == 0 || !memcmp(keys, g_pad_keys, n))) return;
+    coco_machine_release_all_keys_src(COCO_KEYS_PAD);
+    for (uint8_t i = 0; i < n; i++) coco_machine_press_key_src(COCO_KEYS_PAD, keys[i]);
+    if (n) memcpy(g_pad_keys, keys, n);
+    g_pad_nkeys = n;
+}
+
 // PIZERO-13: the bound gamepad (0 = none), and the pad identity of each
 // device address, so no pad's reports reach the keyboard. A pad binds on the
 // first interface whose report its decoder accepts: the GameSir identities
@@ -1857,6 +1869,7 @@ void tuh_hid_umount_cb(uint8_t daddr, uint8_t idx) {
     if (g_pad_daddr && daddr == g_pad_daddr && idx == g_pad_idx) {
         g_pad_daddr = 0;
         coco_machine_release_all_joysticks();
+        pad_keys_present(nullptr, 0);             // PIZERO-164: and its keys
     }
 }
 
@@ -1869,9 +1882,9 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
     // is kept off the keyboard path: its 64-byte reports would type junk.
     if (pad_addr(daddr)) {
         bool mine = g_pad_daddr && daddr == g_pad_daddr && idx == g_pad_idx;
-        struct pad_state ps;
+        struct pad_out ps;
         if ((mine || !g_pad_daddr) &&
-            pad_decode(g_pad_kind_of[daddr], report, len, &ps)) {
+            pad_read(g_pad_kind_of[daddr], report, len, &g_settings.pad, &ps)) {
             if (!mine) {                       // first decodable report: bind
                 g_pad_daddr = daddr;
                 g_pad_idx = idx;
@@ -1885,6 +1898,9 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
                 coco_machine_set_joystick_axis(p ^ sw, 1, ps.axis[p][1]);
                 coco_machine_set_joystick_fire(p ^ sw, ps.fire[p]);
             }
+            // PIZERO-164: the keys the pad's buttons are mapped to, on the
+            // pad's own layer of the key matrix; redrawn only on a change.
+            pad_keys_present(ps.keys, ps.nkeys);
             g_pad_decoded++;
             g_pad_x = ps.axis[sw][0];                  // what CoCo port 0 now holds
             g_pad_y = ps.axis[sw][1];

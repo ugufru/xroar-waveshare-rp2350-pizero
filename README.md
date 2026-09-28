@@ -102,7 +102,10 @@ same HDMI cable**. Only joystick input remains open.
    PIZERO-159.) The left stick or D-pad is the right joystick, the one nearly all
    software reads; the right stick is the left joystick. The bottom or right
    face button, or R1, is the right fire button; the left face button or L1 is
-   the left one. `PRINT JOYSTK(0)` reads 0-63. Tested with a GameSir
+   the left one. Start is ENTER and the top face button SPACE, and every
+   other button, and the D-pad, can be set to any CoCo key, per game too
+   (`pad_start = s`, `dpad = arrows`: see [`SETTINGS.md`](SETTINGS.md)).
+   `PRINT JOYSTK(0)` reads 0-63. Tested with a GameSir
    Tegenaria Lite in Android mode (hold Home + A), and in its automatic mode;
    its Switch mode (Home + Y) sends nothing and does not work. A pad plugged
    in after power-on is not seen yet (PIZERO-51). How USB input got here, and

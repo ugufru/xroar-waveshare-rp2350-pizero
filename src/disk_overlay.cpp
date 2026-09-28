@@ -194,7 +194,7 @@ static void toggle_drive(int d) {
 static void edit_file(const uint8_t codes[6]) {
     int i = g_ovk.sel;
     if (i < 0 || i >= OVL_NFILES) return;
-    static char gen[512];
+    static char gen[1024];                   // PIZERO-164: the pad lines made it longer
     const char *tmpl = k_files[i].tmpl;
     if (!tmpl) { settings_template(gen, sizeof gen); tmpl = gen; }
     if (text_editor_open(k_files[i].path, k_files[i].name, tmpl))

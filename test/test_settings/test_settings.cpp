@@ -57,6 +57,16 @@ static void test_every_setting(void) {
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("key_repeat_delay = 50"));
     TEST_ASSERT_EQUAL_INT(SET_OK, line("key_repeat_rate = 5")); TEST_ASSERT_EQUAL_UINT8(5, s.key_repeat_rate);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("key_repeat_rate = 0"));
+    // PIZERO-164: pad buttons and the D-pad.
+    TEST_ASSERT_EQUAL_UINT8(K_ENTER, s.pad.act[PAD_B_START]);          // default
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("pad_start = S"));      TEST_ASSERT_EQUAL_UINT8(K_S, s.pad.act[PAD_B_START]);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("pad_l2 = fire"));      TEST_ASSERT_EQUAL_UINT8(PAD_ACT_FIRE, s.pad.act[PAD_B_L2]);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("pad_select = break")); TEST_ASSERT_EQUAL_UINT8(K_BREAK, s.pad.act[PAD_B_SELECT]);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("pad_top = none"));     TEST_ASSERT_EQUAL_UINT8(PAD_ACT_NONE, s.pad.act[PAD_B_TOP]);
+    TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("pad_start = tab"));
+    TEST_ASSERT_EQUAL_INT(SET_UNKNOWN, line("pad_turbo = fire"));
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("dpad = arrows"));      TEST_ASSERT_TRUE(s.pad.dpad_arrows);
+    TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("dpad = mouse"));
     TEST_ASSERT_EQUAL_INT(SET_OK, line("color_green = #1ED01E"));
     TEST_ASSERT_EQUAL_UINT16(0x0001, s.color_set);
     TEST_ASSERT_EQUAL_HEX16(settings_rgb565(0x1ED01E), s.color[0]);
@@ -113,7 +123,7 @@ static void test_rgb565_rounding(void) {
 static void test_the_template_parses_back_to_the_defaults(void) {
     // The editor offers this when there is no file; saving it unchanged
     // must leave every setting exactly at its default, with no errors.
-    char tmpl[512];
+    char tmpl[1024];                                  // the overlay's buffer size
     int n = settings_template(tmpl, sizeof tmpl);
     TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof tmpl);
     settings_defaults(&s);
