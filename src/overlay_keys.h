@@ -33,6 +33,7 @@
 #define HK_0      0x27
 #define HK_ENTER  0x28
 #define HK_ESC    0x29
+#define HK_TAB    0x2B
 #define HK_F9     0x42
 #define HK_F10    0x43
 #define HK_F11    0x44
@@ -54,10 +55,12 @@
 #define OVL_TITLE_BIN    "< PROGRAMS >"
 #define OVL_TITLE_CART   "< CARTRIDGES >"
 #define OVL_TITLE_FILES  "< FILES >"          // PIZERO-146: text files to edit
-#define OVL_LEGEND_DSK   "0-3 DRIVE  ENTER BOOT  <> TYPE"
-#define OVL_LEGEND_BIN   "ENTER RUN  <> TYPE  ESC EXIT"
-#define OVL_LEGEND_CART  "ENTER START  <> TYPE  ESC EXIT"
-#define OVL_LEGEND_FILES "ENTER EDIT  <> TYPE  ESC EXIT"
+// PIZERO-154: the F keys switch lists now, so '<> TYPE' made way for Tab.
+#define OVL_LEGEND_DSK   "0-3 DRIVE  ENTER BOOT  TAB SET"
+#define OVL_LEGEND_BIN   "ENTER RUN  TAB SETTINGS"
+#define OVL_LEGEND_CART  "ENTER START  TAB SETTINGS"
+#define OVL_LEGEND_FILES "ENTER EDIT  ESC EXIT"
+#define OVL_NO_SETTINGS  "THAT NAME CANNOT HAVE SETTINGS"
 #define OVL_EMPTY_DSK    "NO DISK IMAGES FOUND. PUT .DSK FILES IN /COCO/DSK ON THE SD CARD."
 #define OVL_EMPTY_BIN    "NO PROGRAMS FOUND. PUT .BIN FILES IN /COCO/BIN ON THE SD CARD."
 #define OVL_EMPTY_CART   "NO CARTRIDGES FOUND. PUT .CCC FILES IN /COCO/CART ON THE SD CARD."
@@ -80,6 +83,7 @@ enum ovk_action {
     OVK_KIND,        // switch list: `drive` holds the direction, -1 or +1
     OVK_LAUNCH,      // ENTER: start the highlighted entry
     OVK_GOTO,        // an F key: switch to list `drive` (already set in list)
+    OVK_EDIT,        // Tab: edit the highlighted entry's settings (PIZERO-154)
 };
 
 struct ovk_result {
@@ -208,6 +212,8 @@ static inline struct ovk_result ovk_report(struct ovk_state *s,
         r.drive = ovk_newly(s, codes, HK_RIGHT) ? +1 : -1;
     } else if (ovk_newly(s, codes, HK_ENTER) || ovk_newly(s, codes, HK_KP_ENTER)) {
         if (s->n > 0) r.action = OVK_LAUNCH;
+    } else if (ovk_newly(s, codes, HK_TAB)) {
+        if (s->n > 0) r.action = OVK_EDIT;
     } else if (ovk_newly(s, codes, HK_HOME)) {
         s->sel = 0;
     } else if (ovk_newly(s, codes, HK_END)) {

@@ -242,17 +242,24 @@ extern "C" const struct dsk_catalog *coco_boot_dsk_catalog(void) {
 // Returns false (with defaults in *out) when there is no file.
 extern "C" bool coco_boot_load_settings(struct coco_settings *out) {
     settings_defaults(out);
+    return coco_boot_apply_settings_file("0:/coco/settings.txt", out);
+}
+
+// PIZERO-154: apply one settings-format file on top of *out, as it stands:
+// settings.txt over the defaults, or a game's NAME.TXT over settings.txt.
+// Returns false when there is no such file (and *out is unchanged).
+extern "C" bool coco_boot_apply_settings_file(const char *path, struct coco_settings *out) {
     FIL f;
-    if (f_open(&f, "0:/coco/settings.txt", FA_READ) != FR_OK) return false;
+    if (f_open(&f, path, FA_READ) != FR_OK) return false;
     char line[96], name[32];
     int n = 0;
     while (f_gets(line, sizeof line, &f)) {
         n++;
         name[0] = '\0';
         int r = settings_parse_line(out, line, name, sizeof name);
-        if (r == SET_UNKNOWN)   Serial.printf("[settings] line %d: unknown setting '%s', ignored\r\n", n, name);
-        if (r == SET_BAD_VALUE) Serial.printf("[settings] line %d: bad value for '%s', ignored\r\n", n, name);
-        if (r == SET_SYNTAX)    Serial.printf("[settings] line %d: expected 'name = value', ignored\r\n", n);
+        if (r == SET_UNKNOWN)   Serial.printf("[settings] %s line %d: unknown setting '%s', ignored\r\n", path, n, name);
+        if (r == SET_BAD_VALUE) Serial.printf("[settings] %s line %d: bad value for '%s', ignored\r\n", path, n, name);
+        if (r == SET_SYNTAX)    Serial.printf("[settings] %s line %d: expected 'name = value', ignored\r\n", path, n);
     }
     f_close(&f);
     return true;

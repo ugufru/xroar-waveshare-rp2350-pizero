@@ -19,4 +19,15 @@
     "# @DIRECT ORBIT.BIN\n" \
     "# RUN\"HELLO\"\n"
 
+// PIZERO-154: a game's own settings file (NAME.TXT beside it). All comments,
+// so saving it unchanged changes nothing.
+#define GAME_TEMPLATE \
+    "# SETTINGS FOR THIS GAME ONLY.\n" \
+    "# THEY OVERRIDE SETTINGS.TXT\n" \
+    "# WHILE IT RUNS. SAME NAMES:\n" \
+    "#\n" \
+    "# artifact_colors = swapped\n" \
+    "# volume = 8\n" \
+    "# color_green = #1ED01E\n"
+
 #endif  // FILE_TEMPLATES_H

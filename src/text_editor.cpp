@@ -23,7 +23,7 @@ static struct text_edit *g_t;            // on the heap only while editing
 static struct tek_state g_k;
 static text_editor_present_fn g_present;
 static text_editor_saved_fn g_saved;
-static char g_path[64];
+static char g_path[96];               // a game's NAME.TXT can be ~80 (PIZERO-154)
 static char g_title[CARD_COLS + 1];
 static char g_status[CARD_COLS + 1];
 static bool g_dirty_draw;

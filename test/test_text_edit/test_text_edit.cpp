@@ -184,7 +184,7 @@ static void test_held_key_is_not_retyped_by_the_next_report(void) {
 static void test_editor_words_fit_and_print(void) {
     const char *all[] = { TEK_HINT, TEK_MSG_SAVED, TEK_MSG_FAILED, TEK_MSG_WARN,
                           TEK_MSG_FULL, TEK_MSG_NEW, TEK_MSG_NOMEM,
-                          TEK_MSG_APPLIED, TEK_MSG_NEXT };
+                          TEK_MSG_APPLIED, TEK_MSG_NEXT, TEK_MSG_GAME };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++) {
         TEST_ASSERT_TRUE_MESSAGE(strlen(all[i]) <= CARD_COLS, all[i]);
         for (const char *p = all[i]; *p; p++)
@@ -192,10 +192,7 @@ static void test_editor_words_fit_and_print(void) {
     }
 }
 
-static void test_autorun_template_is_all_comments_that_fit(void) {
-    // Saved unchanged, the template must do nothing at the next power-on:
-    // every line a comment. And every line fits the screen.
-    const char *p = AUTORUN_TEMPLATE;
+static void all_comments_that_fit(const char *p) {
     int lines = 0;
     while (*p) {
         const char *nl = strchr(p, '\n');
@@ -207,6 +204,16 @@ static void test_autorun_template_is_all_comments_that_fit(void) {
         p = nl + 1;
     }
     TEST_ASSERT_TRUE(lines > 5);
+}
+
+static void test_autorun_template_is_all_comments_that_fit(void) {
+    // Saved unchanged, the template must do nothing at the next power-on:
+    // every line a comment. And every line fits the screen.
+    all_comments_that_fit(AUTORUN_TEMPLATE);
+}
+
+static void test_game_template_is_all_comments_that_fit(void) {
+    all_comments_that_fit(GAME_TEMPLATE);             // PIZERO-154
 }
 
 int main(void) {
@@ -224,5 +231,6 @@ int main(void) {
     RUN_TEST(test_held_key_is_not_retyped_by_the_next_report);
     RUN_TEST(test_editor_words_fit_and_print);
     RUN_TEST(test_autorun_template_is_all_comments_that_fit);
+    RUN_TEST(test_game_template_is_all_comments_that_fit);
     return UNITY_END();
 }

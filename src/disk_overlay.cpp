@@ -201,6 +201,19 @@ static void edit_file(const uint8_t codes[6]) {
         text_editor_hold(codes);            // the ENTER that opened it is not typed
 }
 
+// PIZERO-154: Tab on a disk, program or cartridge edits its own settings
+// file, NAME.TXT beside it, from a template of commented examples if new.
+static void edit_game_settings(const uint8_t codes[6]) {
+    if (g_kind == OVL_FILES) return;
+    const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+    char game[DSK_NAME_MAX + 16], path[DSK_NAME_MAX + 16];
+    if (!dsk_cat_path(cat, g_ovk.sel, game, sizeof game)) return;
+    if (!settings_game_path(game, path, sizeof path)) { set_status(OVL_NO_SETTINGS); return; }
+    const char *slash = strrchr(path, '/');
+    if (text_editor_open(path, slash ? slash + 1 : path, GAME_TEMPLATE))
+        text_editor_hold(codes);            // the Tab that opened it is not typed
+}
+
 // Returns true when the launch was accepted and the overlay has closed.
 static bool launch(void) {
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
@@ -258,6 +271,7 @@ bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool
         open_now();
         break;
     case OVK_GOTO:   go_to_list(r.drive); break;
+    case OVK_EDIT:   edit_game_settings(codes); break;
     case OVK_CLOSE:  Serial.print("[overlay] close\r\n"); break;
     case OVK_MOVED:  legend(); break;
     case OVK_DRIVE:  toggle_drive(r.drive); break;

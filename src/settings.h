@@ -172,6 +172,25 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     return SET_OK;
 }
 
+// PIZERO-154: a game's own settings file: the game's path with its extension
+// replaced by .TXT, beside it ('0:/coco/bin/ORBIT.BIN' -> '0:/coco/bin/ORBIT.TXT').
+// Refused (false) for a name that would be the machine's own settings.txt or
+// autorun.txt, for a path with no extension, or if it does not fit.
+static inline bool settings_game_path(const char *game, char *out, size_t n) {
+    const char *slash = strrchr(game, '/');
+    const char *base = slash ? slash + 1 : game;
+    const char *dot = strrchr(base, '.');
+    if (!dot || dot == base) return false;
+    size_t stem = (size_t)(dot - base);
+    if ((stem == 8 && !strncasecmp(base, "settings", 8)) ||
+        (stem == 7 && !strncasecmp(base, "autorun", 7))) return false;
+    size_t keep = (size_t)(dot - game);
+    if (keep + 5 > n) return false;
+    memcpy(out, game, keep);
+    memcpy(out + keep, ".TXT", 5);
+    return true;
+}
+
 // PIZERO-146: the text the on-screen editor starts from when there is no
 // settings.txt: every setting at its default, with the colors commented out,
 // so the file documents itself. Built from settings_defaults, so it cannot

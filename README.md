@@ -79,6 +79,8 @@ same HDMI cable**. Only joystick input remains open.
      hold it). **ENTER** restarts with it in drive 0 and runs its first program.
    - *Programs:* **ENTER** restarts and runs the `.bin` directly.
    - *Cartridges:* **ENTER** plugs it in and restarts into it.
+   - **TAB** on a disk, program or cartridge edits its own settings file
+     (see item 6).
 
    Disks are read-only for now.
 5. **Three-voice sound: an SN76489 at `$FF41`.** The sound chip from the Games
@@ -91,7 +93,9 @@ same HDMI cable**. Only joystick input remains open.
    the CoCo 3-style extras, RUN and serial typing behavior, and any of the
    palette colors, one `name = value` per line. Edit it on the CoCo Zero
    itself (**F11** for the files list, ENTER on `SETTINGS.TXT`, Ctrl-S to
-   save and apply) or on a computer. See [`SETTINGS.md`](SETTINGS.md).
+   save and apply) or on a computer. A game can have its own: `ORBIT.TXT`
+   beside `ORBIT.BIN`, `ORBIT.CCC` or `ORBIT.DSK` overrides settings.txt while
+   that game runs (**TAB** on it in its list). See [`SETTINGS.md`](SETTINGS.md).
 
 Full build details, the env/flag matrix, and toolchain notes are in
 [`docs/BUILD.md`](docs/BUILD.md).

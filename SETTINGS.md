@@ -21,6 +21,31 @@ is fine: settings are not case-sensitive. The save writes a new copy and
 then swaps it in, so pulling the power mid-save cannot leave a broken file.
 You can also edit the file on a computer.
 
+## Settings for one game
+
+A disk, program or cartridge can have its own settings file: the same name
+with `.TXT` in place of its extension, in the same folder. `ORBIT.TXT` goes
+with `/coco/bin/ORBIT.BIN`, `/coco/cart/ORBIT.CCC` or `/coco/dsk/ORBIT.DSK`.
+It uses the same names as `settings.txt`, `color_` lines included, and only
+needs the lines that differ:
+
+```
+# /coco/bin/ORBIT.TXT
+artifact_colors = swapped
+color_green     = #1ED01E
+```
+
+When the game starts, from its list or from `autorun.txt`, the machine loads
+`settings.txt` and then the game's file on top. Launching something without
+a file of its own goes back to plain `settings.txt`.
+
+To make or change one on the CoCo Zero, open the game's list (**F9**
+programs, **F10** cartridges, **F12** disks), highlight it and press **TAB**.
+A new file starts as a few commented examples. Ctrl-S saves; if that game is
+the one running, the change applies straight away, otherwise it applies the
+next time the game starts. A game called `SETTINGS` or `AUTORUN` cannot have
+one, since its file would be one of the machine's own.
+
 ## Example
 
 ```

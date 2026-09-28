@@ -112,6 +112,22 @@ static void test_the_template_parses_back_to_the_defaults(void) {
     TEST_ASSERT_EQUAL_MEMORY(&d, &s, sizeof s);
 }
 
+static void test_game_settings_path(void) {
+    char p[96];
+    TEST_ASSERT_TRUE(settings_game_path("0:/coco/bin/ORBIT.BIN", p, sizeof p));
+    TEST_ASSERT_EQUAL_STRING("0:/coco/bin/ORBIT.TXT", p);
+    TEST_ASSERT_TRUE(settings_game_path("0:/coco/cart/Popcorn (1981).ccc", p, sizeof p));
+    TEST_ASSERT_EQUAL_STRING("0:/coco/cart/Popcorn (1981).TXT", p);
+    TEST_ASSERT_TRUE(settings_game_path("0:/coco/dsk/space.warp.dsk", p, sizeof p));
+    TEST_ASSERT_EQUAL_STRING("0:/coco/dsk/space.warp.TXT", p);   // last dot only
+    // The machine's own files are never a game's settings file.
+    TEST_ASSERT_FALSE(settings_game_path("0:/coco/SETTINGS.DSK", p, sizeof p));
+    TEST_ASSERT_FALSE(settings_game_path("0:/coco/autorun.bin", p, sizeof p));
+    TEST_ASSERT_TRUE(settings_game_path("0:/coco/SETTINGSX.DSK", p, sizeof p));  // only exact
+    TEST_ASSERT_FALSE(settings_game_path("0:/coco/NOEXT", p, sizeof p));
+    TEST_ASSERT_FALSE(settings_game_path("0:/coco/dsk/ORBIT.BIN", p, 12));      // too long
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_defaults_match_todays_behaviour);
@@ -120,5 +136,6 @@ int main(void) {
     RUN_TEST(test_bad_lines_are_reported_and_change_nothing);
     RUN_TEST(test_rgb565_rounding);
     RUN_TEST(test_the_template_parses_back_to_the_defaults);
+    RUN_TEST(test_game_settings_path);
     return UNITY_END();
 }

@@ -888,17 +888,41 @@ static inline void wd_heartbeat(uint32_t h) { watchdog_hw->scratch[2] = h; }
 //   detail   the evidence, so the next person does not have to guess
 static void settings_apply(void);
 
-// PIZERO-146/147: after the editor saves a file. settings.txt is re-read
-// and applied at once, so a change needs no reboot. autorun.txt only matters
-// at power-on: running it now would restart the machine unannounced.
+// PIZERO-154: the game running now (its .bin, .ccc or .dsk path; "" for
+// none) and its own settings file, if it has one. Every launch starts again
+// from settings.txt, so one game's settings never leak into the next.
+static char g_game_path[96];
+static char g_game_settings[96];
+
+static void settings_for_game(const char *game) {
+    coco_boot_load_settings(&g_settings);
+    g_game_path[0] = g_game_settings[0] = '\0';
+    if (game && game[0] && strlen(game) < sizeof g_game_path) {
+        strcpy(g_game_path, game);
+        char p[96];
+        if (settings_game_path(game, p, sizeof p) &&
+            coco_boot_apply_settings_file(p, &g_settings)) {
+            strcpy(g_game_settings, p);
+            Serial.printf("[settings] with %s\r\n", p);
+        }
+    }
+    settings_apply();
+}
+
+// PIZERO-146/147/154: after the editor saves a file. settings.txt, or the
+// running game's own file, is re-read and applied at once, so a change needs
+// no reboot. autorun.txt only matters at power-on: running it now would
+// restart the machine unannounced. Another game's file waits for that game.
 static const char *on_file_saved(const char *path) {
-    if (strcmp(path, "0:/coco/settings.txt") == 0) {
-        coco_boot_load_settings(&g_settings);
-        settings_apply();
+    char mine[96];
+    bool running_game = g_game_path[0] && settings_game_path(g_game_path, mine, sizeof mine)
+                        && strcasecmp(path, mine) == 0;
+    if (strcmp(path, "0:/coco/settings.txt") == 0 || running_game) {
+        settings_for_game(g_game_path);
         return TEK_MSG_APPLIED;
     }
     if (strcmp(path, "0:/coco/autorun.txt") == 0) return TEK_MSG_NEXT;
-    return nullptr;
+    return TEK_MSG_GAME;
 }
 
 // PIZERO-145: put every setting into effect. Called at boot and again
@@ -1090,6 +1114,7 @@ static void perform_launch(void) {
         char rom[80];
         if (!coco_boot_resolve_cart("disk11.rom", rom, sizeof rom) || !install_cart_file(rom)) return;
         coco_machine_install_disk_reader(coco_boot_disk_read_sector);
+        settings_for_game(g_launch_path);         // PIZERO-154
         coco_machine_cold_reset();
         if (disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
             g_autotype = g_launch_cmd;
@@ -1102,11 +1127,13 @@ static void perform_launch(void) {
     }
     case CAT_BIN:
         coco_machine_install_cart(nullptr);
+        settings_for_game(g_launch_path);         // PIZERO-154
         coco_machine_cold_reset();
         g_bin_settle = 30;                        // as at power-on: PIA DDRs settle
         break;
     case CAT_CART:
         if (!install_cart_file(g_launch_path)) return;
+        settings_for_game(g_launch_path);         // PIZERO-154
         coco_machine_cold_reset();
         break;
     }
@@ -1521,12 +1548,18 @@ void setup() {
         if (!miss_kind) { miss_kind = kind; miss_name = name; }
     };
 
+    // PIZERO-154: what autorun.txt starts, for its own settings file: the
+    // @DIRECT program, else a named cartridge, else the named disk.
+    static char game[96];
+    game[0] = '\0';
+
     bool direct = false;
     if (have_autorun && autorun.direct_name[0]) {
         direct = coco_boot_resolve("bin", autorun.direct_name, path, sizeof(path));
         if (!direct) missing("@DIRECT", autorun.direct_name);
     }
     if (direct) {
+        snprintf(game, sizeof game, "%s", path);
         for (int i = 0; i < 30; i++) coco_machine_run_cycles(15000);  // let PIA DDRs settle
         uint16_t entry = 0;
         if (coco_boot_parse_loadm(path, loadm_write_cb, nullptr, &entry)) {
@@ -1540,6 +1573,7 @@ void setup() {
             cart_ok = coco_boot_resolve_cart(autorun.cart_name, cart_path, sizeof cart_path)
                       && install_cart_file(cart_path);
             if (!cart_ok) missing("@CART", autorun.cart_name);
+            else snprintf(game, sizeof game, "%s", cart_path);
         }
         if (!cart_ok)
             cart_ok = coco_boot_resolve_cart("disk11.rom", cart_path, sizeof cart_path)
@@ -1550,6 +1584,7 @@ void setup() {
                 named_dsk = coco_boot_resolve("dsk", autorun.disk_name, path, sizeof(path))
                             && coco_boot_attach_dsk(path);
                 if (!named_dsk) missing("@DISK", autorun.disk_name);
+                else if (!game[0]) snprintf(game, sizeof game, "%s", path);
                 dsk = named_dsk;
             }
             if (!dsk)
@@ -1572,6 +1607,7 @@ void setup() {
             }
         }
     }
+    if (game[0]) settings_for_game(game);    // PIZERO-154: layered on settings.txt
     if (miss_kind) {
         char body[160];
         snprintf(body, sizeof body, MSG_ARMISS_BODY, miss_kind, miss_name);

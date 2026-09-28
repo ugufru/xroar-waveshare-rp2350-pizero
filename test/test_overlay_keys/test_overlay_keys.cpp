@@ -208,6 +208,7 @@ static void test_overlay_words_fit_and_print(void) {
     TEST_ASSERT_TRUE(strlen(skipped) <= CARD_COLS);
     const char *all[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART, OVL_TITLE_FILES,
                           OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES,
+                          OVL_NO_SETTINGS,
                           OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART, skipped };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++)
         for (const char *p = all[i]; *p; p++)
@@ -294,6 +295,17 @@ static void test_closed_f_keys_are_claimed_other_keys_are_not(void) {
     TEST_ASSERT_FALSE(s.open);
 }
 
+static void test_tab_edits_the_highlighted_entry(void) {
+    open_with(3);
+    TEST_ASSERT_EQUAL_UINT8(OVK_EDIT, press(HK_TAB).action);
+    TEST_ASSERT_TRUE(s.open);
+    none();
+    open_with(0);                                        // nothing to edit
+    TEST_ASSERT_EQUAL_UINT8(OVK_NONE, press(HK_TAB).action);
+    none(); press(HK_ESC); none();
+    TEST_ASSERT_FALSE(press(HK_TAB).swallow);            // closed: Tab is the CoCo's
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_closed_passes_everything_but_f12);
@@ -315,5 +327,6 @@ int main(void) {
     RUN_TEST(test_f_keys_go_straight_to_a_list);
     RUN_TEST(test_another_f_key_switches_list);
     RUN_TEST(test_closed_f_keys_are_claimed_other_keys_are_not);
+    RUN_TEST(test_tab_edits_the_highlighted_entry);
     return UNITY_END();
 }

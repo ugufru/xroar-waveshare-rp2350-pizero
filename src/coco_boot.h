@@ -64,6 +64,8 @@ bool coco_boot_load_file(const char *path, uint8_t *buf, uint32_t len);        /
 // reported on serial and never fail the boot.
 struct coco_settings;
 bool coco_boot_load_settings(struct coco_settings *out);
+// PIZERO-154: apply a settings-format file on top of *out (a game's NAME.TXT).
+bool coco_boot_apply_settings_file(const char *path, struct coco_settings *out);
 
 // PIZERO-146: text files for the on-screen editor. save_text writes PATH.tmp
 // and swaps it in, so a power cut never leaves a half-written file;
