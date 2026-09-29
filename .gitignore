@@ -17,3 +17,6 @@ build/
 # Camera originals. The keepers live downscaled in hardware/case/photos/;
 # 100 MB of phone PNGs does not belong in history.
 hardware/photos/
+
+# Generated at build time by scripts/fw_version.py (PIZERO-156).
+src/fw_version.h

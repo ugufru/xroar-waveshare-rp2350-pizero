@@ -24,6 +24,12 @@ typedef bool (*disk_overlay_launch_fn)(int kind, const char *path,
 
 void disk_overlay_init(disk_overlay_present_fn present, disk_overlay_launch_fn launch);
 
+// PIZERO-156: the INFO page (F1). Fill up to `max` lines of card text (at
+// most 32 characters each) and return how many. main.cpp supplies it, since
+// it knows the chip, the clock and the USB devices.
+typedef int (*disk_overlay_info_fn)(char lines[][33], int max);
+void disk_overlay_set_info(disk_overlay_info_fn fn);
+
 // Feed a HID report (modifier byte and six key codes; the text editor needs
 // Shift and Ctrl). Returns true when the report
 // belongs to the overlay and must not reach the CoCo. *closed is set when

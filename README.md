@@ -82,6 +82,10 @@ same HDMI cable**. Only joystick input remains open.
    - **TAB** on a disk, program or cartridge edits its own settings file
      (see item 6).
 
+   - *Info:* **F1** shows the firmware version and build, the chip and its
+     revision, the board's serial number, the clock, uptime, free memory and
+     USB devices. F1 or ESC closes it.
+
    Disks are read-only for now.
 5. **Three-voice sound: an SN76489 at `$FF41`.** The sound chip from the Games
    Master Cartridge (three square-wave tones, noise, 16 volume steps) is

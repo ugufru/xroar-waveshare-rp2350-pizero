@@ -197,7 +197,9 @@ static int rows_needed(const char *s, int width) {
 }
 static void test_overlay_words_fit_and_print(void) {
     const char *one_line[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART, OVL_TITLE_FILES,
-                               OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES };
+                               OVL_TITLE_INFO,
+                               OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES,
+                               OVL_LEGEND_INFO };
     for (unsigned i = 0; i < sizeof one_line / sizeof one_line[0]; i++)
         TEST_ASSERT_TRUE_MESSAGE(strlen(one_line[i]) <= CARD_COLS, one_line[i]);
     const char *wrapped[] = { OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART };
@@ -207,6 +209,7 @@ static void test_overlay_words_fit_and_print(void) {
     snprintf(skipped, sizeof skipped, OVL_SKIPPED, 128);  // worst case
     TEST_ASSERT_TRUE(strlen(skipped) <= CARD_COLS);
     const char *all[] = { OVL_TITLE_DSK, OVL_TITLE_BIN, OVL_TITLE_CART, OVL_TITLE_FILES,
+                          OVL_TITLE_INFO, OVL_LEGEND_INFO,
                           OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES,
                           OVL_NO_SETTINGS,
                           OVL_EMPTY_DSK, OVL_EMPTY_BIN, OVL_EMPTY_CART, skipped };
@@ -245,10 +248,12 @@ static void test_enter_on_an_empty_list_does_nothing(void) {
 }
 
 static void test_f_keys_go_straight_to_a_list(void) {
-    // PIZERO-153: F9 programs, F10 cartridges, F11 files, F12 disks.
-    const uint8_t key[4]  = { HK_F9, HK_F10, HK_F11, HK_F12 };
-    const int     list[4] = { OVK_LIST_BIN, OVK_LIST_CART, OVK_LIST_FILES, OVK_LIST_DSK };
-    for (int i = 0; i < 4; i++) {
+    // PIZERO-153: F9 programs, F10 cartridges, F11 files, F12 disks;
+    // PIZERO-156: F1 the INFO page.
+    const uint8_t key[5]  = { HK_F9, HK_F10, HK_F11, HK_F12, HK_F1 };
+    const int     list[5] = { OVK_LIST_BIN, OVK_LIST_CART, OVK_LIST_FILES, OVK_LIST_DSK,
+                              OVK_LIST_INFO };
+    for (int i = 0; i < 5; i++) {
         ovk_init(&s); frame = 1000;
         struct ovk_result r = press(key[i]);             // closed: opens on its list
         TEST_ASSERT_EQUAL_UINT8(OVK_OPEN, r.action);
@@ -287,7 +292,8 @@ static void test_closed_f_keys_are_claimed_other_keys_are_not(void) {
     ovk_init(&s);
     TEST_ASSERT_TRUE(press(HK_F9).swallow);               // opened
     none(); press(HK_ESC); none();                        // closed again
-    const uint8_t fkeys_not_ours[] = { 0x3A /*F1*/, 0x41 /*F8*/, 0x46 /*PrtSc*/ };
+    // F1 is ours since PIZERO-156 (the INFO page); F8 and Print Screen are not.
+    const uint8_t fkeys_not_ours[] = { 0x41 /*F8*/, 0x46 /*PrtSc*/ };
     for (unsigned i = 0; i < sizeof fkeys_not_ours; i++) {
         TEST_ASSERT_FALSE(press(fkeys_not_ours[i]).swallow);
         none();

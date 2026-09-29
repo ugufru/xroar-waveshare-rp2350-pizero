@@ -34,6 +34,7 @@
 #define HK_ENTER  0x28
 #define HK_ESC    0x29
 #define HK_TAB    0x2B
+#define HK_F1     0x3A   // PIZERO-156: the INFO page
 #define HK_F9     0x42
 #define HK_F10    0x43
 #define HK_F11    0x44
@@ -55,11 +56,13 @@
 #define OVL_TITLE_BIN    "< PROGRAMS >"
 #define OVL_TITLE_CART   "< CARTRIDGES >"
 #define OVL_TITLE_FILES  "< FILES >"          // PIZERO-146: text files to edit
+#define OVL_TITLE_INFO   "< INFO >"           // PIZERO-156: firmware and board
 // PIZERO-154: the F keys switch lists now, so '<> TYPE' made way for Tab.
 #define OVL_LEGEND_DSK   "0-3 DRIVE  ENTER BOOT  TAB SET"
 #define OVL_LEGEND_BIN   "ENTER RUN  TAB SETTINGS"
 #define OVL_LEGEND_CART  "ENTER START  TAB SETTINGS"
 #define OVL_LEGEND_FILES "ENTER EDIT  ESC EXIT"
+#define OVL_LEGEND_INFO  "F1 OR ESC TO CLOSE"
 #define OVL_NO_SETTINGS  "THAT NAME CANNOT HAVE SETTINGS"
 #define OVL_EMPTY_DSK    "NO DISK IMAGES FOUND. PUT .DSK FILES IN /COCO/DSK ON THE SD CARD."
 #define OVL_EMPTY_BIN    "NO PROGRAMS FOUND. PUT .BIN FILES IN /COCO/BIN ON THE SD CARD."
@@ -68,7 +71,8 @@
 
 // The lists, in Left/Right order. The catalogue lists share enum cat_kind's
 // numbers (disk_overlay.cpp checks).
-enum { OVK_LIST_DSK = 0, OVK_LIST_BIN = 1, OVK_LIST_CART = 2, OVK_LIST_FILES = 3 };
+enum { OVK_LIST_DSK = 0, OVK_LIST_BIN = 1, OVK_LIST_CART = 2, OVK_LIST_FILES = 3,
+       OVK_LIST_INFO = 4 };
 
 #define OVK_ROWS          14   // list rows on screen: one page
 #define OVK_REPEAT_DELAY  24   // frames (~400 ms at 60 Hz) before a held key repeats
@@ -139,6 +143,7 @@ static inline int ovk_fkey_list(uint8_t k) {
     case HK_F10: return OVK_LIST_CART;
     case HK_F11: return OVK_LIST_FILES;
     case HK_F12: return OVK_LIST_DSK;
+    case HK_F1:  return OVK_LIST_INFO;
     default:     return -1;
     }
 }

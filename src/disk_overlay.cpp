@@ -45,13 +45,15 @@
 
 // The three catalogue lists, then FILES (PIZERO-146): text files to edit.
 #define OVL_FILES  CAT_KINDS
-#define OVL_LISTS  (CAT_KINDS + 1)
+#define OVL_INFO   (CAT_KINDS + 1)      // PIZERO-156: firmware and board facts
+#define OVL_LISTS  (CAT_KINDS + 2)
 // PIZERO-153: the F keys name lists by overlay_keys.h's numbers.
 static_assert(OVK_LIST_DSK == CAT_DSK && OVK_LIST_BIN == CAT_BIN &&
-              OVK_LIST_CART == CAT_CART && OVK_LIST_FILES == OVL_FILES,
+              OVK_LIST_CART == CAT_CART && OVK_LIST_FILES == OVL_FILES &&
+              OVK_LIST_INFO == OVL_INFO,
               "overlay_keys.h list numbers must match the overlay's lists");
-static const char *const k_title[OVL_LISTS]  = { OVL_TITLE_DSK,  OVL_TITLE_BIN,  OVL_TITLE_CART,  OVL_TITLE_FILES };
-static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES };
+static const char *const k_title[OVL_LISTS]  = { OVL_TITLE_DSK,  OVL_TITLE_BIN,  OVL_TITLE_CART,  OVL_TITLE_FILES,  OVL_TITLE_INFO };
+static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN, OVL_LEGEND_CART, OVL_LEGEND_FILES, OVL_LEGEND_INFO };
 
 // The files the editor can open. Listed whether or not they exist yet: the
 // editor starts a missing one from a template (NULL: the settings template,
@@ -67,6 +69,7 @@ static const char *const k_empty[CAT_KINDS]  = { OVL_EMPTY_DSK,  OVL_EMPTY_BIN, 
 static struct ovk_state g_ovk;
 static disk_overlay_present_fn g_present;
 static disk_overlay_launch_fn  g_launch;
+static disk_overlay_info_fn    g_info;       // PIZERO-156
 static int  g_kind = CAT_DSK;   // the list on show; kept between openings
 static int  g_top;              // first visible list row
 static bool g_dirty;
@@ -96,7 +99,11 @@ static void draw(void) {
     coco_boot_card_center(0, k_title[g_kind]);
     coco_boot_card_invert_row(0);
 
-    if (g_kind == OVL_FILES) {
+    if (g_kind == OVL_INFO) {
+        char lines[CARD_ROWS - 2][CARD_COLS + 1];
+        int n = g_info ? g_info(lines, CARD_ROWS - 2) : 0;
+        for (int i = 0; i < n; i++) coco_boot_card_text(0, 1 + i, lines[i]);
+    } else if (g_kind == OVL_FILES) {
         for (int i = 0; i < OVL_NFILES; i++) {
             coco_boot_card_text(0, 1 + i, k_files[i].name);
             if (i == g_ovk.sel) coco_boot_card_invert_row(1 + i);
@@ -129,6 +136,7 @@ static void draw(void) {
 // the next key, so it cannot hide the controls for good.
 static void load_list(void) {
     if (g_kind == OVL_FILES) { ovk_set_count(&g_ovk, OVL_NFILES); legend(); return; }
+    if (g_kind == OVL_INFO)  { ovk_set_count(&g_ovk, 0); legend(); return; }
     int n = coco_boot_rescan(g_kind);
     ovk_set_count(&g_ovk, n);
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
@@ -204,7 +212,7 @@ static void edit_file(const uint8_t codes[6]) {
 // PIZERO-154: Tab on a disk, program or cartridge edits its own settings
 // file, NAME.TXT beside it, from a template of commented examples if new.
 static void edit_game_settings(const uint8_t codes[6]) {
-    if (g_kind == OVL_FILES) return;
+    if (g_kind == OVL_FILES || g_kind == OVL_INFO) return;
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     char game[DSK_NAME_MAX + 16], path[DSK_NAME_MAX + 16];
     if (!dsk_cat_path(cat, g_ovk.sel, game, sizeof game)) return;
@@ -236,6 +244,8 @@ void disk_overlay_init(disk_overlay_present_fn present, disk_overlay_launch_fn l
     g_launch = launch_fn;
     g_top = 0;
 }
+
+void disk_overlay_set_info(disk_overlay_info_fn fn) { g_info = fn; }
 
 bool disk_overlay_is_open(void) {
     return g_ovk.open;
@@ -290,5 +300,6 @@ void disk_overlay_frame(uint32_t frame) {
     if (!g_ovk.open) return;
     if (text_editor_is_open()) { text_editor_frame(frame); return; }
     if (ovk_tick(&g_ovk, frame) == OVK_MOVED) legend();
+    if (g_kind == OVL_INFO && frame % 60 == 0) g_dirty = true;   // PIZERO-156: uptime ticks
     if (g_dirty) draw();
 }
