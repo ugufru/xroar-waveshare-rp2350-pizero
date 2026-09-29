@@ -1680,6 +1680,12 @@ void loop() {
         a = b = c = micros();
         wd_phase(WP_RENDER);
         disk_overlay_frame(g_frame_count);
+        // PIZERO-165: the serial pump is paused, but a Ctrl-P waiting at the
+        // front of the queue still takes a screenshot of the list.
+        if (g_settings.serial_keyboard && Serial.available() && Serial.peek() == 0x10) {
+            Serial.read();
+            g_shot_request = true;
+        }
         d = micros();
     } else {
     if (g_launch_kind >= 0) perform_launch();     // PIZERO-81d: chosen in the overlay
