@@ -1,91 +1,83 @@
 # ROADMAP
 
 Where the RP2350-PiZero XRoar port stands and what's next. This is a navigation
-map over `issues.jsonl` — it sequences the open work and links the tickets; it
+map over `issues.jsonl`: it sequences the open work and links the tickets; it
 does **not** restate ticket detail. Authoritative status always lives in the
 ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`).
 
-_Last updated: 2026-09-28 (USB workstream refreshed after the gamepad and hub)._
+_Last updated: 2026-09-29 (documentation sweep, PIZERO-172)._
 
 ## Shipped / working (V1.0 core)
 
 The end-to-end product path is up and hardware-validated:
 
-- **Video** — libdvi/PIO DVI, 320×240 → true **640×480p60** at 252 MHz
-  (`PIZERO-45`); CoCo VDG render + blit, NTSC artifact colour (`PIZERO-43`).
-- **Audio** — streaming HDMI data-island audio, no warble (`PIZERO-35`/`38`/`39`),
-  pitch-matched at the in-spec 60 Hz clock.
-- **Storage** — microSD ROM/disk load + AUTORUN (`PIZERO-08`/`10`).
+- **Video**: libdvi/PIO DVI, 320×240 → true **640×480p60** at 252 MHz
+  (`PIZERO-45`); CoCo VDG render + blit, NTSC artifact color (`PIZERO-43`).
+  Screen fonts: the classic set, the 6847T1, and our 6847T2 by default
+  (`PIZERO-166`).
+- **Audio**: streaming HDMI data-island audio, no warble (`PIZERO-35`/`38`/`39`),
+  pitch-matched at the in-spec 60 Hz clock, and the default since `PIZERO-45`.
+  SN76489 sound chip (`PIZERO-143`).
+- **CoCo 3 extras**: the GIME palette at `$FFB0-$FFBF` (`PIZERO-85`, `55`) and
+  the GIME timer at `$FF90-$FF95` (`PIZERO-62`), both on by default.
+- **Storage**: microSD ROM/disk load + AUTORUN (`PIZERO-08`/`10`). Whole-file
+  writes exist: the settings editor saves text files and Print Screen saves
+  PNGs (`PIZERO-146`, `165`). Guest disk writes do not (see below).
+- **Overlay**: F9 to F12 open programs, cartridges, files and disks
+  (`PIZERO-81`, `114`, `115`, `153`); per-game `NAME.TXT` settings
+  (`PIZERO-154`); settings in `/coco/settings.txt`, edited on screen
+  (`PIZERO-145`, `146`; `autorun.txt` too, `147`); the pad drives the overlay (`PIZERO-169`); F1
+  opens an INFO page (`PIZERO-156`, first slice; the help reader is still open).
 - **Input**: USB keyboard (`PIZERO-11`/`12`) and USB gamepad as both CoCo
   joysticks (`PIZERO-13`, `joystick_swap` `PIZERO-160`), together through a
   simple hub (`PIZERO-54`). Straight into the board, a device must be attached
   at power-on (`PIZERO-51`). History and lessons: `docs/usb-retrospective.md`.
-- **Stability** — hardware-watchdog freeze auto-recovery + cross-reset phase
+- **Stability**: hardware-watchdog freeze auto-recovery + cross-reset phase
   log deployed (`PIZERO-33`).
-- **Compatibility** — default env `pizero_stream_60` confirmed stable across
-  multiple third-party games on hardware (user, 2026-07-19). Tracking the
-  title-by-title results in `docs/compatibility.md` (`PIZERO-52`).
-- **Docs** — README, BUILD, pipeline, hdmi-audio-notes, cpu-speed.
+- **Compatibility**: default env `pizero_stream_60` confirmed stable across
+  multiple third-party games on hardware (user, 2026-07-19). No per-title
+  record exists yet; that is `PIZERO-52` (open).
+- **Docs**: README, SETTINGS, AUTORUN, BUILD, pipeline, hdmi-audio-notes,
+  cpu-speed, kit, usb-retrospective.
 
 ## Now: Input / USB workstream (active focus)
 
 Updated 2026-09-28. Done: the gamepad (`PIZERO-13`), hub (`PIZERO-54`),
 stick swap (`PIZERO-160`), keycap keyboard and keypad (`PIZERO-163`, `49`),
 auto-repeat (`PIZERO-167`), screen glyphs (`PIZERO-162`) and the font setting
-with our 6847T2 (`PIZERO-166`). `docs/usb-retrospective.md` records how, and
-the lessons. What is left, in order:
+with our 6847T2 (`PIZERO-166`), pad buttons pressing CoCo keys (`PIZERO-164`),
+Print Screen to a PNG (`PIZERO-165`), the pad driving the overlay
+(`PIZERO-169`) and the F1 INFO page, first slice (`PIZERO-156`).
+`docs/usb-retrospective.md` records how, and the lessons. What is left, in
+order:
 
-1. **`PIZERO-164`: Pad buttons press CoCo keys** (`pad_start = ENTER`,
-   `dpad = arrows`), per game too. Reuses the key matrix's per-source layers
-   from `PIZERO-163`; starts with one button sweep on the pad.
-2. **`PIZERO-165`: Print Screen saves a PNG** to `/coco/screendumps`.
-3. **`PIZERO-51`: Hot-plug straight into the board.** The software fixes are
+1. **`PIZERO-51`: Hot-plug straight into the board.** The software fixes are
    disproved (VBUS is hardwired); needs a switched VBUS. Through a hub, a
    keyboard plugged in while running did mount, which may be enough.
-4. **`PIZERO-50`: A real CoCo joystick on the header pins.** Uses the
+2. **`PIZERO-50`: A real CoCo joystick on the header pins.** Uses the
    joystick API that `PIZERO-13` built.
-5. Lower: `PIZERO-157` (pad Switch mode), `PIZERO-158` (serial typing drops a
+3. Lower: `PIZERO-157` (pad Switch mode), `PIZERO-158` (serial typing drops a
    character), `PIZERO-159` (chained USB-C hubs).
 
-## Next: BIOS / launcher & VDG extensions
+## Next: launcher and settings follow-ups
 
-A new UX workstream — pick what to load and recolor it, all in-firmware with a
-native-CoCo look. Chain: `PIZERO-81` → `PIZERO-53` → `PIZERO-55`.
+The overlay milestone is done (see Shipped). What remains of the original
+launcher and "BIOS" chain:
 
-- **Current milestone (2026-09-26): F12 disk drives overlay.** `81a`
-  catalogue, `114` four drives, `81c` keys and pause, `81b` drawing, in that
-  build order. F12 opens it, keys 0 to 3 put the highlighted `.dsk` in that
-  drive or take it out (hot swap, no reset), ESC closes. Launching (`81d`,
-  `115`) comes after. The BOOT button joins via `PIZERO-128`. The design
-  below is the original one; the tickets hold the current decisions.
-- **`PIZERO-81` — F12 disk-image switcher** (sliced `81a`–`81d`). Ported from the
-  AMOLED picker but keyboard-driven: **F12** opens, **←/→** select, **ENTER**
-  cold-boots, **ESC** cancels. Emulation is paused while it's up; all three entry
-  types (DSK/BIN/CART). Drawn with real `font_6847t1` glyphs so it looks like the
-  machine it's running on. **Smaller than it looks** — the source-pointer blit
-  `coco_boot_blit_vdg_pizero_src` already exists at `coco_boot.h:76`. What's
-  missing is `coco_boot_enumerate`, the card renderer, and `coco_machine_reset()`
-  (AMOLED has it, this port doesn't). Sequence: `81a` catalogue → `81b` renderer
-  → `81c` keys + pause → `81d` cold-boot launch.
-- **`PIZERO-82` — Boot back into the last launched entry** (`laststate.txt`).
-  Split out of `-81` because it needs SD write (`PIZERO-64`).
-- **`PIZERO-53` — Firmware settings menu ("BIOS").** Now the *superset*, not the
-  first brick: SAM-speed cap, joystick source, audio env, built on `PIZERO-81`'s
-  overlay and state machine. Its planned `render_alpha_frame` refactor turned out
-  to be unnecessary. Settings persistence needs `PIZERO-67`.
-- **`PIZERO-55` — Programmable palette + editor + per-title `.pal` profiles.**
-  The concrete, expanded successor to `PIZERO-26`: give the classic 6847 modes a
-  GIME-style programmable palette (make the `g_vdg_rgb565_native[16]` LUT
-  writable), a BIOS editor (64-colour GIME-authentic default / full-RGB advanced),
-  and **per-title sidecar palettes** (`GAME.DSK` → `GAME.PAL`) with a per-title →
-  user-global → factory fallback chain. Depends on `PIZERO-53` for the overlay,
-  SD, and persistence.
-- **`PIZERO-57` — Loadable VDG font from SD.** Sibling to `PIZERO-55`, same
-  three-layer shape: a swappable `g_font` pointer (default = ROM `font_6847t1`), a
-  BIOS `.FNT` loader with live preview, and **per-title font sidecars** (`GAME.DSK`
-  → `GAME.FNT`, same fallback chain) — so a game can carry both its palette and
-  its font. Cleanly decoupled from the palette LUT (font swaps need no rebuild);
-  redefines the 64-glyph alpha slot. Depends on `PIZERO-53`.
+- **`PIZERO-82`: Boot back into the last launched entry** (`laststate.txt`).
+  Split out of `PIZERO-81`. Whole-file writes now exist (`coco_boot_save_text`),
+  so it no longer waits on `PIZERO-64`.
+- **`PIZERO-53`: Firmware settings menu.** Its settings half shipped as
+  `/coco/settings.txt` plus the on-screen editor (`PIZERO-145`, `146`), with no
+  settings GUI by the user's choice. Still open for what is left in the ticket.
+- **`PIZERO-55`** (done at ~80%): shipped as the GIME palette registers and the
+  `color_*` settings. Per-title palettes and a palette editor were dropped.
+- **`PIZERO-57`: Loadable VDG font from SD.** The built-in font choice shipped
+  as the `font` setting (`PIZERO-166`); loading a `.FNT` from the card is what
+  stays open.
+- Hardware checks still owed: `PIZERO-151` (each setting seen to take effect),
+  `PIZERO-155` (per-game settings for cartridges, disks, revert, autorun).
+  The BOOT button as an overlay key is `PIZERO-128` (deferred).
 
 ## Later: CoCo 3 (128 KB)
 
@@ -138,11 +130,13 @@ no transport speeds up.
 
 ## Supporting: SD write foundation
 
-Today the port **cannot write to the SD card at all** — every `f_open` in project
-code is `FA_READ` and there is no `f_write` anywhere. The FatFs stack underneath
-is fully write-capable (`FF_FS_READONLY 0`, `disk_write()` implemented), so this
-is additive firmware work, not a dependency fight. These two tickets underpin the
-filesystem layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
+The firmware writes **whole files** to the card today: the on-screen editor
+saves text through `coco_boot_save_text` (write to `.tmp`, then swap in), and
+Print Screen writes PNGs through `coco_boot_screenshot` (`PIZERO-146`, `165`).
+Both are rare, user-triggered writes, so their latency is tolerated. What does
+not exist is a write from the running guest (disk sectors, save-states), which
+must stay off the emulation hot path. These tickets underpin the filesystem
+layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
 (`PIZERO-79`).
 
 - **`PIZERO-64` — SD write foundation.** Writable-file helper layer, atomic
@@ -150,21 +144,21 @@ filesystem layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
   latency** against the frame budget. Blocks everything else here; its numbers
   are the design input to `PIZERO-65`.
 - **`PIZERO-65` — Deferred sector write-back.** The genuinely hard part, kept as
-  its own ticket so the timing risk isn't buried in the feature. Core 0 has only
-  ~31% slack at 1× (`PIZERO-48`) and SD block-erase stalls run tens-to-hundreds
-  of ms, so a synchronous write on the emulation thread would starve the audio
+  its own ticket so the timing risk isn't buried in the feature. Core 0 uses
+  ~76% of the frame at 1× (the measured frame budget noted in `platformio.ini`)
+  and SD block-erase stalls run tens-to-hundreds of ms, so a synchronous write on the emulation thread would starve the audio
   ring and drop frames. Queue + drainer, off the hot path.
 - **`PIZERO-66` (low, legacy) — FDC Write Sector → `SAVE`/`SAVEM` to `.DSK`.**
-  Peripheral polish for old images; replaces the write-protect stub at
-  `coco_machine.cpp:252-257`. **Not** the route to writable storage — that's
+  Peripheral polish for old images; replaces the FDC write-protect stub in
+  `coco_machine.cpp`. **Not** the route to writable storage; that's
   `PIZERO-71`.
-- **`PIZERO-68` (low, legacy) — DECB disk maintenance.** `DSKINI`/format,
-  multi-drive, write-protect toggle, FDC error status.
-- **`PIZERO-67` — Firmware-side persistence API.** Config + per-title
-  `.pal`/`.fnt` sidecar writes. **Closes a gap:** `PIZERO-53`/`55`/`57` all
-  assume the firmware can write to SD and none of them declared it. Much easier
-  than `PIZERO-66` on timing — BIOS saves happen with the overlay up, so a
-  synchronous write is fine and the `PIZERO-65` queue isn't needed.
+- **`PIZERO-68` (low, legacy): DECB disk maintenance.** `DSKINI`/format,
+  write-protect toggle, FDC error status. (Four drives already exist,
+  `PIZERO-114`.)
+- **`PIZERO-67`: Firmware-side persistence API.** Settings and per-game files
+  are already written by the editor (`PIZERO-146`, `154`); what is left is any
+  further firmware state (e.g. `.fnt` choices for `PIZERO-57`). Saves happen
+  with the overlay up, so a synchronous write is fine.
 - **`PIZERO-69` — Emulator save-states.** Freeze/restore the whole machine.
   XRoar's `serialise.c` (846 lines) is already vendored and compiled in; only the
   `fs_*` primitives are no-oped (`xroar_stubs.c:21-45`), so this is ~18 one-line
@@ -179,10 +173,11 @@ direction it would be peripheral support if ever wanted.
 - **`PIZERO-41` — Source-side audio fidelity** (high): live CoCo SOUND is ~1
   semitone sharp + buzzier than desktop xroar; proven NOT HDMI-delivery →
   resampler/cycle-timing. Measure via `pizero_wavmeas`, compare rate constants.
-- **`PIZERO-40` — Make streaming audio the default**, sweep POOL depth, validate
-  budgets (folds into retiring the off-spec 52 Hz envs).
+- **`PIZERO-40`: Sweep POOL depth and validate budgets.** Streaming audio is
+  already the default (`PIZERO-45`); what is left is the sweep and retiring
+  the off-spec 52 Hz fallback.
 - **`PIZERO-32` — ACR CTS monitor compatibility** (multi-monitor; inert on the
-  dev sink but matters for sinks that honour ACR).
+  dev sink but matters for sinks that honor ACR).
 
 ## Release-readiness
 
@@ -198,7 +193,7 @@ direction it would be peripheral support if ever wanted.
 Faithful-extension and "what-if" tracks, explicitly deferred:
 
 - **`PIZERO-56` — Higher-fidelity NTSC artifacts.** The current path is a
-  deliberate 2-bits→4-colours LUT shortcut (canonical PMODE 4 look), *not*
+  deliberate 2-bits→4-colors LUT shortcut (canonical PMODE 4 look), *not*
   composite decoding — so extra CRT hues, fringing, context-dependence, and
   artifacting outside RG6 are absent by design. Options ladder from a wider
   context-keyed pattern LUT to a full composite decode; pairs with `PIZERO-55`.
@@ -209,9 +204,9 @@ Faithful-extension and "what-if" tracks, explicitly deferred:
   (PIZERO-35/45), so this is now compute + a control surface: runs on core 0
   (~3–4 ms of the ~5.3 ms/frame headroom → ~4–8 rich voices), wavetables/samples
   in 16 MB flash with an SRAM active-frame cache (PSRAM is unpopulated; SRAM is
-  **70.4% full on the default `pizero_stream_60`** — ~155 KB free — and 96.8% on the
-  double-buffered `pizero`/`pizero_60hz` fallbacks; measured 2026-08-17), guest control via bus-write interception (same trick as the
-  `PIZERO-55` palette registers). Gated on **`PIZERO-58`**.
+  **~75% full on the default `pizero_stream_60`**, measured 2026-09-27), guest
+  control via bus-write interception (same trick as the `PIZERO-55` palette
+  registers). Gated on **`PIZERO-58`**.
 - **`PIZERO-58` — Synth voice-budget bench** (pre-work for `PIZERO-17`): a
   flag-gated build that runs N dummy voices and watches the `[run]` telemetry to
   measure real cyc/sample per complexity tier, float-vs-Q15, and flash-vs-SRAM
@@ -235,28 +230,17 @@ plain CoCo2 boot is untouched.
 - **`PIZERO-61` — Pre-work: reverse-engineer Lyra's serial MIDI driver.** Nail
   the PIA lines, baud, framing, and whether Lyra bit-bangs 31250 directly or the
   box reclocks — via `analyze-rom`/`trace-calls`. Sets `PIZERO-59`'s decoder.
-- **`PIZERO-62` — GIME-compatible programmable timer.** A CoCo3-layout timer at
-  `$FF94/$FF95` (+ minimal `$FF90–$FF93` interrupt registers) reusing the
-  cart-countdown scheduler, routable to IRQ/FIRQ. Goal: run *some* unmodified
-  CoCo3 timer/music software (VDG-mode, own-handler programs) without full GIME
-  and without touching CoCo2 purity — and give the guest a programmable tick for
-  MIDI clock / sequencing. Full GIME (MMU, hi-res, 512K) stays out of scope.
+- **`PIZERO-62`** (done): the GIME-compatible timer at `$FF90-$FF95`, a
+  programmable tick for MIDI clock and sequencing. Which GIME revision's reload
+  quirk to emulate is `PIZERO-170`.
 
 ## Dependency notes
 
-- **`PIZERO-50`'s joystick-injection API is the shared root** for all joystick
-  routes: `PIZERO-13` (USB gamepad) and the header hat both build on it. Build
-  the API first regardless of which read-path ships first.
-- `PIZERO-13` (gamepad) is much easier to validate after `PIZERO-51` (hotplug);
-  `PIZERO-54` (hub) is only needed to run more than one USB device at once — none
-  of these is a hard blocker, since the keyboard already works cold-boot.
-- **`PIZERO-53` → `PIZERO-55`**: the launcher overlay (SD browse + persistence +
-  the `render_alpha_frame` refactor) must land before the palette editor and
-  per-title `.pal` profiles.
-- **`PIZERO-53`/`55`/`57` also need `PIZERO-67`** (and therefore `PIZERO-64`):
-  every one of them persists something to SD — firmware settings, `.pal`
-  sidecars, `.fnt` sidecars — and the port currently has no write path at all.
-  Their *read/render* halves are unblocked; only the **save** halves are gated.
+- **The joystick-injection API is the shared root** for all joystick routes:
+  `PIZERO-13` (USB gamepad, done) built it, and `PIZERO-50` (header pins) reuses
+  it.
+- **`PIZERO-57`'s save half** (a remembered font choice) uses the whole-file
+  write that already exists; it does not need `PIZERO-64`.
 - **Storage/filesystem chain**: `PIZERO-64` (write foundation + latency numbers)
   → `PIZERO-65` (write-back queue) → `PIZERO-70` (backend interface) →
   `PIZERO-71` (VFS) → `PIZERO-72` (hypercall ABI) → `PIZERO-73` (cart ROM) →
@@ -267,9 +251,8 @@ plain CoCo2 boot is untouched.
 - **`PIZERO-72` is the ABI freeze point.** It is the contract Bare Naked Forth and
   every later guest program bind to, so settle versioning and sync-vs-async there
   rather than discovering them in `PIZERO-74`.
-- **Address-space conflict to resolve**: `PIZERO-72`'s hypercall registers and
-  `PIZERO-62`'s GIME timer both eye the `$FF90–$FF95` block. Whichever lands
-  first must not squat the range by accident.
+- **Address space**: `PIZERO-62`'s GIME timer now occupies `$FF90-$FF95`, so
+  `PIZERO-72`'s hypercall registers must go elsewhere.
 - `PIZERO-67` and `PIZERO-69` need only `PIZERO-64`, so either can be pulled
   forward. If `PIZERO-65` has landed, `PIZERO-69` must flush its queue before
   snapshotting or the restored state disagrees with the card.
@@ -280,9 +263,6 @@ plain CoCo2 boot is untouched.
   `PIZERO-59` reuses the cycle-accurate PIA-tap from the audio work (`PIZERO-18`)
   and `PIZERO-60`'s host path composes with `PIZERO-54` (hub). The synth is the
   only heavy CPU/RAM consumer; the MIDI layer is near-free when idle.
-- **`PIZERO-55` supersedes `PIZERO-26`** (now closed) — `PIZERO-26`'s palette-
-  register idea became Part 1 of `PIZERO-55`, and its guest-side `$FFB0–$FFBF`
-  bus-write interception (live recolor via CoCo-3-aware pokes) is `PIZERO-55`
-  Part 4. All palette work is tracked in `PIZERO-55`.
+- **`PIZERO-55` superseded `PIZERO-26`**; both are closed.
 - `PIZERO-40`/`PIZERO-42` should be coordinated (both retire diagnostic/off-spec
   envs).

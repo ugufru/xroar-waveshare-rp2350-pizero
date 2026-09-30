@@ -1,12 +1,12 @@
-# `autorun.txt` — Boot configuration for CoCo content
+# `autorun.txt`: boot configuration for CoCo content
 
 When the device boots, it mounts the microSD card and looks for files in
 `/coco/`. If `/coco/autorun.txt` exists, it controls what happens after
 the system ROMs load: which disk to mount, which cart to install, and
 what gets typed into Disk BASIC (or whether to bypass BASIC entirely).
 
-This is the implemented behavior — the parser lives in `src/coco_boot.cpp`
-(`coco_boot_load_autorun`). A few future directives are noted as such below.
+This is the implemented behavior. The parser lives in `src/coco_boot.cpp`
+(`coco_boot_load_autorun`) and the boot steps in `src/main.cpp`.
 
 ## Editing it on the CoCo Zero
 
@@ -27,7 +27,7 @@ The loader accepts both a flat layout and an organized one:
 
 ```
 /coco/
-  roms/                      (optional — for organization)
+  roms/                      (optional, for organization)
     bas12.rom                ← Color BASIC          (REQUIRED, BYO)
     extbas11.rom             ← Extended Color BASIC (recommended, BYO)
     disk11.rom               ← Disk BASIC cart      (recommended, BYO)
@@ -37,21 +37,24 @@ The loader accepts both a flat layout and an organized one:
     *.dsk                    ← JVC disk images
   bin/                       (optional)
     *.bin                    ← DECB load-module binaries (direct-load)
+  screendumps/               ← made by the machine; Print Screen saves PNGs here
   autorun.txt                ← optional, boot configuration (this spec)
   settings.txt               ← optional, settings (see SETTINGS.md)
-  README.txt                 ← optional, ships with the device
 ```
+
+Any game can also have its own settings file beside it: `ORBIT.TXT` next to
+`ORBIT.BIN`, `ORBIT.CCC` or `ORBIT.DSK` (see `SETTINGS.md`).
 
 Note the folder names: ROMs go in `roms/` (plural); disk images in
 `dsk/` and direct-load binaries in `bin/` (singular).
 
 The three system ROMs (`bas12.rom`, `extbas11.rom`, `disk11.rom`) are
 non-redistributable Microsoft/Tandy property. They are **not** shipped
-with the device — users must supply their own copies, dumped from
+with the device. Users must supply their own copies, dumped from
 hardware they own.
 
 Only `bas12.rom` is strictly required. Without `extbas11.rom` the device
-boots plain Color BASIC (no Extended BASIC, and no Disk BASIC — the
+boots plain Color BASIC (no Extended BASIC, and no Disk BASIC, since the
 `disk11.rom` cart is built on top of Extended). For the disk/autorun
 flows described here, supply all three.
 
@@ -68,15 +71,17 @@ So users who don't want subdirectories can just dump everything into
 ## File format
 
 Plain text, UTF-8 / ASCII, one entry per line. CRLF and LF line endings
-both accepted. Maximum 256 characters per line; maximum 4 KB total.
+both accepted. Lines are read up to about 256 characters; the typed lines
+together can total 1 KB, and anything past that is dropped (with a note on
+serial).
 
 Three kinds of lines:
 
 | Starts with    | Meaning                                                |
 |----------------|--------------------------------------------------------|
-| `#` or blank   | Comment / skipped                                      |
-| `@`            | Directive — controls boot configuration                |
-| anything else  | Autotype — typed verbatim into Disk BASIC after warmup |
+| `#` or blank   | Comment, skipped                                       |
+| `@`            | Directive: controls boot configuration                 |
+| anything else  | Autotype: typed verbatim into Disk BASIC after warmup  |
 
 Lines are processed in order. Directives can appear anywhere; they
 take effect during boot setup (before BASIC starts typing).
@@ -116,11 +121,12 @@ power-on.
 ### `@CART filename.ccc` (or `.rom`)
 Install this cartridge ROM at `$C000`. Searched in `/coco/cart/` first, then
 `/coco/roms/`, then `/coco/`; a name without an extension gets `.CCC` in
-`/coco/cart/` (PIZERO-136). Cartridges may be 2, 4, 8 or 16 KB (PIZERO-139).
+`/coco/cart/` (PIZERO-136). Cartridges may be 2, 4, 8 or 16 KB (PIZERO-139),
+or a larger bank-switched image.
 
 If absent: the loader installs `/coco/roms/disk11.rom` (or `/coco/disk11.rom`)
-if found. If neither exists, the cart is empty (Color BASIC only — no
-disk operations).
+if found. If neither exists, the cart slot is empty: Color BASIC only, no
+disk operations, no disk mounted, and no typed lines.
 
 ### `@DIRECT filename.bin`
 **Bypass Disk BASIC entirely.** Load this DECB-format `.bin` file
@@ -136,16 +142,20 @@ Use this for memory-hungry standalone demos like `INVADERS.BIN`,
 ## Autotype lines
 
 Any line not starting with `#` or `@` is treated as a sequence of
-characters to type into Disk BASIC after the OK prompt is reached
-(~12 seconds after reset).
+characters to type into Disk BASIC once the OK prompt is up (about
+3 seconds after the machine starts).
+
+Typed lines need a cartridge: Disk BASIC (`disk11.rom`) or the one `@CART`
+names. With no cartridge at all, nothing is typed.
 
 The lines are typed in order with a `<Enter>` between them. They
-appear character-by-character on the panel just as if a user were
+appear character-by-character on the screen just as if a user were
 typing on a real CoCo keyboard.
 
 Special handling:
 
-- Lines are typed verbatim — case-sensitive characters go through as-is
+- Letters are typed in the CoCo's normal upper case, whatever case they are
+  written in; other characters go through as written
 - The autotype state machine handles the CoCo's polled-keyboard
   cadence; users don't need to worry about timing
 - Quotation marks in BASIC commands work normally: `LOADM"FOO":EXEC`
@@ -184,124 +194,114 @@ LOADM"DEFENDER":EXEC
 
 ```
 @DISK utilities.dsk
+DIR
 ```
 
-No autotype lines → land at the OK prompt with `utilities.dsk` ready
-for the user to explore (`DIR`, `LOADM"name"`, etc.).
+`@DISK` alone would run the disk's first program, so give it a typed line
+of your own. Here `DIR` lists the disk and leaves you at the OK prompt with
+`utilities.dsk` ready to explore.
 
 ### 5. No autorun.txt at all
 
 Loader installs `disk11.rom` if present, mounts first `.dsk` if
-present, lands at the OK prompt. Same as today's default behavior.
+present, lands at the OK prompt. This is the default behavior.
 
 ### 6. Multi-command autotype with a comment
 
 ```
-# Set screen colour then run a BASIC program
+# Set screen color then run a BASIC program
 CLS 4
 RUN"MYPROG"
 ```
 
 ---
 
-## Edge cases & open decisions
+## Edge cases
 
-These are points to nail down before implementation.
+What the firmware does in the cases that are easy to wonder about.
 
 ### A. `@DIRECT` together with autotype lines
 
-If `autorun.txt` has both `@DIRECT foo.bin` and BASIC autotype lines,
-which wins?
+`@DIRECT` wins. The typed lines are ignored, without a warning, since BASIC
+never runs to receive them. If the `@DIRECT` file is missing, boot carries on
+normally and the typed lines are typed.
 
-**Proposed:** `@DIRECT` wins — autotype lines are ignored and a warning
-is serial-printed at boot. Don't want to silently drop user content.
+### B. A name that is not on the card
 
-### B. Missing disk specified by `@DISK`
+Reported on screen and on serial, and boot continues without that line
+(PIZERO-152). See [Directives](#directives).
 
-If `@DISK foo.dsk` is in `autorun.txt` but `foo.dsk` isn't on the card,
-what happens?
+### C. Paths
 
-**Proposed:** halt with an error displayed on the panel. Fail loud so
-the user fixes their config rather than getting confusing fallback
-behavior.
-
-### C. Path security
-
-**Proposed:** directive arguments must be bare filenames — no `..`, no
-`/`. The resolver always looks under `/coco/` and its typed subdirs.
-Means `autorun.txt` can't reference arbitrary paths on the SD.
+Names are not restricted. The name is added to the end of the `/coco/`
+search paths, so it is always looked up under `/coco/` (for example
+`@DISK games/arcade.dsk` finds `/coco/dsk/games/arcade.dsk` or
+`/coco/games/arcade.dsk`). Names can be up to 63 characters.
 
 ### D. Case sensitivity
 
-**Proposed:** match FAT16/FAT32 conventions — case-insensitive. Editing
-the SD from any host OS works regardless of casing.
+None. Names match whatever their case on the card, as FAT does, so editing
+the card from any computer works.
 
-### E. Anti-kiosk interrupt
+### E. Getting out of an autorun
 
-When `autorun.txt` is doing a kiosk-style autorun, can the user abort
-to drop into BASIC and explore?
+**Press the RUN button** (PIZERO-116). RUN restarts the board, and a restart
+that came from RUN ignores `autorun.txt` entirely: the machine comes up
+exactly as it would with no `autorun.txt` on the card (Disk BASIC, the
+default disk mounted, nothing typed). When there was an `autorun.txt` to
+skip, an "AUTORUN SKIPPED" page shows for a couple of seconds first.
+Switching the power off and on runs AUTORUN again as usual. In the printed
+case, RUN is reached through the vent slots with a thin wire.
 
-**Implemented (PIZERO-116): press the RUN button.** RUN restarts the
-board, and a restart that came from RUN ignores `autorun.txt` entirely:
-the machine comes up exactly as it would with no `autorun.txt` on the
-card (Disk BASIC, the default disk mounted, nothing typed). When there was
-an `autorun.txt` to skip, an "AUTORUN SKIPPED" page shows for a couple of
-seconds first. Switching the power off and on runs AUTORUN again as usual.
-In the printed case, RUN is reached through the vent slots with a thin
-wire.
+To make RUN behave like power-on instead, autorun included, put
+`run_skips_autorun = off` in `settings.txt`.
 
-**Earlier proposal, not implemented:**
+### F. Missing SD card or ROMs
 
-- During the ~12 s boot warmup (before autotype starts), holding any
-  key over the serial console aborts the autorun and lands at OK prompt.
-  (This board is headless/HDMI-only; the serial-console abort is the
-  supported path.)
+The machine says so on screen (PIZERO-92), in pages titled:
 
-### F. Missing required ROMs
+- **NO SD CARD**: the card is missing or cannot be read.
+- **NO ROM FOUND**: the card reads, but `bas12.rom` is not on it.
+- **ROM FILE IS DAMAGED**: `bas12.rom` is there but not 8192 bytes.
+- **COLOR BASIC ONLY**: `extbas11.rom` is missing. This one is not fatal: it
+  shows for a few seconds and the machine starts in plain Color BASIC.
 
-If `bas12.rom` or `extbas11.rom` aren't on the SD, the emulator can't
-start at all. Today this fails silently (panel stays at its boot
-test pattern).
+The pages name `/coco/roms/` as the place for the ROMs; flat `/coco/` works
+too.
 
-**Proposed:** show a friendly panel message like
+### G. More than one disk
 
-```
-SD CARD MISSING ROMS
+**F12** puts disks in drives 0 to 3 after boot. `@DISK` sets drive 0 only;
+there is no directive for the other drives.
 
-Please copy bas12.rom + extbas11.rom into:
-  /coco/roms/  (or /coco/)
+### H. Cassettes and BASIC listings
 
-See https://github.com/ugufru/xroar-waveshare-rp2350-pizero for setup.
-```
+Not supported: there is no `@CAS` or `@BAS`. An unknown directive is
+reported on serial and skipped.
 
-Modest implementation work (needs a minimal text drawer that doesn't
-need xroar running), big UX improvement for a public release.
+### I. The game's own settings
 
-### G. Multi-disk support
-
-Today only drive 0 is implemented in the FDC. Demos requiring two
-disks won't work. `autorun.txt` could later support `@DISK0` and `@DISK1`
-when the FDC is extended; for v1 just `@DISK` (= drive 0) is fine.
-
-### H. Cassette / BAS sources
-
-Future directives — not in v1:
-
-- `@CAS filename.cas` — attach a cassette image
-- `@BAS filename.bas` — auto-type a plaintext BASIC program
+A game started by `autorun.txt` gets its own settings file, just as when it
+is started from its list: the `@DIRECT` program's, else the `@CART`
+cartridge's, else the `@DISK` disk's. `ORBIT.TXT` beside `ORBIT.BIN` is
+loaded on top of `settings.txt` (see `SETTINGS.md`).
 
 ---
 
-## Boot decision tree (v1)
+## Boot decision tree
 
 ```
 Boot
  │
  ├─ Mount /coco/ from SD
- │   └─ Fail → display "INSERT SD CARD" and halt
+ │   └─ Fail → show "NO SD CARD" and stop
  │
- ├─ Load extbas11.rom + bas12.rom
- │   └─ Missing → display "ROMS NOT FOUND" help screen and halt
+ ├─ Load bas12.rom (+ extbas11.rom if present)
+ │   ├─ bas12.rom missing → show "NO ROM FOUND" and stop
+ │   ├─ bas12.rom wrong size → show "ROM FILE IS DAMAGED" and stop
+ │   └─ extbas11.rom missing → show "COLOR BASIC ONLY", carry on
+ │
+ ├─ Load /coco/settings.txt  (if present)
  │
  ├─ Parse /coco/autorun.txt  (if present)
  │   └─ Restarted by the RUN button → ignore it (show "AUTORUN SKIPPED")
@@ -311,33 +311,28 @@ Boot
  ├─ Install cart:
  │     @CART specified  → use that
  │     else             → use disk11.rom if present
+ │     neither          → no cart, no disk, nothing typed
  │
  ├─ Mount disk:
  │     @DISK specified  → use that
  │     else             → use first .dsk found alphabetically (if any)
  │
+ ├─ Apply the started game's own settings file  (if any)
+ │
  ├─ Boot emulator to Disk BASIC OK prompt
  │
- └─ Autotype lines from autorun.txt  (if any)
+ └─ Autotype lines from autorun.txt  (if any; @DISK alone runs the disk)
 ```
 
 ---
 
-## Things to ship with the SD
+## Cards handed out with a unit
 
-A "factory" SD card sold with the device (if any) would contain:
-
-```
-/coco/
-  README.txt                 ← short user guide
-  autorun.txt.example        ← commented sample, renamed to enable
-```
+A card given away with a unit (see `docs/kit.md`) holds the folder layout
+above and, optionally, `sample-sd/coco/autorun.txt` from this repository as
+`/coco/autorun.txt`: a self-running graphics demo that doubles as a display
+test.
 
 No ROMs (legal), and no demos shipping copyrighted content unless each
-demo's redistribution is confirmed.
-
-Users add their own `bas12.rom`/`extbas11.rom`/`disk11.rom`, drop in
-their content, and rename `autorun.txt.example` → `autorun.txt` to
-enable the kiosk demo.
-
-The README explains all of this in plain English.
+demo's redistribution is confirmed. Users add their own
+`bas12.rom`/`extbas11.rom`/`disk11.rom` and drop in their content.

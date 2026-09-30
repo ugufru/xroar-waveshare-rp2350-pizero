@@ -65,7 +65,7 @@ unchanged" a fact instead of a hope.
 
 The first lid would not close. It looked like the 40-pin header, so
 `head_room` went from 12 to 13 mm. It was actually the microSD card, and
-the extra millimetre bought nothing (afa4900 reverted it).
+the extra millimeter bought nothing (afa4900 reverted it).
 
 **Lesson:** find what is actually touching before changing a dimension.
 A change that does not fix the symptom is a sign the diagnosis was wrong,
@@ -132,7 +132,7 @@ by layer adhesion. Tie it into a wall wherever there is one to tie into.
 The ask was to make the microSD finger relief as tall as the plug pockets
 so the openings match. The agent got it wrong twice before it was right:
 
-1. **0f8f50c** made the relief 7.6 mm tall, centred on the card. That
+1. **0f8f50c** made the relief 7.6 mm tall, centered on the card. That
    changed the base and left the tops at different heights, which was the
    whole point of the change.
 2. **c7684c6** kept the base and lined the relief up with the HDMI pocket,

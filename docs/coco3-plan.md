@@ -17,7 +17,7 @@ A stock CoCo 3 has a 6809 (68B09E). The Hitachi 6309 was a popular owner
 upgrade, not the shipped part, so it is out of scope.
 
 A CoCo 3 at about 80% of real speed is an acceptable outcome, as long as the
-audio behaviour below real time is decided on purpose (PIZERO-135).
+audio behavior below real time is decided on purpose (PIZERO-135).
 
 ## What the research found
 
@@ -38,7 +38,7 @@ audio behaviour below real time is decided on purpose (PIZERO-135).
      **flash**, reached through veneers from the RAM-resident `mc6809_run`.
      They sit behind every CMP, SUB and 16-bit immediate.
   4. Dispatch is one large switch (`mc6809_run`, `mc6809.c:217`).
-- **No 6809 correctness test exists**, here or in upstream XRoar. Optimising a
+- **No 6809 correctness test exists**, here or in upstream XRoar. Optimizing a
   trusted core without one is the largest risk in this plan.
 - **Measurement exists:** the `[run] cpu=` serial field (`src/main.cpp`),
   read by `scripts/soak.py analyse` and archived in `docs/measurements/`.
@@ -51,7 +51,7 @@ audio behaviour below real time is decided on purpose (PIZERO-135).
   delegate) are already here, plus a `vo.h` stub. `coco3.c` (1532 lines) is
   desktop glue and gets rewritten into our machine. 1.79 MHz is simply 8
   instead of 16 ticks per access (`tcc1014.c:832`). Video arrives one scanline
-  at a time as 6-bit GIME colours, up to 640x225.
+  at a time as 6-bit GIME colors, up to 640x225.
 
 ## The four stages
 
@@ -133,5 +133,5 @@ halving them to 320 makes 80-column text unreadable.
 - The product build (`pizero_stream_60`) soaks as before: fps in band, audio
   unchanged, `cpu=` lower than today's 10.4 ms.
 - Stage 4: `coco3.rom` boots to the CoCo 3 BASIC prompt, `WIDTH 40` works, a
-  palette POKE recolours the screen, a GIME timer program runs, and the
+  palette POKE recolors the screen, a GIME timer program runs, and the
   320-wide HSCREEN modes draw.

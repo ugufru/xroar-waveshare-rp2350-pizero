@@ -63,10 +63,24 @@ lowercase         = on
 key_repeat        = on
 key_repeat_delay  = 500
 key_repeat_rate   = 10
+dpad              = joystick
+pad_bottom        = fire
+pad_right         = fire
+pad_left          = fire_right
+pad_top           = space
+pad_l1            = fire_right
+pad_r1            = fire
+pad_l2            = none
+pad_r2            = none
+pad_select        = none
+pad_start         = enter
+pad_l3            = none
+pad_r3            = none
 ```
 
-That file sets everything to its default, so it behaves exactly like having
-no file at all. Change the lines you care about and delete the rest.
+That file sets every setting except the colors to its default, so it behaves
+exactly like having no file at all. Change the lines you care about and
+delete the rest.
 
 ## Settings
 
@@ -75,8 +89,8 @@ no file at all. Change the lines you care about and delete the rest.
 | `sn76489` | `on` / `off` | `on` | The SN76489 sound chip at `$FF41`, without a Games Master Cartridge. `off` gives `$FF41` back to the disk controller. With a GMC plugged in, the chip is there either way. |
 | `volume` | `0`-`15` | `10` | Overall sound level. `0` is silent; `15` is half as loud again as the default. |
 | `artifact_colors` | `on` / `off` / `swapped` | `on` | Color in PMODE 4 graphics, from the NTSC artifact effect. `off` shows plain black and white; `swapped` exchanges the blue and orange, for games drawn with the other phase. |
-| `gime_palette` | `on` / `off` | `on` | The CoCo 3-style palette registers at `$FFB0`-`$FFBF`. `off` removes them and restores the default palette. |
-| `gime_timer` | `on` / `off` | `on` | The CoCo 3-style timer and interrupts at `$FF90`-`$FF95`. `off` removes them and stops the timer. |
+| `gime_palette` | `on` / `off` | `on` | The CoCo 3-style palette registers at `$FFB0`-`$FFBF`. `off` removes them and restores the default palette. Only in the default 60 Hz build (`pizero_stream_60`); the `pizero_stream` fallback has no palette registers, so the setting does nothing there. |
+| `gime_timer` | `on` / `off` | `on` | The CoCo 3-style timer and interrupts at `$FF90`-`$FF95`. `off` removes them and stops the timer. Like `gime_palette`, only in the default 60 Hz build. |
 | `run_skips_autorun` | `on` / `off` | `on` | Whether pressing RUN restarts straight to the BASIC prompt, skipping `autorun.txt`. `off` makes RUN behave like power-on. |
 | `serial_keyboard` | `on` / `off` | `on` | Whether characters sent over the USB serial port are typed into the CoCo. |
 | `joystick_swap` | `on` / `off` | `off` | Which USB gamepad stick is which CoCo joystick. `off`: the pad's left stick (and D-pad) is the right joystick, `JOYSTK(0)` and `JOYSTK(1)`, the one most games read, and the right stick is the left joystick. `on` swaps them, fire buttons included: the right stick steers `JOYSTK(0)`/`(1)` and the left-hand buttons (L1, square) fire it. Handy in a game's own settings file. |
@@ -88,7 +102,8 @@ no file at all. Change the lines you care about and delete the rest.
 | `dpad`, `pad_...` | see below | | What the gamepad's D-pad and each button do. See [Gamepad buttons](#gamepad-buttons). |
 | `color_NAME` | `#RRGGBB` | the 6847's | Overrides one palette color. See below. |
 
-Names and values are not case-sensitive, so `VOLUME = 12` works too. A `#`
+Names and values are not case-sensitive, so `VOLUME = 12` works too. Where a
+setting takes `on` / `off`, `yes` / `no` and `1` / `0` work as well. A `#`
 starts a comment, either on its own line or after a value:
 
 ```

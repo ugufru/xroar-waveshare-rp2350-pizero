@@ -96,7 +96,7 @@ overmould, leaving 0.8 mm of wall in front of the socket.
 
 **It took four prints and fourteen revisions**, in one evening. The loop was
 print, fit, measure, change one parameter, re-render. Two things it taught
-that no amount of modelling would have:
+that no amount of modeling would have:
 
 - The first lid fouled on assembly. It looked like the 40-pin header, and the
   case grew 1 mm to clear it. The real obstruction was the microSD card, so
@@ -189,7 +189,7 @@ it is shut.
 | Part | Version | Where |
 |---|---|---|
 | `base.stl` | BASE v11 | Floor, in the 6 mm gap between the two banks of floor vents, reading bottom to top |
-| `top.stl` | TOP v13 | Roof underside, centred on the two USB ports, in front of the groove loop |
+| `top.stl` | TOP v13 | Roof underside, centered on the two USB ports, in front of the groove loop |
 | `top_header.stl` | TOP-HDR v5 | Same place as the lid |
 
 Set in `ver_base`, `ver_top` and `ver_top_header` in the source. **Bump the
@@ -223,10 +223,10 @@ the socket. Re-derived from the socket datasheet and the Waveshare drawing:
 Changes:
 
 - **Channel** 11.6 x 1.3 mm (card plus 0.3 each side, and below the housing
-  top), centred on the socket at y 16.9 (`sd_cy`, `sd_ch_h`).
+  top), centered on the socket at y 16.9 (`sd_cy`, `sd_ch_h`).
 - **Guide block** on the inside wall face carries the channel on to 0.4 mm
   short of the housing (`sd_guide_*`), so the card is held level and
-  centred until it is in the socket mouth.
+  centered until it is in the socket mouth.
 - **Flared mouth** on the outside, 1.2 mm wider each side and 1.2 mm taller
   at the face, narrowing over 1.2 mm (`sd_flare_*`), so a card finds the
   channel by feel.
@@ -280,7 +280,7 @@ openscad -o top_header.stl -D 'part="top_header"' pizero_case.scad
 
 An alternate lid with an opening over the 40-pin header, for a 2x20
 female connector, plugged by a separate printed cover when unused. Same
-base, same screws. The opening is centred on the header pin field and is
+base, same screws. The opening is centered on the header pin field and is
 51.6 x 7.0 mm (`hdr_open_w`, `hdr_open_d`), as long as fits between the
 two back screw bosses (0.18 mm clear) and as deep as fits in front of the
 back wall (0.15 mm clear).
@@ -342,7 +342,7 @@ microSD fix from revision 2 is untouched.
 
 - **Floor vents** in the base: the lid's slot (3.0 mm, 3.0 mm rib, 6.0 mm
   pitch, rounded ends) turned to run front to back. Two banks of four with
-  the same 6.0 mm gap, centred on the board at x 8.5 to 56.5, each slot
+  the same 6.0 mm gap, centered on the board at x 8.5 to 56.5, each slot
   y 2.6 to 27.4. They clear the corner standoffs by 2.0 mm. Through the
   floor, so nothing bridges. `base_vents = false` drops them.
 - **Corners** 4 to 5 mm (`r_out`). The cavity corner `r_in` is now its own
@@ -351,7 +351,7 @@ microSD fix from revision 2 is untouched.
 - **Top edge rounded** to 5.0 mm (`top_r`, rev 2), the same as the corners,
   so each lid corner is a sphere. The old 1 mm chamfer came back as
   `top_r = 0`. A 5 mm round alone breaks through a 2 mm wall, so the cavity's
-  top 3 mm is rounded too, about the same centres, keeping the shell 1.8 to
+  top 3 mm is rounded too, about the same centers, keeping the shell 1.8 to
   2.0 mm thick over the round. Below that the cavity keeps its 2.0 mm
   corners, so board fit is unchanged; the header loses at most 0.14 mm of
   its 0.5 mm roof clearance. The corner bosses are clipped to the cavity so
@@ -361,7 +361,7 @@ microSD fix from revision 2 is untouched.
   2.0 mm on all four corners of each plug pocket, split across base and lid.
 - **Groove loop.** Grooves widened from 0.5 to 2.0 mm (still 0.6 deep) and
   joined into one closed loop with 3.0 mm corners (`groove_r`, on the
-  centreline). The side legs run front to back at x 1.1 and 63.9, 1.5 mm
+  centerline). The side legs run front to back at x 1.1 and 63.9, 1.5 mm
   inside the top chamfer, the same margin the front groove has. This fixes
   the front groove running out through the side wall right where the
   corner curve starts. `groove_loop = false` gives straight grooves again.
@@ -373,15 +373,15 @@ microSD fix from revision 2 is untouched.
   edge clears the battery opening by 1.3 mm (0.8 before rev 3). It is cut as
   a 0.6 mm skin that follows the outside surface, so depth stays constant
   over the round.
-- **Grille centred, three rows** (rev 4). The 5 mm rounds leave 24.8 mm of
+- **Grille centered, three rows** (rev 4). The 5 mm rounds leave 24.8 mm of
   flat roof front to back, and four rows plus two grooves need 25 mm, so
   the front groove sat on the round. Now three 3.0 mm slots on a 5.0 mm
-  pitch (2.0 mm ribs, `vent_rows`, `vent_rib`), centred on the case at
+  pitch (2.0 mm ribs, `vent_rows`, `vent_rib`), centered on the case at
   y 10, 15 and 20. The grooves follow at y 6.5 and 23.5, both on the flat
   roof, 7.9 mm from the front and back edges. Slots keep their 20.8 mm
   length (`roof_vent_margin`). The base floor vents keep their own four rows
   on 3.0 mm ribs (`base_vent_rows`, `base_vent_rib`) and are unchanged.
-  **Buttons:** no pitch can centre both, because centred rows are symmetric
+  **Buttons:** no pitch can center both, because centered rows are symmetric
   about y 15 and the buttons are not (BOOT 3.4 mm in front, RUN 6.6 mm
   behind). The 5 mm pitch treats them equally: each is 1.6 mm off a row,
   with about 0.65 mm of plunger under open slot (was 1.25). Needs a
@@ -389,12 +389,12 @@ microSD fix from revision 2 is untouched.
 - **Finer grille, 1 mm grooves** (rev 5). Slots 3.0 to 1.0 mm wide so more
   fit, five rows instead of three. The pitch is a third of the 10 mm
   between RUN and BOOT (3.33 mm, a 2.33 mm rib, derived in `vent_rib`), so
-  with five rows centred on the case, rows 2 and 5 land within 0.07 mm of
+  with five rows centered on the case, rows 2 and 5 land within 0.07 mm of
   BOOT and RUN: 1.18 mm of each 1.5 mm plunger under open slot. Rows at
   y 8.33, 11.67, 15.0, 18.33, 21.67, still 20.8 mm long. Grooves back to
   1.0 mm wide, at y 5.83 and 24.17 (7.7 mm from the front and back edges);
   the side leg keeps its top edge at the start of the round, so its
-  centreline is now z 15.1. The base floor vents keep their own 3.0 mm
+  centerline is now z 15.1. The base floor vents keep their own 3.0 mm
   slot (`base_vent_w`) and are unchanged. A 1 mm printed slot comes out
   nearer 0.8 mm, so a paperclip is a tight fit.
 - **Floor vents match the roof** (rev 6). `base_vent_w` and `base_vent_rib`
@@ -406,8 +406,8 @@ microSD fix from revision 2 is untouched.
   bed. `top_r = 0` restores the 1 mm chamfer; the 5 mm vertical corners
   stay. The groove no longer wraps down the sides (`groove_wrap = false`).
   It is a closed 1.0 mm loop on the roof, 3.0 mm clear of the slots on all
-  four sides (`groove_gap`, `groove_hug`): centreline x 5.2 to 59.8,
-  y 4.33 to 25.67, corners 3.5 mm on the centreline so they are concentric
+  four sides (`groove_gap`, `groove_hug`): centerline x 5.2 to 59.8,
+  y 4.33 to 25.67, corners 3.5 mm on the centerline so they are concentric
   with a sharp grille corner.
 - **Bottom chamfer** (rev 8). The base's bottom edge gets the same 1.0 mm
   chamfer as the lid's top edge (`bottom_chamfer`), so the case has no
@@ -416,7 +416,7 @@ microSD fix from revision 2 is untouched.
   squish. It stays clear of the countersinks and plug pockets.
 
 The grille and button notes below describe revs 1 to 3. Rev 4 above
-centres the grille on three rows and replaces the button anchoring.
+centers the grille on three rows and replaces the button anchoring.
 
 **Vent grille**, on the CoCo 2 pattern (see `coco2-image.png`): two banks
 of four slots, 3.0 mm across on a 6.0 mm row pitch, so 3.0 mm ribs. Rows
@@ -427,7 +427,7 @@ the banks.
 **Grooves, not a recess.** The banded look was two 0.5 mm grooves, 0.6 mm
 deep, at y 1.1 and 26.1, running the full width across the side walls
 (now a 2.0 mm loop, see the style pass above).
-0.6 mm is an exact three layers at 0.2 mm, so the depth does not quantise
+0.6 mm is an exact three layers at 0.2 mm, so the depth does not quantize
 to something shallower than intended.
 They replace a 2 mm recessed panel that **failed to print**: roof-down its
 floor had to bridge 27 mm between two strips of first layer, and because
@@ -448,17 +448,17 @@ rectangle. That worst case is computed from the boss positions via
 sits 10 mm behind it and the pitch is 6, so RUN would fall 2 mm off row 4
 with only 0.25 mm of its plunger under open slot. `vent_shift = -1.0`
 nudges the whole group 1 mm forward, putting both buttons 1 mm off a
-centreline with 1.25 mm of each plunger open.
+centerline with 1.25 mm of each plunger open.
 
 That is the best a 6 mm pitch allows: a row exactly on BOOT throws RUN
 2 mm off, and vice versa, since only a pitch dividing the 10 mm between
-the buttons can centre both. `vent_rib = 2.0`, a 5 mm pitch, would centre
+the buttons can center both. `vent_rib = 2.0`, a 5 mm pitch, would center
 both at the cost of the 3 mm rib spacing. The model echoes which buttons
 are covered, so a later change to pitch, shift or slot width will say if
 it breaks this.
 
-The grille sits where the buttons put it, not where the case centre is, so
-it is off-centre front to back: 3.5 mm from the front edge to the first
+The grille sits where the buttons put it, not where the case center is, so
+it is off-center front to back: 3.5 mm from the front edge to the first
 groove, 6.3 mm from the last groove to the back. Deliberate.
 
 **Roof vents**, first version: two banks of four slots, 1 mm wide,
@@ -486,7 +486,7 @@ headroom fouled the header pins. Revision 2 changes:
 | BAT opening height | 7.0 | 6.0 |
 | BAT opening, low-y edge | 14.4 | 15.4 |
 
-Case height stays at 20.6 mm.
+Case height stays at 20.6 mm (at the time; now 18.6 mm since PIZERO-122).
 
 The first lid fouled on assembly. That initially read as the 40-pin header
 and `head_room` went to 13.0, but the real obstruction was the microSD

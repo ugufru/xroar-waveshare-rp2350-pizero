@@ -16,7 +16,7 @@ report, `docs/measurements/2026-09.jsonl`, and `docs/cpu-speed.md`._
 | 128 KB CoCo 3, 640-wide modes | Possible on RAM, needs a different scanout, **blocked on CPU speed**. |
 | The wall | **The 6809, not the video.** This is the opposite of what we assumed. |
 
-The ticket expected the 640-wide 16-colour modes to be the wall and the
+The ticket expected the 640-wide 16-color modes to be the wall and the
 320-wide ones to be reachable. Video turns out not to be the binding
 constraint at all.
 
@@ -32,6 +32,9 @@ unpopulated (`README.md`), so every byte is on-chip.
 | of which the packed VDG buffer, 192 x 128 | 24,576 |
 | Guest RAM today, allocated at runtime | 65,536 |
 | **Free** | **~87,000** |
+
+Note (2026-09-27): the product build's static RAM is now ~75% (PIZERO-150),
+up from the 70.9% measured here, so the free figure above is smaller today.
 
 - **128 KB CoCo 3** needs +64 KB over today. It fits, with roughly 23 KB to
   spare. Tight but real.
@@ -102,7 +105,7 @@ tuning pass, and it is the first thing that would have to succeed.
 feature branch.**
 
 _2026-09-26: picked up. The staged plan, with a correctness harness ahead of
-any optimisation, is in [`coco3-plan.md`](coco3-plan.md) (PIZERO-129 to 135).
+any optimization, is in [`coco3-plan.md`](coco3-plan.md) (PIZERO-129 to 135).
 It keeps the framebuffer for the first milestone, since 128 KB fits without
 freeing it, and moves per-line scanout to the 640-wide follow-on._
 

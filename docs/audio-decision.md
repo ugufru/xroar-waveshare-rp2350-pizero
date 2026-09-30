@@ -8,9 +8,9 @@
 
 **Status (historical):** source implemented (PIZERO-18, 2026-06-02), sink not yet. The board is
 currently **silent**. NOTE (corrects an earlier premise): this stripped port vendors
-**no XRoar sound module** — desktop XRoar synthesises the audio stream, but that code
+**no XRoar sound module** — desktop XRoar synthesizes the audio stream, but that code
 was not vendored here, so the CoCo's 6-bit DAC + single-bit sound existed only as
-PIA1 register state and were discarded. We now **synthesise the stream ourselves** in
+PIA1 register state and were discarded. We now **synthesize the stream ourselves** in
 `coco_machine` (tap the 6-bit DAC on PIA1 port A bits 2–7 + single-bit sound on PB1,
 resample to 32 kHz mono into a ring). What remains is the **sink** — nothing yet
 drives those samples to an output.
@@ -29,7 +29,7 @@ PIZERO-18 is: **decide & prove the output path before writing emulator-side code
 The board wires HDMI to GPIO 32-39, so HSTX (GPIO 12-19) is unavailable and we use
 the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
 
-- **The PIO serialiser is content-agnostic.** It just shifts out 10-bit symbols
+- **The PIO serializer is content-agnostic.** It just shifts out 10-bit symbols
   (`dvi_serialiser.pio.h`: `out pins, 1` ×10, `out_shift … 10 * DVI_SYMBOLS_PER_WORD`).
   TMDS video, the 4 DVI control symbols, TERC4 data-island symbols, and guard bands
   are *all* 10-bit. **No PIO program change is needed** — HDMI audio is purely a
@@ -78,7 +78,7 @@ the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
   DMA-list templates (×3), packet buffers, and an audio sample ring need a few KB we
   may not have spare. Most likely thing to force a trade-off (e.g. give back a buffer).
 - **Monitor acceptance.** We already rely on EDID tolerance for the ~57 Hz timing.
-  Switching the sink from DVI to HDMI signalling on an off-spec timing may make some
+  Switching the sink from DVI to HDMI signaling on an off-spec timing may make some
   displays pickier. Verify on the real monitor *first*.
 - **Merge friction.** Our libdvi is locally patched (the `tmds_encode.S` /
   `dvi_config_defs.h` assembler guards from PIZERO-04). Porting the fork is a careful

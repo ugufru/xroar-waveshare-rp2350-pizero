@@ -20,8 +20,13 @@ pio run -t upload                       # flash (hold BOOT if upload fails)
 pio device monitor                      # serial @ 115200, prints [run] telemetry
 
 # Fallback for a display that rejects 60 Hz (kept until PIZERO-99 proves 60 Hz
-# widely): the same machine on the older off-spec 24 MHz / ~52 Hz timing.
+# widely): the older off-spec 24 MHz / ~52 Hz timing. It does NOT build the
+# GIME palette or timer (-DGIME_PALETTE / -DGIME_TIMER), so the gime_palette
+# and gime_timer settings do nothing on it.
 pio run -e pizero_stream -t upload
+
+# Host unit tests (no board): 16 suites, 222 cases.
+pio test -e native
 ```
 
 Upload puts the RP2350 into BOOTSEL automatically via `picotool`; if it won't,
@@ -40,8 +45,8 @@ buildable on its own.
 | Env | Extends | Adds | Framebuffer | Audio | RAM |
 |-----|---------|------|-------------|-------|-----|
 | **`pizero_stream_60`** | `pizero_stream` | `-DHDMI_60HZ -DGIME_TIMER -DGIME_PALETTE` | single-buffered | **THE PRODUCT: streaming audio @ true 640x480p60 + USB (PIZERO-45)** | ~75% |
-| **`pizero_stream`** | `pizero_base` | `-DHDMI_DATA_ISLAND -DHDMI_STREAM_AUDIO` | single-buffered | streaming audio at the older ~52 Hz timing: the fallback | ~75% |
-| `pizero_hotplug` | `pizero_stream_60` | `-DUSB_HOTPLUG_RECOVER` | single-buffered | product + USB hot-replug recovery (PIZERO-51) | ~75% |
+| **`pizero_stream`** | `pizero_base` | `-DHDMI_DATA_ISLAND -DHDMI_STREAM_AUDIO` | single-buffered | streaming audio at the older ~52 Hz timing: the fallback. No GIME palette or timer | ~75% |
+| `pizero_hotplug` | `pizero_stream_60` | `-DUSB_HOTPLUG_RECOVER` | single-buffered | product + USB hot-replug recovery (PIZERO-51). **HW-disproven**: kept for re-test only, do not ship | ~75% |
 | `pizero_usbdebug` | `pizero_stream_60` | `-DCFG_TUSB_DEBUG=2 -DCFG_TUD_LOG_LEVEL=3 -DCFG_TUSB_DEBUG_PRINTF=tusb_debug_printf -DSERIAL_TUSB_DEBUG=Serial` | single-buffered | product + TinyUSB host log on the serial console, for hub and enumeration faults (PIZERO-54) | ~75% |
 | `pizero_padprobe` | `pizero_stream_60` | `-DPAD_PROBE=1` | single-buffered | product + gamepad report dump on serial, for measuring a pad's buttons (PIZERO-13, 164) | ~75% |
 | `pizero_stream_synth` | `pizero_stream` | `-DHDMI_AUDIO_SYNTH` | single-buffered | 440 Hz test tone: tests the HDMI sound path alone (PIZERO-99) | ~75% |
@@ -50,6 +55,7 @@ buildable on its own.
 | `pizero_wdtest` | `pizero_stream` | `-DWATCHDOG_SELFTEST` | single-buffered | wedges core 0 to prove watchdog recovery (PIZERO-33) | ~75% |
 | `pizero_wavmeas` | `pizero_base` | `-DAUDIO_WAV_DUMP` | double-buffered | no HDMI audio: dumps the emulator's sound as WAV over USB (PIZERO-41) | ~99% |
 | `waveshare_demo` | (none) | (stock USB demo) | n/a | Waveshare's USB device_info demo, for USB triage (PIZERO-11/51) | ~6% |
+| `native` | (none) | `platform = native`, Unity | n/a | host unit tests, no board (PIZERO-109): `pio test -e native`, 16 suites, 222 cases | n/a |
 
 PIZERO-150 retired `pizero` and `pizero_60hz` (silent, double-buffered, ~99%
 RAM, no use as a fallback for a machine with sound) and the finished
@@ -60,7 +66,7 @@ still exist in the source; an env is only a preset, so any can be recreated.
 640×480p60 + streaming HDMI audio + USB, HW-confirmed. `pizero_stream` (off-spec
 24 MHz/~52 Hz audio) is kept as the fallback until 60 Hz is validated across more
 displays (PIZERO-99). See [`hdmi-audio-notes.md`](hdmi-audio-notes.md)
-for the audio engineering notes. The remaining envs are diagnostics —
+for the audio engineering notes. The remaining envs are diagnostics;
 see the comments by each `[env:…]` in `platformio.ini`.
 
 > **Audio engineering knowledge — the wins, gotchas, and tricks — lives in
@@ -68,14 +74,18 @@ see the comments by each `[env:…]` in `platformio.ini`.
 > audio path (especially the `__not_in_flash_func`/`PICO_NO_HARDWARE` trap and the
 > "verify RAM placement with `nm`" rule).
 
-### Why audio uses *less* RAM than the silent build
+### Why the audio builds use *less* RAM than `pizero_wavmeas`
 `HDMI_DATA_ISLAND` switches the 320×240 framebuffer from double-buffered
 (2 × ~153 KB) to single-buffered, freeing ~150 KB for the per-line audio-island
-buffers (`main.cpp:98`). The trade-off is possible tearing (core 1 may scan the
-framebuffer mid-blit), accepted per `docs/audio-decision.md`. Net effect measured
-2026-08-17: the audio envs sit at **70.4%** (368,964 B) while the silent
-double-buffered envs are nearly full at **96.8%** (507,340 B, ~17 KB spare) — so
-the audio build is the roomy one. Watch the link report when adding buffers.
+buffers (see `g_fb` in `src/main.cpp`, under `#ifdef HDMI_DATA_ISLAND`). The
+trade-off is possible tearing (core 1 may scan the framebuffer mid-blit),
+accepted per `docs/audio-decision.md`. Every shipping env defines
+`HDMI_DATA_ISLAND`, so every shipping build is single-buffered. The only
+double-buffered env left is the diagnostic `pizero_wavmeas`, which drops HDMI
+audio to dump the sound over USB instead. Measured 2026-09-27: the audio envs
+sit at **~75%**, while `pizero_wavmeas` is nearly full at **~99%** (~5 KB
+spare). So a new static buffer that fits the product can still overflow
+`pizero_wavmeas`: build both when adding RAM, and watch the link report.
 
 ---
 
@@ -88,6 +98,8 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 | Flag | Effect | Set by |
 |------|--------|--------|
 | `HDMI_DATA_ISLAND` | Master enable: HDMI data-island path: AVI + Audio InfoFrame + ACR in vblank, live audio sample packets on active lines; single-buffers the framebuffer. **Off = silent.** | `pizero_stream` |
+| `GIME_PALETTE` | CoCo 3-style palette registers at `$FFB0-$FFBF` (PIZERO-85; kept by the PIZERO-111 decision). Transparent until a guest writes them; the `gime_palette` setting turns it off at run time. | `pizero_stream_60` |
+| `GIME_TIMER` | CoCo 3-style timer at `$FF90-$FF95` (PIZERO-62). Stays stopped until a guest programs it; the `gime_timer` setting turns it off at run time. | `pizero_stream_60` |
 
 ### Audio test / diagnostic (layer on top of `HDMI_DATA_ISLAND`)
 | Flag | Effect |
@@ -96,7 +108,7 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 | `HDMI_AUDIO_SWAPTEST` | M0 diagnostic: per-line `read_addr` ping-pong of the vblank island buffers (bypasses the live-audio path). |
 | `HDMI_AUDIO_STATIC` | Static test tone planted in the vblank islands (M4 step). |
 | `HDMI_ENCODE_BENCH` | **(PIZERO-36)** One-shot micro-benchmark at boot: times one RAM-resident per-line audio-island encode and prints `[bench] … ns/encode` + the IRQ-window budget. Go/no-go for in-IRQ encoding. No env since PIZERO-150 (was `pizero_bench`); add one to rerun it. |
-| `HDMI_STREAM_AUDIO` | **(PIZERO-38, CURRENT)** Streaming per-active-line delivery — one metered island/line in the core-1 IRQ (rotating pool + 16.16 sample meter). **This is the warble fix**; it's the recommended audio path (`pizero_stream`). Unset = the legacy bursty 77-line bank path. |
+| `HDMI_STREAM_AUDIO` | **(PIZERO-38, CURRENT)** Streaming per-active-line delivery: one metered island/line in the core-1 IRQ (rotating pool + 16.16 sample meter). **This is the warble fix**, and every audio env uses it; the product is `pizero_stream_60` (it inherits the flag from `pizero_stream`). Unset = the legacy bursty 77-line bank path. |
 | `HDMI_EVEN_AUDIO` | **Abandoned (PIZERO-34).** Even delivery via vblank back-porch islands — **breaks video sync on the dev sink**. Kept off behind the flag; do not enable. |
 | `HDMI_ACR_CTS=<n>` | ACR CTS value (default 25176). **Monitor-dependent** (PIZERO-32); inert on sinks that ignore ACR (like the dev monitor). See hdmi-audio-notes.md. |
 | `AUDIO_WAV_DUMP` / `AUDIO_OUTPUT_LPF` | Stream the source ring as base64 WAV over USB-CDC (source measurement, no HDMI) / re-enable the 2-pole TV-bandwidth output LPF. Diagnostics for PIZERO-41. |
@@ -110,11 +122,6 @@ All flags are plain `-D` macros consumed in `src/main.cpp`. The **master switch 
 | `ARTIFACT_PHASE_LEGACY` | Revert the PMODE4/RG6 NTSC artifact red/blue phase to the pre-PIZERO-43 orientation (default now matches Space Warp). |
 | `WATCHDOG_DISABLE` | Turn off the PIZERO-33 hardware watchdog (default ON: auto-reboots a wedged board in ~3 s + logs the stuck phase in `[run]` as `freezes=N last=<phase>`). Disable only for live freeze debugging. `WATCHDOG_TIMEOUT_MS` overrides the 3000 ms timeout. |
 | `USB_HOTPLUG_RECOVER` | **(PIZERO-51) EXPERIMENTAL — HW-DISPROVEN, do not ship.** USB hot-replug recovery. On this rev3 board an unplug is invisible to the line/connect flags — the PIO SM pins the bus at J/FS and PIO-USB floods ~180 byte-identical phantom HID reports/s (PIZERO-11b). Detects a run of `USB_PHANTOM_FLOOD_N` (default 100, ~0.55 s) identical reports on an interface, then **watchdog-reboots** to re-enumerate (fix v3; the earlier `pio_usb_host_stop/restart` and force-disconnect approaches are dead — see the ticket). **2026-08-16 HW result: does not work.** The reboot does not re-enumerate an attached device (`usb=0` for 200 s), the detector false-positives on an idle composite keyboard (~20 s after mount), and the `scratch[4]` replug sentinel is silently wiped by the pico-SDK (`watchdog_reboot` zeroes it), so recoveries are miscounted as PIZERO-33 freezes. Kept flag-gated in `pizero_hotplug` for re-test only; the real fix needs a GPIO-switched VBUS. |
-
-### Timing
-| Flag | Effect |
-|------|--------|
-| `HDMI_STD_TIMING` | Use ~standard **25.2 MHz pixel / 252 MHz sysclk** timing (h_fp=58, h_total=924) instead of our off-spec 24 MHz / 240 MHz. **Skips the USB host** (PIO-USB needs CPU = 120/240 MHz). Diagnostic for the ACR sink-clock pitch question (PIZERO-32). |
 
 ### Source validation (HDMI not required)
 | Flag | Effect |
@@ -180,7 +187,8 @@ in editor — they are **not** real build errors (the actual `pio run` is clean)
   **~75%**. `pizero_wavmeas` is double-buffered at **~99%** with ~5 KB spare, so
   a new static buffer can overflow it; build it too when adding RAM. Check it.
 - **Serial telemetry:** `pio device monitor` (115200). The running emulator prints
-  `[run] fps cpu render blit aud …` — confirm `fps≈52`, frame time under budget.
+  `[run] fps cpu render blit aud …`. Confirm `fps≈60` on `pizero_stream_60`
+  (`≈52` on the `pizero_stream` fallback), frame time under budget.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.
 - **Hardware acceptance** (audio/video) is listen/look-on-the-monitor and must be
   user-confirmed — do not mark an issue `done` from a green build alone (see

@@ -45,7 +45,7 @@ Why each piece is the way it is:
 1. **Stream, don't pre-encode banks.** The original scheme pre-encoded 77 of 480
    active lines (3 packets each) into double-buffered banks. The sink's audio FIFO
    saw a coarse, frame-locked burst pattern → **~52 Hz warble**. The fix is
-   standard-HDMI behaviour: sprinkle **0–4 samples onto (nearly) every active
+   standard-HDMI behavior: sprinkle **0–4 samples onto (nearly) every active
    line** via a 16.16 fixed-point sample accumulator (`g_meter_acc += step` each
    line; `n = acc>>16`). Near-constant feed ⇒ no warble.
 
@@ -71,8 +71,9 @@ Why each piece is the way it is:
   samples in a burst during emulation, which overflowed the small ring →
   reader-side catch-up skipped chunks → audio fast-forward (sounded "a few
   semitones sharp"). Deep + primed ring fixed it.
-- **RAM win**: streaming freed ~126 KB, enough that the no-audio path can stay
+- **RAM win**: streaming freed ~126 KB, enough that the no-audio path could stay
   double-buffered (tear-free) and there's headroom for future features.
+  (Historical: the silent double-buffered envs were retired in PIZERO-150.)
 - **60 Hz + USB unlocked** (PIZERO-44): see the dedicated section below.
 
 ---
@@ -99,7 +100,7 @@ Why each piece is the way it is:
   packet count — so you can't buy more carrier lines by shrinking packets.
 
 - **This sink ignores ACR entirely.** Sweeping CTS 25176 → 26674 → 50000 (the last
-  would be ~1 octave if honoured) had **zero** audible effect. So on this monitor
+  would be ~1 octave if honored) had **zero** audible effect. So on this monitor
   the audio rate is *not* reconstructed from ACR — pitch is governed by the video
   clock and the source. Lesson: don't assume a sink uses ACR; `HDMI_ACR_CTS` is
   kept tunable (default 25176) for sinks that *do* (PIZERO-32), but it's inert
@@ -164,8 +165,9 @@ audio + this timing + USB). It sets the timing above, vreg 1.25, ACR CTS=25200
 (`CYCLES_PER_FRAME=14915 / FRAME_PERIOD_US=16667` at the CoCo's 0.894886 MHz).
 The 28-word back porch is exactly one island + the video preamble/guard, so
 `ALINE_BP_W=72` is unchanged (only `h_bp/2=28` words are used). The streaming
-pool/meter/IRQ-encode path is untouched. Awaiting HW confirmation; on success it
-becomes the default and the 24 MHz/52 Hz envs retire (PIZERO-40/42). RISK: `h_bp=56`
+pool/meter/IRQ-encode path is untouched. HW-confirmed, and now the default
+(`default_envs = pizero_stream_60` in `platformio.ini`); `pizero_stream` at the
+older ~52 Hz timing is kept as the fallback. RISK: `h_bp=56`
 (28 words vs ~27 needed) and `h_fp=8` are tight — if a monitor balks, fall back to
 ~277/288 MHz for a wider back porch.
 
