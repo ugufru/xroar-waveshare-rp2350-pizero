@@ -10,7 +10,7 @@ ventilated top of a Tandy Color Computer 2. Confirmed on hardware.
 | Fasteners | 4 x M2.5 countersunk, 12 mm, self-tapping into the lid |
 | Supports | None |
 | Material | Any. Roughly 20 g, about 1 to 2 hours |
-| Openings | mini-HDMI, both USB-C, microSD, battery connector, RUN and BOOT |
+| Openings | mini video, both USB-C, microSD, battery connector, RUN and BOOT |
 
 - `pizero_case.scad` is the only source. Every dimension is a named parameter.
 - The STLs are rendered from it. Do not edit them by hand.
@@ -167,7 +167,7 @@ PIZERO-101 rev 8 case with the first PIZERO-103 microSD channel.
 
 | | |
 |---|---|
-| `photos/ports-front.jpg` | The port wall: mini-HDMI and both USB-C, with their rounded plug pockets |
+| `photos/ports-front.jpg` | The port wall: the mini video port and both USB-C, with their rounded plug pockets |
 | `photos/ports-front-angle.jpg` | Same wall, three-quarter, showing the lid/base seam |
 | `photos/closed-top.jpg` | The roof: 1 mm slots and the groove loop that hugs them |
 | `photos/lid-v11-bosses-snapped.jpg` | TOP v11 with two screw boss tips snapped off (PIZERO-124) |
@@ -175,7 +175,7 @@ PIZERO-101 rev 8 case with the first PIZERO-103 microSD channel.
 | `photos/microsd-side.jpg` | The microSD wall |
 | `photos/microsd-card-inserted.jpg` | A card in the slot |
 | `photos/three-quarter-ports.jpg`, `photos/three-quarter-battery-side.jpg`, `photos/standing-front.jpg` | General views, including the battery-connector opening |
-| `photos/in-use-top.jpg`, `photos/in-use-angle.jpg` | Running, with HDMI and USB-C plugged and the power LED glowing through the grille |
+| `photos/in-use-top.jpg`, `photos/in-use-angle.jpg` | Running, with the video cable and USB-C plugged and the power LED glowing through the grille |
 
 Camera originals are not committed (see `.gitignore`); these are 1600 px
 JPEGs, which is enough for documentation and about 4 MB for the set.
@@ -251,7 +251,7 @@ later must leave it alone.
 **PIZERO-123:** every opening on the case now shares one top edge,
 5.45 mm above the split: the three plug pockets and the microSD relief.
 That height is `pocket_top_z`, the highest any pocket needs (the USB-C
-ones). The HDMI pocket's top rises 0.15 mm to meet it, which only adds
+ones). The video connector pocket's top rises 0.15 mm to meet it, which only adds
 plug clearance, and the relief's top rises from 3.15 to 5.45, so it is
 18 x 7.3 mm with more room above the card to pinch it. Only tops move,
 never bottoms, so the base is unchanged.
@@ -480,7 +480,7 @@ headroom fouled the header pins. Revision 2 changes:
 
 | | was | now |
 |---|---|---|
-| mini-HDMI opening height | 4.5 | 3.5 |
+| mini video opening height | 4.5 | 3.5 |
 | microSD slot width | 10.2 | 11.7 |
 | microSD thumb dish | none | R10 x 1.2 mm deep |
 | BAT opening height | 7.0 | 6.0 |

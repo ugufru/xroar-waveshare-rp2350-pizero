@@ -20,7 +20,7 @@ than just handing someone a board.
 |---|---|
 | **Waveshare RP2350-PiZero**, pre-flashed | The only irreplaceable item |
 | **Case**, printed | See §5. About $0.55 in filament and screws |
-| **mini-HDMI → HDMI cable** | The board's HDMI is the **mini** size. Nobody has one of these in a drawer |
+| **mini video cable** (the kind sold for the Raspberry Pi Zero) | The board's video port is the **mini** size. Nobody has one of these in a drawer |
 | **USB-C male → USB-A female adapter** (OTG) | The **USB host port is a Type-C**. A normal USB keyboard cannot physically reach it without this |
 | **Printed card** | See §4. Cheaper than answering the same question ten times |
 | microSD card *(optional)* | Not required, but see §3: a pre-laid-out card removes most of the setup friction |
@@ -31,7 +31,7 @@ than just handing someone a board.
 | USB-C gamepad *(optional)* | Works as the CoCo joysticks. A USB-A one needs the same adapter. With a keyboard too, needs a simple USB-C hub (§4) |
 | microSD card | Any size; FAT32 |
 | USB-C power | Any phone charger or battery bank |
-| HDMI display | Any TV or monitor |
+| Display | Any TV or computer monitor with a digital video input |
 | **CoCo ROMs** | `bas12.rom` is **required**. We ship none; see §6 |
 | Games, disk images, programs | Their own |
 
@@ -49,7 +49,7 @@ placeholders and confirm at order time.
 | Waveshare RP2350-PiZero | 12 | **$9.99** direct from Waveshare | waveshare.com | **Sourced** |
 | *(same board on Amazon)* | | *$17.17* | | **Sourced**, nearly 2× |
 | Printed case + 4 screws | 10 | ~**$0.55** | `hardware/case/`, self-printed | **Sourced** |
-| mini-HDMI → HDMI cable | 10 | ~$7–10 | Amazon | *Estimate* |
+| mini video cable | 10 | ~$7–10 | Amazon | *Estimate* |
 | USB-C → USB-A OTG adapter | 10 | ~$3–5 (cheaper in multipacks) | Amazon | *Estimate* |
 | microSD card *(optional)* | 10 | ~$5 | Amazon | *Estimate* |
 
@@ -83,7 +83,7 @@ estimates rather than quotes. Fill in real numbers when ordering.
    is the single biggest difference between a gift and a project.
 
 2. **Fit the case** (§5). Nothing needs opening by hand, but still check every
-   port physically before closing it: both Type-C, mini-HDMI, microSD, and
+   port physically before closing it: both USB-C, the mini video port, microSD, and
    **BOOT button access** with a thin wire (an ornament hook works) through the top vents. BOOT is the
    recovery path when a flash goes wrong, so confirm you can actually reach it
    on the first unit rather than discovering otherwise on the tenth.
@@ -162,7 +162,7 @@ and confirmed on hardware. See
 | Time | 1 to 2 hours for both parts |
 | Supports | None |
 | Fasteners | 4 x M2.5 countersunk, 12 mm, self-tapping. About $0.15 a set |
-| Openings | mini-HDMI, both USB-C, microSD, battery connector, RUN and BOOT |
+| Openings | mini video, both USB-C, microSD, battery connector, RUN and BOOT |
 
 Nothing is filed, drilled or opened by hand. The ports are cut where the board
 actually has them, which is the whole reason a bought shell did not work.

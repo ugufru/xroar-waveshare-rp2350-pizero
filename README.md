@@ -2,7 +2,7 @@
 
 **A Tandy Color Computer 2 on a board the size of a stick of gum.** Plug in a TV, a USB-C keyboard
 or gamepad, and a microSD card, and it starts Color BASIC. The picture and the sound both go
-over one HDMI cable, at 60 frames per second.
+over one video cable, at 60 frames per second.
 
 It is [XRoar](https://www.6809.org.uk/xroar/), the CoCo emulator, running on a
 [Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm), a microcontroller board the
@@ -10,15 +10,15 @@ size of a Raspberry Pi Zero.
 
 <p align="center">
   <img src="docs/images/board-wired.jpg" width="460"
-       alt="The CoCo Zero running: a Waveshare RP2350-PiZero board powered up with USB-C power, a USB-C host cable, a mini-HDMI-to-HDMI adapter, and a microSD card inserted">
+       alt="The CoCo Zero running: a Waveshare RP2350-PiZero board powered up with USB-C power, a USB-C host cable, a mini video adapter, and a microSD card inserted">
 </p>
 
 ## What it does
 
 - It runs a Tandy Color Computer 2 (CoCo 2) at full speed: Color BASIC, Extended BASIC, Disk BASIC,
   games and demos.
-- It shows the picture on any HDMI TV or monitor, at 640×480 and 60 frames per second.
-- It plays the sound through the same HDMI cable.
+- It shows the picture on any modern TV or computer monitor, at 640×480 and 60 frames per second.
+- It plays the sound through the same video cable.
 - It also has the three-voice sound chip from the Games Master Cartridge (the SN76489), so games
   written for that cartridge play their music.
 - It lets you choose disks, programs and cartridges from lists on the screen. You highlight one and
@@ -36,9 +36,10 @@ size of a Raspberry Pi Zero.
 ## What you need
 
 - A **Waveshare RP2350-PiZero** board ([product page](https://www.waveshare.com/rp2350-pizero.htm)).
-  It has two USB-C ports and one mini-HDMI port. One USB-C port is for power, and for installing the
+  It has two USB-C ports and one mini video port (the same small video connector as a Raspberry Pi Zero). One USB-C port is for power, and for installing the
   firmware. The other USB-C port is for your keyboard and gamepad.
-- An **HDMI TV or monitor**, and a **mini-HDMI to HDMI** cable or adapter.
+- A **TV or computer monitor** with a digital video input, and a **mini video cable or adapter** to
+  reach it (the kind sold for the Raspberry Pi Zero).
 - A **USB-C power supply**, such as a phone charger.
 - A **USB-C keyboard**, a **USB-C gamepad**, or both.
   - A keyboard or gamepad with the older, rectangular USB-A plug works too, with a small USB-C to
@@ -58,9 +59,9 @@ size of a Raspberry Pi Zero.
 
 <p align="center">
   <img src="docs/images/connections.jpg" width="420"
-       alt="The board's connector edge: two USB-C ports (one for the keyboard and gamepad, one for power) and a mini-HDMI-to-HDMI adapter">
+       alt="The board's connector edge: two USB-C ports (one for the keyboard and gamepad, one for power) and a mini video adapter">
   <br>
-  <em>The two USB-C ports (keyboard and gamepad, and power) and the mini-HDMI adapter.</em>
+  <em>The two USB-C ports (keyboard and gamepad, and power) and the mini video adapter.</em>
 </p>
 
 ## Quick start
@@ -74,7 +75,7 @@ size of a Raspberry Pi Zero.
    - Put disks (`.dsk` files) in `/coco/dsk`, programs (`.bin` files) in `/coco/bin`, and cartridges
      (`.ccc` files) in `/coco/cart`.
 3. **Connect everything and switch on.**
-   - Plug the TV into the mini-HDMI port.
+   - Plug the TV or monitor into the mini video port.
    - Plug the keyboard or gamepad (or the hub) into the USB-C keyboard port.
    - Push the microSD card into its slot.
    - Last, plug USB-C power into the power port.
@@ -141,12 +142,12 @@ Open work is in `issues.jsonl` (use `/issues`), sequenced in [`docs/ROADMAP.md`]
 | Phase | Goal | Issues | Status |
 |---|---|---|---|
 | 0 | Decisions + scaffolding | PIZERO-01..03 | ✅ done |
-| 1 | HDMI bring-up: DVI test pattern | PIZERO-04..05 | ✅ done |
-| 2 | XRoar boots to Color BASIC "OK" on HDMI | PIZERO-06..09 | ✅ done |
+| 1 | Video bring-up: DVI test pattern | PIZERO-04..05 | ✅ done |
+| 2 | XRoar boots to Color BASIC "OK" on screen | PIZERO-06..09 | ✅ done |
 | 3 | Autonomous self-running demo | PIZERO-10 | ✅ done |
 | 4 | USB-host keyboard / joystick input | PIZERO-11/11a/11b/12/13/54 | 🟡 keyboard, gamepad and hub done; hot-replug open |
 | 5 | Dual-core split + performance | PIZERO-14..15 | ✅ done |
-| 6 | HDMI audio over the existing cable (CoCo 6-bit DAC + 1-bit sound, and the SN76489) | PIZERO-18, 26–35, 38/39, 143 | ✅ done: streaming per-active-line delivery (warble fixed) |
+| 6 | Sound over the video cable (CoCo 6-bit DAC + 1-bit sound, and the SN76489) | PIZERO-18, 26–35, 38/39, 143 | ✅ done: streaming per-active-line delivery (warble fixed) |
 | 7 | Clean audio + stability | PIZERO-33 (watchdog), PIZERO-35/38 (delivery re-arch) | ✅ done |
 | 8 | True in-spec 640×480p60 + audio + USB at 252 MHz | PIZERO-44/45 | ✅ done: now the default build |
 
@@ -162,7 +163,7 @@ The RP2350-PiZero is a Raspberry Pi Zero form-factor board built around the **RP
 
 - **MCU**: RP2350B (dual Cortex-M33 / dual Hazard3 RISC-V), 48 GPIO, 150 MHz stock (overclockable).
 - **Memory**: 520 KB on-chip SRAM, 16 MB flash. A PSRAM pad exists on the PCB but is **not populated**, so treat this as an SRAM-only target.
-- **Display**: mini-HDMI connector carrying a DVI signal, driven from GPIO via PIO (see below).
+- **Display**: mini video connector carrying a DVI signal, driven from GPIO via PIO (see below).
 - **Input**: a dedicated PIO-USB Type-C port usable as a USB 1.1 host (a second Type-C is power/programming).
 - **Storage**: microSD slot on SPI.
 
@@ -170,11 +171,11 @@ The RP2350-PiZero is a Raspberry Pi Zero form-factor board built around the **RP
 
 | Function | GPIO | Notes |
 |---|---|---|
-| HDMI TMDS data 2 (±) | 32 / 33 | DVI driven by PIO `libdvi` |
-| HDMI TMDS data 1 (±) | 34 / 35 | |
-| HDMI TMDS data 0 (±) | 36 / 37 | |
-| HDMI TMDS clock (±) | 38 / 39 | |
-| HDMI DDC / CEC | 44 + others | not needed for video output |
+| DVI TMDS data 2 (±) | 32 / 33 | DVI driven by PIO `libdvi` |
+| DVI TMDS data 1 (±) | 34 / 35 | |
+| DVI TMDS data 0 (±) | 36 / 37 | |
+| DVI TMDS clock (±) | 38 / 39 | |
+| Display DDC / CEC | 44 + others | not needed for video output |
 | microSD SCK | 30 | SPI, ~12.5 MHz |
 | microSD MOSI | 31 | |
 | microSD MISO | 40 | |
@@ -188,10 +189,10 @@ The RP2350-PiZero is a Raspberry Pi Zero form-factor board built around the **RP
 The reference DVI configuration is the upstream `pico_sock_cfg` (`invert_diffpairs = false`,
 `pio_set_gpio_base(pio, 16)` because the TMDS pins are above GPIO 31).
 
-## How the HDMI output works
+## How the video output works
 
-The mini-HDMI connector is wired **directly to RP2350 GPIOs** through series resistors; there is no
-HDMI transmitter chip. DVI carries video as four TMDS differential pairs (clock + 3 data lanes = 8
+The mini video connector is wired **directly to RP2350 GPIOs** through series resistors; there is no
+video transmitter chip. DVI carries video as four TMDS differential pairs (clock + 3 data lanes = 8
 wires), and each pair is produced by two adjacent GPIOs driven in opposite polarity.
 
 The RP2350 has two ways to generate that high-speed TMDS bitstream:
@@ -199,10 +200,10 @@ The RP2350 has two ways to generate that high-speed TMDS bitstream:
 - **PIO `libdvi`** (Wren6991/PicoDVI): PIO state machines + DMA do the TMDS encoding in software.
 - **HSTX**: a dedicated hardware serializer, but it is hardwired to **GPIO 12–19 only**.
 
-On this board the HDMI connector is on **GPIO 32–39**, so **HSTX cannot drive it**; `libdvi` (PIO) is
+On this board the video connector is on **GPIO 32–39**, so **HSTX cannot drive it**; `libdvi` (PIO) is
 the only option. This matches Waveshare's own reference demos, which use `libdvi` on this board.
 
-For the full end-to-end signal path (emulated CoCo screen and sound all the way to the HDMI pins,
+For the full end-to-end signal path (emulated CoCo screen and sound all the way to the connector pins,
 including how audio rides inside the TMDS stream as data islands), see
 [`docs/pipeline.md`](docs/pipeline.md).
 
@@ -216,7 +217,7 @@ The CoCo's native 256×192 is centered inside the 320×240 buffer (32 px left/ri
 border). After the 2× hardware scale-out it appears on the monitor as **512×384 with blank borders**,
 which is the "2× resolution" target. The blitter writes 320×240 in landscape with no rotation.
 
-## System-clock reconciliation (HDMI + USB host): resolved
+## System-clock reconciliation (video + USB host): resolved
 
 DVI and PIO-USB want different system clocks: DVI's TMDS bit clock prefers ~252 MHz for
 640×480p60 (25.175 MHz pixel), while Pico-PIO-USB asserts the CPU is *exactly* 120 MHz or
@@ -234,7 +235,7 @@ timing is kept only as a fallback env, without the CoCo 3-style palette and time
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  core 0  emulation + VDG render + blit + USB + SD         │
-│  core 1  DVI scanout (libdvi) + HDMI audio encode         │
+│  core 1  DVI scanout (libdvi) + audio encode              │
 ├──────────────────────────────────────────────────────────┤
 │  lib/coco_machine   CoCo bus glue + minimal FDC  (reused) │
 │  lib/xroar_core     vendored XRoar core          (reused) │
@@ -257,12 +258,12 @@ PlatformIO with the earlephilhower arduino-pico core, targeting the RP2350B.
 toolchain gotchas. In short:
 
 ```
-pio run                 -t upload   # DEFAULT: true 640x480p60 + HDMI audio + USB
+pio run                 -t upload   # DEFAULT: true 640x480p60 + audio + USB
 pio run -e pizero_stream -t upload  # fallback: older ~52 Hz timing, for a picky display
 pio device monitor                  # serial @ 115200: prints per-second [run] fps/cpu/blit
 ```
 
-A bare `pio run` builds the default `pizero_stream_60` env (60 Hz, streaming HDMI
+A bare `pio run` builds the default `pizero_stream_60` env (60 Hz, streaming
 audio, USB host). The off-spec 52 Hz `pizero_stream` is kept as the fallback for
 displays that reject 60 Hz. Don't enable flags via the `PLATFORMIO_BUILD_FLAGS` env var: it links
 stale objects (see BUILD.md §4b).
@@ -297,7 +298,7 @@ How we got from the first boot (54 fps) to a locked 60 fps:
   handoff from core 0 to core 1, so `libdvi` never samples a half-rendered frame. Costs **96.8% RAM**
   (507,340 / 524,288 bytes) in the double-buffered envs `pizero` and `pizero_60hz`, since retired
   (PIZERO-150). The default
-  `pizero_stream_60` **single**-buffers instead (the HDMI data islands need the framebuffer's
+  `pizero_stream_60` **single**-buffers instead (the audio data islands need the framebuffer's
   ~150 KB) and sits at **75.7%** of RAM (396,892 bytes), leaving ~127 KB free. Measured 2026-09-28.
 
 Performance instrumentation, clock, and vreg tuning landed in `PIZERO-15`; the serial monitor prints
@@ -318,7 +319,7 @@ A two-part 3D-printed case lives in [`hardware/case/`](hardware/case/README.md),
 styled after the ventilated top of a Tandy Color Computer 2. It is 69.8 x 34.8 x
 18.6 mm, prints without supports, and closes with four M2.5 screws that pass
 through the board's own mounting holes so one set of fasteners both clamps the
-board and shuts the case. Openings for mini-HDMI, both USB-C ports, the microSD
+board and shuts the case. Openings for the mini video port, both USB-C ports, the microSD
 slot and the battery connector, with the RUN and BOOT buttons reachable through
 the vent slots.
 
