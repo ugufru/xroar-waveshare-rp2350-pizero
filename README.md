@@ -15,23 +15,17 @@ size of a Raspberry Pi Zero.
 
 ## What it does
 
-- It runs a Tandy Color Computer 2 (CoCo 2) at full speed: Color BASIC, Extended BASIC, Disk BASIC,
-  games and demos.
-- It shows the picture on any modern TV or computer monitor, at 640×480 and 60 frames per second.
-- It plays the sound through the same video cable.
-- It also has the three-voice sound chip from the Games Master Cartridge (the SN76489), so games
-  written for that cartridge play their music.
-- It lets you choose disks, programs and cartridges from lists on the screen. You highlight one and
-  press ENTER to start it.
-- It works with a USB-C keyboard. Each key types the character printed on it.
-- It works with a USB-C gamepad. The gamepad acts as the CoCo's two joysticks, and you can choose
-  and start games with the gamepad alone.
-- It reads its settings from text files on the card. You can change them on a computer, or on the
-  CoCo Zero itself. A setting can apply to every game, or to just one game.
-- It has a choice of text fonts, including one with true lower case.
-- It saves a picture of the screen to the card when you press Print Screen.
-- It can start a game of your choice automatically when you switch it on.
-- It fits a 3D-printed case shaped like a CoCo 2. The design files are included.
+- Runs a CoCo 2 at full speed: Color, Extended and Disk BASIC, games and demos.
+- Picture and sound over one video cable, at 60 frames per second.
+- Adds the three-voice sound chip from the Games Master Cartridge.
+- Lets you pick disks, programs and cartridges from on-screen lists.
+- USB-C keyboard: each key types what is printed on it.
+- USB-C gamepad: works as both joysticks, and can pick and start games.
+- Settings live in text files, for all games or just one.
+- Choice of fonts, including true lower case.
+- Print Screen saves a screenshot to the card.
+- Can start a game automatically at power-on.
+- Fits a printable case shaped like a CoCo 2.
 
 ## What you need
 
