@@ -73,13 +73,13 @@ guest's GIME palette writes to `$FFB0-$FFBF` and holds the `color_*` settings
 
 ### 3. Framebuffer hand-off (core 0 → core 1)
 
-Every shipping build defines `HDMI_DATA_ISLAND` and so **single-buffers**: one
+Every shipping build defines `AV_DATA_ISLAND` and so **single-buffers**: one
 `g_fb`, which `g_front` points at permanently, and core 0 blits straight into it (see
-`g_fb` under `#ifdef HDMI_DATA_ISLAND` in `src/main.cpp`). That reclaims ~150 KB RAM
+`g_fb` under `#ifdef AV_DATA_ISLAND` in `src/main.cpp`). That reclaims ~150 KB RAM
 for the audio islands, trading tear-free for never-starving: core 1 may scan a line
 mid-blit and tear, but it never drops to a solid-color glitch.
 
-Only a build without `HDMI_DATA_ISLAND` double-buffers, and the one such env left is
+Only a build without `AV_DATA_ISLAND` double-buffers, and the one such env left is
 the diagnostic `pizero_wavmeas`. There core 0 blits into the back buffer, then
 **publishes** `g_front = g_fb[g_back]` at the frame boundary and flips `g_back`.
 `g_front` is `volatile` so core 1 always reads the latest pointer; it samples it
@@ -149,7 +149,7 @@ genuinely cross-cutting constraint:
 
 - One audio data island costs ~27 TMDS words and must fit in the back-porch of an active
   line.
-- The **60 Hz** product timing (`HDMI_60HZ`) uses an 800-pixel-total line split
+- The **60 Hz** product timing (`AV_60HZ`) uses an 800-pixel-total line split
   `8 / 96 / 56 / 640`: its **56-pixel (28-word) back-porch just fits one island**.
   The older off-spec **~52 Hz** timing has a roomy 130-pixel back-porch. Both are
   `#if` branches of the one timing struct in `src/main.cpp` (see the source map). So
@@ -185,7 +185,7 @@ Symbols rather than line numbers, since the files move.
 | Frame drive                   | `src/main.cpp` : `coco_machine_run_cycles` / `coco_machine_render_frame` (main loop) |
 | RGB565 blit                   | `src/coco_boot.cpp` : `coco_boot_blit_vdg_pizero_src`                |
 | Palette                       | `lib/coco_machine/src/coco_machine.cpp` : `coco_machine_palette`     |
-| Framebuffer / publish         | `src/main.cpp` : `g_fb` / `g_front` (`g_back` only without `HDMI_DATA_ISLAND`) |
+| Framebuffer / publish         | `src/main.cpp` : `g_fb` / `g_front` (`g_back` only without `AV_DATA_ISLAND`) |
 | TMDS scanline encode          | `lib/libdvi/dvi.cpp` : `_dvi_prepare_scanline_16bpp`                 |
 | Static-framebuffer worker     | `lib/libdvi/dvi.cpp` : `dvi_static_framebuf_main_16bpp`              |
 | DVI timing struct             | `src/main.cpp` : `dvi_timing_640x480p_57hz_240mhz` (aliased as `DVI_TIMING`). Despite the name it carries every build's timing through `#if` branches, the 60 Hz product included. libdvi's stock `dvi_timing_640x480p_60hz` (`lib/libdvi/dvi_timing.cpp`) is not used. |

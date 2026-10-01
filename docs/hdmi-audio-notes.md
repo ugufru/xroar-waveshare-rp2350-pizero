@@ -102,7 +102,7 @@ Why each piece is the way it is:
 - **This sink ignores ACR entirely.** Sweeping CTS 25176 → 26674 → 50000 (the last
   would be ~1 octave if honored) had **zero** audible effect. So on this monitor
   the audio rate is *not* reconstructed from ACR — pitch is governed by the video
-  clock and the source. Lesson: don't assume a sink uses ACR; `HDMI_ACR_CTS` is
+  clock and the source. Lesson: don't assume a sink uses ACR; `AV_ACR_CTS` is
   kept tunable (default 25176) for sinks that *do* (PIZERO-32), but it's inert
   here.
 
@@ -125,7 +125,7 @@ Why each piece is the way it is:
 
 ## Validation techniques (isolate source vs transport)
 
-- **`-DHDMI_AUDIO_SYNTH`** feeds a mathematically clean 440 Hz wavetable straight
+- **`-DAV_AUDIO_SYNTH`** feeds a mathematically clean 440 Hz wavetable straight
   into the islands, bypassing the emulator. A pure sine has ~no harmonics, so any
   roughness = the **transport**, not the CoCo waveform/resampler. Primary warble
   acceptance test.
@@ -133,7 +133,7 @@ Why each piece is the way it is:
   USB-CDC (no HDMI), so you can decode + measure the exact frequency/spectrum and
   prove whether a defect is in the source or the HDMI path. (`env:pizero_wavmeas`.)
 - **Rule-out logic that paid off:** to prove the residual pitch/buzz (PIZERO-41) is
-  source-side, we showed it survives BOTH a standard pixel clock (`HDMI_STD_TIMING`)
+  source-side, we showed it survives BOTH a standard pixel clock (`AV_STD_TIMING`)
   AND any ACR/CTS value → it can't be the HDMI clock, so it's the emulation/
   resampler.
 
@@ -150,7 +150,7 @@ needs 25.175 MHz → 251.75 MHz sysclk, long assumed to conflict with USB.
 so it gets a clean 48 MHz USB bit clock. HW-confirmed: **60 Hz locks on the
 monitor, the USB keyboard enumerates, and game speed is now correct** (NTSC is
 59.92 Hz; at 52 Hz everything ran ~13 % slow). Build: `env:pizero_60hz` (retired
-in PIZERO-150; the flag `HDMI_60HZ_TEST` remains).
+in PIZERO-150; the flag `AV_60HZ_TEST` remains).
 
 **Audio at 60 Hz** then fits at the same 252 MHz without a bigger overclock: a
 standard 800-total line split as `h_fp=8 / h_sync=96 / h_bp=56 / h_active=640`
@@ -159,7 +159,7 @@ gives a 28-word back porch — just enough for one streaming island — and
 Open question worth checking: at a **standard** 60 Hz clock the sink timebase is
 in-spec, which may also reduce the PIZERO-41 residual.
 
-**Implemented (PIZERO-45):** flag `HDMI_60HZ`, env `pizero_stream_60` (= streaming
+**Implemented (PIZERO-45):** flag `AV_60HZ`, env `pizero_stream_60` (= streaming
 audio + this timing + USB). It sets the timing above, vreg 1.25, ACR CTS=25200
 (in-spec pixel), `AUDIO_SAMPLES_PER_FRAME=800`, and 60 fps pacing
 (`CYCLES_PER_FRAME=14915 / FRAME_PERIOD_US=16667` at the CoCo's 0.894886 MHz).
@@ -176,7 +176,7 @@ older ~52 Hz timing is kept as the fallback. RISK: `h_bp=56`
 ## Pointers
 - Encoder: `lib/libdvi/dvi_data_island.{c,h}` (ported from shuichitakano/pico_lib).
 - Streaming delivery + meter + ring consumer: `src/main.cpp` (`stream_audio_cb`,
-  `HDMI_STREAM_AUDIO`).
+  `AV_STREAM_AUDIO`).
 - Source resampler + SPSC ring: `lib/coco_machine/src/coco_machine.cpp`
   (`audio_emit` / `audio_integrate` / `coco_machine_audio_read`).
 - Build envs & flag matrix: `docs/BUILD.md`. Original scoping: `audio-decision.md`.

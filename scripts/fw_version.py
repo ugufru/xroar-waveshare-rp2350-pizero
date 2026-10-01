@@ -23,6 +23,10 @@ def git(*args):
 
 version = git("describe", "--always", "--dirty", "--abbrev=7")
 date = git("log", "-1", "--format=%cd", "--date=format:%Y-%m-%d")
+# Reproducible builds: FW_VERSION_OVERRIDE / FW_DATE_OVERRIDE pin both, so two
+# builds of different trees can be compared byte for byte (PIZERO-174).
+version = os.environ.get("FW_VERSION_OVERRIDE", version)
+date = os.environ.get("FW_DATE_OVERRIDE", date)
 pioenv = env.subst("$PIOENV")  # noqa: F821
 
 text = (
