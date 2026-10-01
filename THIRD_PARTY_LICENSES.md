@@ -93,20 +93,16 @@ on the bundled libraries (TinyUSB, FatFs, etc.). See the framework's
 
 ---
 
-## Waveshare Electronics — board demo & hardware docs
+## Waveshare Electronics: hardware docs
 
 **Files:**
-- `demo/device_info_demo.cpp` — USB-host triage demo, ported `.ino` → `.cpp`
-  from Waveshare's official RP2350-PiZero Arduino demo
-  (`02-USB/device_info`). The demo itself is an **Adafruit TinyUSB example**
-  and carries its original **MIT license header** (© 2019 Ha Thach for
-  Adafruit Industries), which is preserved verbatim at the top of the file.
 - `docs/RP2350-PiZero-schematic.pdf` — Waveshare's published board schematic,
-  included for hardware reference / interoperability.
+  included for hardware reference and interoperability. (A USB triage demo
+  ported from Waveshare's examples was removed in PIZERO-42.)
 
 **Source:** https://www.waveshare.com/wiki/RP2350-PiZero
 
-Waveshare distributes the demo code and schematic freely for use with their
+Waveshare distributes its demo code and schematic freely for use with their
 hardware. The full board wiki is **not** re-hosted here — see the link above.
 
 ---
