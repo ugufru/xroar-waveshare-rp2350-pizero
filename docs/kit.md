@@ -27,17 +27,17 @@ than just handing someone a board.
 
 | Recipient supplies | Notes |
 |---|---|
-| USB keyboard | Any **simple wired** one. See the USB 1.1 limit in §4 |
-| USB gamepad *(optional)* | Works as the CoCo joysticks. With a keyboard too, needs a simple USB hub (§4) |
+| USB-C keyboard | Any **simple wired** one. One with the older USB-A plug needs a USB-C to USB-A adapter. See the USB 1.1 limit in §4 |
+| USB-C gamepad *(optional)* | Works as the CoCo joysticks. A USB-A one needs the same adapter. With a keyboard too, needs a simple USB-C hub (§4) |
 | microSD card | Any size; FAT32 |
 | USB-C power | Any phone charger or battery bank |
 | HDMI display | Any TV or monitor |
 | **CoCo ROMs** | `bas12.rom` is **required**. We ship none; see §6 |
 | Games, disk images, programs | Their own |
 
-> **The two Type-C ports look identical and are not interchangeable.** One is the
-> USB host (keyboard), the other is power/programming. Label them on the case, or
-> the first thing every recipient does is plug power into the wrong one.
+> **The two USB-C ports look identical and are not interchangeable.** One is for
+> the keyboard and gamepad, the other is for power and programming. Label them on
+> the case, or the first thing every recipient does is plug power into the wrong one.
 
 ## 2. Bill of materials
 
@@ -113,17 +113,18 @@ These points account for essentially every question you will be asked.
 
 > **CoCo on RP2350: read this first**
 >
-> **1. Plug the keyboard in BEFORE you power on.** Plugged straight into the
-> board, a keyboard or pad must be there at power-on; if you swap it,
-> power-cycle the unit. Through a simple USB hub, one plugged in later can
-> appear.
+> **1. Plug the keyboard in BEFORE you switch on.** A keyboard or gamepad
+> plugged straight into the board must be there when you switch on. If you swap
+> it, switch the unit off and on again. Through a simple USB-C hub, one plugged
+> in later can work.
 >
-> **2. Use a simple wired USB keyboard.** The host port is USB 1.1. Basic wired
-> keyboards and full-speed wireless receivers work; high-speed USB 2.0
-> peripherals will not enumerate.
+> **2. Use a simple wired USB-C keyboard.** The keyboard port runs at USB 1.1
+> speed. Basic wired keyboards and full-speed wireless receivers work. A device
+> that only works at high speed will not. A keyboard with the older USB-A plug
+> needs a USB-C to USB-A adapter.
 >
-> **3. The two USB-C ports are different.** One is the keyboard (host), the
-> other is power. They look identical. *(Mark them before you pack the unit:
+> **3. The two USB-C ports are different.** One is for the keyboard and
+> gamepad, the other is for power. They look identical. *(Mark them before you pack the unit:
 > the case does not label them. See §5.)*
 >
 > **4. You need to supply CoCo ROMs.** Until you do, the screen shows
@@ -139,10 +140,10 @@ These points account for essentially every question you will be asked.
 > list, ENTER starts the highlighted one, and ESC (or the same key) goes back
 > to what was running.
 >
-> **6. A USB gamepad works too**, as the CoCo joysticks. Its **Home** button
-> opens the same lists; the D-pad moves and A starts. For a keyboard and a
-> pad together, use a simple USB hub (a multi-chip USB-C hub does not work
-> yet).
+> **6. A USB-C gamepad works too**, as the CoCo joysticks. Its **Home** button
+> opens the same lists. The D-pad moves, and A starts the game. For a keyboard
+> and a gamepad together, plug both into a simple USB-C hub. (Some larger hubs,
+> with several hub chips inside, do not work yet.)
 >
 > Everything else (the source, the build instructions, the SD layout, and how
 > to update the firmware) is at:

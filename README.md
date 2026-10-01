@@ -1,47 +1,56 @@
 # CoCo Zero
 
-**A Tandy Color Computer 2 on a board the size of a stick of gum.** Plug in a TV, a USB keyboard or
-gamepad and a microSD card, and it boots straight to Color BASIC: picture and sound over one HDMI
-cable, at a rock-steady 60 frames a second.
+**A Tandy Color Computer 2 on a board the size of a stick of gum.** Plug in a TV, a USB-C keyboard
+or gamepad, and a microSD card, and it starts Color BASIC. The picture and the sound both go
+over one HDMI cable, at 60 frames per second.
 
 It is [XRoar](https://www.6809.org.uk/xroar/), the CoCo emulator, running on a
-[Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm), a Raspberry Pi Zero sized
-microcontroller board.
+[Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm), a microcontroller board the
+size of a Raspberry Pi Zero.
 
 <p align="center">
   <img src="docs/images/board-wired.jpg" width="460"
-       alt="The CoCo Zero running: a Waveshare RP2350-PiZero board powered up with USB-C power, a USB-host cable, a mini-HDMI-to-HDMI adapter, and a microSD card inserted">
+       alt="The CoCo Zero running: a Waveshare RP2350-PiZero board powered up with USB-C power, a USB-C host cable, a mini-HDMI-to-HDMI adapter, and a microSD card inserted">
 </p>
 
 ## What it does
 
-- **Full-speed CoCo.** Color, Extended and Disk BASIC, games and demos at real speed, in standard
-  640×480 HDMI that any TV or monitor takes.
-- **Sound over HDMI.** The CoCo's own sound, plus a three-voice SN76489 sound chip that Games Master
-  Cartridge titles use, all through the same cable.
-- **Pick a game from a menu.** Disks, programs and cartridges (bank-switched ones too) in on-screen
-  lists. Highlight one, press ENTER, and it starts.
-- **A gamepad is the joystick.** A USB pad works as both CoCo joysticks, and its Home button opens
-  the menus, so you can play without a keyboard at all.
-- **A keyboard that types what it says.** Any USB keyboard: `"`, `:`, `=` and `[ ]` are where the
-  keycaps put them, Caps Lock switches case, and held keys repeat.
-- **Settings in plain text,** for the whole machine or one game: button mapping, colors, fonts, key
-  repeat and more. Edit them on a computer or on the CoCo Zero itself.
-- **Better text.** A choice of fonts, including our 6847T2 with true lower case and a real
-  underscore, caret and braces.
-- **Screenshots.** Print Screen saves the screen as a PNG on the card.
-- **Autorun.** Boot straight into a game, ready to play.
-- **A printable case** styled after the CoCo 2.
+- It runs a Tandy Color Computer 2 (CoCo 2) at full speed: Color BASIC, Extended BASIC, Disk BASIC,
+  games and demos.
+- It shows the picture on any HDMI TV or monitor, at 640×480 and 60 frames per second.
+- It plays the sound through the same HDMI cable.
+- It also has the three-voice sound chip from the Games Master Cartridge (the SN76489), so games
+  written for that cartridge play their music.
+- It lets you choose disks, programs and cartridges from lists on the screen. You highlight one and
+  press ENTER to start it.
+- It works with a USB-C keyboard. Each key types the character printed on it.
+- It works with a USB-C gamepad. The gamepad acts as the CoCo's two joysticks, and you can choose
+  and start games with the gamepad alone.
+- It reads its settings from text files on the card. You can change them on a computer, or on the
+  CoCo Zero itself. A setting can apply to every game, or to just one game.
+- It has a choice of text fonts, including one with true lower case.
+- It saves a picture of the screen to the card when you press Print Screen.
+- It can start a game of your choice automatically when you switch it on.
+- It fits a 3D-printed case shaped like a CoCo 2. The design files are included.
 
 ## What you need
 
-- A **Waveshare RP2350-PiZero** ([product page](https://www.waveshare.com/rp2350-pizero.htm)).
-- A **mini-HDMI to HDMI** cable or adapter, and any HDMI TV or monitor.
-- A **USB keyboard, a USB gamepad, or both** through a simple USB hub. The USB port is
-  full-speed only (USB 1.1): ordinary keyboards, wireless receivers and most gamepads work.
-- A **microSD card** (FAT32) with your own CoCo ROMs. Only `bas12.rom` is required.
-- **USB-C power**, and [PlatformIO](https://platformio.org/install) on a computer to build and
-  flash the firmware.
+- A **Waveshare RP2350-PiZero** board ([product page](https://www.waveshare.com/rp2350-pizero.htm)).
+  It has two USB-C ports and one mini-HDMI port. One USB-C port is for power, and for installing the
+  firmware. The other USB-C port is for your keyboard and gamepad.
+- An **HDMI TV or monitor**, and a **mini-HDMI to HDMI** cable or adapter.
+- A **USB-C power supply**, such as a phone charger.
+- A **USB-C keyboard**, a **USB-C gamepad**, or both.
+  - A keyboard or gamepad with the older, rectangular USB-A plug works too, with a small USB-C to
+    USB-A adapter.
+  - To use a keyboard and a gamepad at the same time, plug them into a simple **USB-C hub**. Some
+    larger hubs, with several hub chips inside, do not work yet.
+  - The keyboard and gamepad port runs at USB 1.1 speed (full speed). Ordinary keyboards, wireless
+    receivers and most gamepads work. A device that only works at high speed does not.
+- A **microSD card**, formatted FAT32, with the CoCo ROM files on it. You supply the ROMs (see
+  below). Only `bas12.rom` is required.
+- A computer with [PlatformIO](https://platformio.org/install) and a **USB-C cable**, to install the
+  firmware.
 - *Optional:* the printable [case](hardware/case/README.md).
 
 > **ROMs are not included.** Color, Extended and Disk BASIC are © Microsoft and Tandy and may not be
@@ -49,24 +58,34 @@ microcontroller board.
 
 <p align="center">
   <img src="docs/images/connections.jpg" width="420"
-       alt="The board's connector edge: two USB-C connections (USB host and power) and a mini-HDMI-to-HDMI adapter">
+       alt="The board's connector edge: two USB-C ports (one for the keyboard and gamepad, one for power) and a mini-HDMI-to-HDMI adapter">
   <br>
-  <em>Two USB-C ports (USB host, and power) and the mini-HDMI adapter.</em>
+  <em>The two USB-C ports (keyboard and gamepad, and power) and the mini-HDMI adapter.</em>
 </p>
 
 ## Quick start
 
-1. **Flash** the firmware: `pio run -t upload`. If the upload can't reset the board, hold
-   **BOOT** while plugging in USB-C.
-2. **Fill the card.** ROMs go in `/coco/roms/` (`bas12.rom`, and optionally `extbas11.rom` and
-   `disk11.rom`). Games go in `/coco/dsk` (`.dsk`), `/coco/bin` (`.bin`) and `/coco/cart` (`.ccc`).
-3. **Connect and power on**: HDMI, keyboard or gamepad, the card, then USB-C power. You get the
-   `OK` prompt in a few seconds. If the card or a ROM is missing, the screen says what to copy where.
-4. **Play.** Press **F12** for disks, **F9** for programs or **F10** for cartridges (or **Home**
-   on the gamepad), pick a game and press **ENTER** (or **A**).
+1. **Install the firmware.** Connect the board's USB-C power port to your computer and run
+   `pio run -t upload`. If the upload can't reset the board, hold the **BOOT** button while you
+   plug in the USB-C cable.
+2. **Fill the microSD card.**
+   - Put the ROMs in the folder `/coco/roms/`: `bas12.rom`, and if you have them, `extbas11.rom` and
+     `disk11.rom`.
+   - Put disks (`.dsk` files) in `/coco/dsk`, programs (`.bin` files) in `/coco/bin`, and cartridges
+     (`.ccc` files) in `/coco/cart`.
+3. **Connect everything and switch on.**
+   - Plug the TV into the mini-HDMI port.
+   - Plug the keyboard or gamepad (or the hub) into the USB-C keyboard port.
+   - Push the microSD card into its slot.
+   - Last, plug USB-C power into the power port.
 
-To start a game automatically at power-on, see [`AUTORUN.md`](AUTORUN.md). Every setting is in
-[`SETTINGS.md`](SETTINGS.md).
+   The `OK` prompt appears after a few seconds. If the card or a ROM is missing, the screen tells you
+   what to copy, and where.
+4. **Play a game.** Press **F12** for disks, **F9** for programs, or **F10** for cartridges. On a
+   gamepad, press **Home**. Highlight a game, then press **ENTER** (or **A** on the gamepad).
+
+To start a game automatically at power-on, see [`AUTORUN.md`](AUTORUN.md). Every setting is
+explained in [`SETTINGS.md`](SETTINGS.md).
 
 ## Controls
 
@@ -97,12 +116,13 @@ memory and USB devices.
 
 Everything above works on hardware. Known gaps:
 
-- **Hot-plugging:** straight into the board, a USB device must be attached at power-on. Through a
-  hub, one plugged in later can appear (PIZERO-51).
+- **Plugging in while it is on:** a keyboard or gamepad plugged straight into the board must be
+  there when you switch on. Through a USB-C hub, one plugged in later can work (PIZERO-51).
 - **Disks are read-only**, so `SAVE` to disk fails.
 - **High-speed POKEs** (SAM double speed) are accepted but ignored; the machine always runs at
   normal speed (PIZERO-132).
-- **Multi-chip USB-C hubs** don't work yet; a simple hub does (PIZERO-159).
+- **Larger USB-C hubs** with several hub chips inside don't work yet. A simple hub does
+  (PIZERO-159).
 - **Gamepads:** tested with a GameSir Tegenaria Lite in its Android and automatic modes. Its
   Switch mode sends nothing (PIZERO-157).
 
