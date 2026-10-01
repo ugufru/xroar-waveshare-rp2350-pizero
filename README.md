@@ -95,7 +95,8 @@ explained in [`SETTINGS.md`](SETTINGS.md).
 | Save a screenshot | **Print Screen** | **M** (GameSir pads) |
 
 **In BASIC:** Caps Lock switches upper and lower case, Home is CLEAR, Esc is BREAK, and Backspace
-deletes. The CoCo has no `{ } | ~` or backtick keys, so those do nothing.
+deletes. The CoCo's keyboard has no way to type `{ } | ~` or a backtick, so those keys do
+nothing. The screen can still show them: `PRINT CHR$(123)` prints `{` with the default 6847t2 font.
 
 **In a game, on the gamepad:** the left stick (or D-pad) is the right joystick, the one nearly all
 software reads, and the right stick is the left joystick. A, B and R1 fire the right joystick; X
