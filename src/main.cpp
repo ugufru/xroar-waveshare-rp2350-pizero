@@ -236,6 +236,84 @@ static volatile bool g_shot_request = false;
 
 static int info_lines(char lines[][33], int max);   // PIZERO-156, at the end of this file
 
+#ifdef VIDEO_BENCH
+// PIZERO-175 step 1: can core 1 send a 640-wide picture? Time libdvi's
+// encoders for one scanline each, on core 0 (the cores are identical) with
+// its interrupts off while core 1 runs the real display, so memory
+// contention is realistic. Today's output is 320 pixels doubled at 16 bpp;
+// the candidates send 640 distinct pixels. Each encoded line is shown twice
+// (240 lines doubled to 480), so it has 2 x 31.75 us = 63.5 us of core 1's
+// time, less the audio data-island work. Printed as [bench] every 5 s.
+#include "tmds_encode.h"
+#include "hardware/sync.h"
+#define BENCH_LINES 240
+static uint32_t g_bench_pix16[640 / 2];          // 640 RGB565 pixels
+static uint32_t g_bench_pix8[640 / 4];           // 640 one-byte pixels
+static uint32_t g_bench_sym[3 * 640];            // symbols, all 3 channels
+static uint32_t g_bench_pal[6 * 256];            // TMDS palette
+struct bench_result { const char *name; uint32_t ns_per_line; };
+static struct bench_result g_bench[8];
+static int g_bench_n = 0;
+
+static void bench_add(const char *name, uint32_t us_total) {
+    if (g_bench_n < 8) g_bench[g_bench_n++] = { name, us_total * 1000u / BENCH_LINES };
+}
+
+static void video_bench_run(void) {
+    for (int i = 0; i < 640 / 2; i++) g_bench_pix16[i] = 0x1234ABCDu * (uint32_t)(i + 1);
+    for (int i = 0; i < 640 / 4; i++) g_bench_pix8[i] = 0x0F070301u + (uint32_t)i * 0x01010101u;
+    static uint16_t pal16[256];
+    for (int i = 0; i < 256; i++) pal16[i] = (uint16_t)(i * 0x0841u);
+    tmds_setup_palette_symbols(pal16, g_bench_pal, 256);
+    uint32_t irq = save_and_disable_interrupts();
+    uint64_t t;
+
+    t = time_us_64();                       // today: 320 pixels doubled, 3 channels
+    for (int l = 0; l < BENCH_LINES; l++) {
+        tmds_encode_data_channel_16bpp(g_bench_pix16, g_bench_sym + 0,   320, DVI_16BPP_BLUE_MSB,  DVI_16BPP_BLUE_LSB);
+        tmds_encode_data_channel_16bpp(g_bench_pix16, g_bench_sym + 640, 320, DVI_16BPP_GREEN_MSB, DVI_16BPP_GREEN_LSB);
+        tmds_encode_data_channel_16bpp(g_bench_pix16, g_bench_sym + 1280,320, DVI_16BPP_RED_MSB,   DVI_16BPP_RED_LSB);
+    }
+    bench_add("today_320x2_16bpp", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();                       // 640 distinct pixels, RGB565
+    for (int l = 0; l < BENCH_LINES; l++) {
+        tmds_encode_data_channel_fullres_16bpp(g_bench_pix16, g_bench_sym + 0,   640, DVI_16BPP_BLUE_MSB,  DVI_16BPP_BLUE_LSB);
+        tmds_encode_data_channel_fullres_16bpp(g_bench_pix16, g_bench_sym + 640, 640, DVI_16BPP_GREEN_MSB, DVI_16BPP_GREEN_LSB);
+        tmds_encode_data_channel_fullres_16bpp(g_bench_pix16, g_bench_sym + 1280,640, DVI_16BPP_RED_MSB,   DVI_16BPP_RED_LSB);
+    }
+    bench_add("full_640_16bpp", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();                       // 640 one-byte pixels, 16 colors
+    for (int l = 0; l < BENCH_LINES; l++)
+        tmds_encode_palette_data(g_bench_pix8, g_bench_pal, g_bench_sym, 640, 4);
+    bench_add("pal_640_16col", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();                       // 640 one-byte pixels, 256 colors
+    for (int l = 0; l < BENCH_LINES; l++)
+        tmds_encode_palette_data(g_bench_pix8, g_bench_pal, g_bench_sym, 640, 8);
+    bench_add("pal_640_256col", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();                       // 640 pixels, 1 bit each (80-column text)
+    for (int l = 0; l < BENCH_LINES; l++)
+        tmds_encode_1bpp(g_bench_pix16, g_bench_sym, 640);
+    bench_add("mono_640_1bpp", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();                       // 640 pixels, 2 bits each (4 grays)
+    for (int l = 0; l < BENCH_LINES; l++)
+        tmds_encode_2bpp(g_bench_pix16, g_bench_sym, 640);
+    bench_add("gray_640_2bpp", (uint32_t)(time_us_64() - t));
+
+    restore_interrupts(irq);
+}
+
+static void video_bench_print(void) {
+    Serial.printf("[bench] ns per encoded line (budget 63500 incl. audio):");
+    for (int i = 0; i < g_bench_n; i++) Serial.printf(" %s=%lu", g_bench[i].name, (unsigned long)g_bench[i].ns_per_line);
+    Serial.printf("\r\n");
+}
+#endif  // VIDEO_BENCH
+
 static const char *g_autotype        = nullptr;
 static int         g_autotype_warmup = 0;
 
@@ -1408,6 +1486,9 @@ void setup() {
     Serial.printf("DVI up: %dx%d -> 640x480 ~57Hz, sys=%lu kHz (PIZERO-02b)\r\n",
                   FRAME_WIDTH, FRAME_HEIGHT, (unsigned long)(clock_get_hz(clk_sys) / 1000));
     Serial.flush();
+#ifdef VIDEO_BENCH
+    video_bench_run();                     // PIZERO-175: core 1 is scanning out now
+#endif
 
     if (!mount_sd()) {
         Serial.print("SD mount FAILED — no ROMs, idle.\r\n");
@@ -1790,6 +1871,9 @@ void loop() {
             Serial.printf("[csg] writes=%lu dropped=%lu\r\n",
                           (unsigned long)coco_machine_cart_csg_writes(),
                           (unsigned long)coco_machine_cart_csg_dropped());
+#ifdef VIDEO_BENCH
+        { static uint32_t n = 0; if (n++ % 5 == 0) video_bench_print(); }
+#endif
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
                       "| freezes=%lu last=%s\r\n",

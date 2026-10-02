@@ -11,11 +11,20 @@ static const uint32_t __scratch_x("tmds_table") tmds_table[] = {
 // memory. There is a third copy which can go in flash, because it's just used
 // to generate palette LUTs. The ones we don't use will get garbage collected
 // during linking.
-const uint32_t __scratch_x("tmds_table_fullres_x") tmds_table_fullres_x[] = {
+#if TMDS_FULLRES_IN_SRAM
+// PIZERO-175: scratch X and Y hold the core stacks too, so for measuring,
+// both copies can live in main SRAM (see tmds_encode.S).
+#define FULLRES_X __not_in_flash("tmds_table_fullres_x")
+#define FULLRES_Y __not_in_flash("tmds_table_fullres_y")
+#else
+#define FULLRES_X __scratch_x("tmds_table_fullres_x")
+#define FULLRES_Y __scratch_y("tmds_table_fullres_y")
+#endif
+const uint32_t FULLRES_X tmds_table_fullres_x[] = {
 #include "tmds_table_fullres.h"
 };
 
-const uint32_t __scratch_y("tmds_table_fullres_y") tmds_table_fullres_y[] = {
+const uint32_t FULLRES_Y tmds_table_fullres_y[] = {
 #include "tmds_table_fullres.h"
 };
 

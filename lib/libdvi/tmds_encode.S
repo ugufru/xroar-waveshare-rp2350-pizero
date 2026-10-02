@@ -17,6 +17,34 @@
 .cpu cortex-m0plus
 .thumb
 
+.macro decl_func_scratch_x name
+.section .scratch_x.\name, "ax"
+.global \name
+.type \name,%function
+.thumb_func
+\name:
+.endm
+
+// decl_func_x/_y place only the full-resolution and palette loops.
+// TMDS_FULLRES_IN_SRAM (PIZERO-175) puts them in main SRAM instead, because
+// scratch X and Y also hold the two core stacks and have no room for them.
+#if TMDS_FULLRES_IN_SRAM
+.macro decl_func_x name
+.section .time_critical.\name, "ax"
+.global \name
+.type \name,%function
+.thumb_func
+\name:
+.endm
+
+.macro decl_func_y name
+.section .time_critical.\name, "ax"
+.global \name
+.type \name,%function
+.thumb_func
+\name:
+.endm
+#else
 .macro decl_func_x name
 .section .scratch_x.\name, "ax"
 .global \name
@@ -32,8 +60,9 @@
 .thumb_func
 \name:
 .endm
+#endif
 
-#define decl_func decl_func_x
+#define decl_func decl_func_scratch_x
 
 // ----------------------------------------------------------------------------
 // Pixel-doubling encoders for RGB
