@@ -50,7 +50,7 @@ static void test_every_setting(void) {
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("reset_button = on"));
     TEST_ASSERT_EQUAL_INT(SET_OK, line("autorun = off"));            TEST_ASSERT_FALSE(s.autorun);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("autorun = maybe"));
-    TEST_ASSERT_EQUAL_INT(SET_OK, line("run_skips_autorun = 0"));    TEST_ASSERT_FALSE(s.reset_to_basic);  // old name still works
+    TEST_ASSERT_EQUAL_INT(SET_UNKNOWN, line("run_skips_autorun = off"));   // PIZERO-182: the old name is gone
     TEST_ASSERT_EQUAL_INT(SET_OK, line("serial_keyboard = off"));    TEST_ASSERT_FALSE(s.serial_keyboard);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("joystick_swap = on"));       TEST_ASSERT_TRUE(s.joystick_swap);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("joystick_swap = sideways"));

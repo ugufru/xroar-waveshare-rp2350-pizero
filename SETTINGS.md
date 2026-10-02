@@ -16,9 +16,9 @@ is no file yet, it opens a template listing every setting at its default.
 - **ESC** leaves. With unsaved changes, the first ESC warns and a second one
   discards them.
 
-Letters type the way they do at the BASIC prompt: upper case to start, Caps
-Lock for lower case, and Shift for the other case of one letter. Settings are
-not case-sensitive either way, and the editor shows text as typed.
+Letters type in lower case, like the settings names. Caps Lock switches to
+upper case, and Shift gives the other case for one letter. Settings are not
+case-sensitive either way, and the editor shows text as typed.
 
 The file always opens tidied: comment lines (`#`) first, then the settings in
 alphabetical order, with blank lines dropped. A game's own settings file opens
@@ -99,7 +99,7 @@ delete the rest.
 | `gime_palette` | `on` / `off` | `on` | The CoCo 3-style palette registers at `$FFB0`-`$FFBF`. `off` removes them and restores the default palette. Only in the default 60 Hz build (`pizero_stream_60`); the `pizero_stream` fallback has no palette registers, so the setting does nothing there. |
 | `gime_timer` | `on` / `off` | `on` | The CoCo 3-style timer and interrupts at `$FF90`-`$FF95`. `off` removes them and stops the timer. Like `gime_palette`, only in the default 60 Hz build. |
 | `autorun` | `on` / `off` | `on` | Whether `autorun.txt` runs when the board starts. `off` always starts at the BASIC prompt (Disk BASIC with the default disk), as if the card had no `autorun.txt`. To skip it just once, hold Space or BREAK (Esc) while the board starts. |
-| `reset_button` | `basic` / `autorun` | `basic` | What the board's reset button (marked RUN) does. `basic` restarts to a clean BASIC prompt and skips `autorun.txt`, the way out when an autorun game hangs. `autorun` restarts as if the power had been switched off and on, autorun included (when `autorun` is on). The old name, `run_skips_autorun = on` / `off`, still works. |
+| `reset_button` | `basic` / `autorun` | `basic` | What the board's reset button (marked RUN) does. `basic` restarts to a clean BASIC prompt and skips `autorun.txt`, the way out when an autorun game hangs. `autorun` restarts as if the power had been switched off and on, autorun included (when `autorun` is on). |
 | `serial_keyboard` | `on` / `off` | `on` | Whether characters a computer sends over the serial link (the USB-C power port) are typed into the CoCo. |
 | `joystick_swap` | `on` / `off` | `off` | Which USB-C gamepad stick is which CoCo joystick. `off`: the pad's left stick (and D-pad) is the right joystick, `JOYSTK(0)` and `JOYSTK(1)`, the one most games read, and the right stick is the left joystick. `on` swaps them, fire buttons included: the right stick steers `JOYSTK(0)`/`(1)` and the left-hand buttons (L1, square) fire it. Handy in a game's own settings file. |
 | `font` | `classic` / `6847t1` / `6847t2` | `6847t2` | The text font. `classic` is the original CoCo 1 and 2 chip: lower case shows as inverse capitals, `^` as an up arrow and `_` as a left arrow. `6847t1` is the later CoCo 2B chip: the same, until a program turns on true lower case with `POKE 65314,16`, which also shows `{ \| } ~` (BASIC switches it off again at the prompt and on `PRINT`; see `lowercase`). `6847t2` is ours: the 6847T1 with a real caret for `^` and a real underscore for `_`. Inverse text in programs looks the same in all three. |

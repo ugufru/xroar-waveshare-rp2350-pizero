@@ -15,7 +15,6 @@
 //   gime_timer        = on | off              CoCo 3-style timer at $FF90
 //   autorun           = on | off              run autorun.txt at power-on
 //   reset_button      = basic | autorun       RUN (reset) skips autorun, or not
-//                       (old name: run_skips_autorun = on | off, PIZERO-182)
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
 //   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
 //   font              = classic | 6847t1 | 6847t2   text font set (6847t2 default)
@@ -187,7 +186,6 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     else if (!strcmp(name, "gime_palette")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_palette = b; }
     else if (!strcmp(name, "gime_timer"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_timer = b; }
     else if (!strcmp(name, "autorun"))           { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->autorun = b; }
-    else if (!strcmp(name, "run_skips_autorun")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->reset_to_basic = b; }  // the old name
     else if (!strcmp(name, "reset_button")) {
         if (!strcmp(v, "basic"))         s->reset_to_basic = true;
         else if (!strcmp(v, "autorun"))  s->reset_to_basic = false;

@@ -5,7 +5,8 @@
 //
 // Keys: printable keys insert (US layout). Letters type as at the BASIC
 // prompt (PIZERO-180): upper case to start, Caps Lock toggles lower case,
-// and Shift gives the other case for one key. Shift gives symbols too.
+// and Shift gives the other case for one key. (The settings editor starts
+// with Caps Lock off instead: text_editor_open.) Shift gives symbols too.
 // Enter splits the line; Backspace and Delete delete; the arrows, Home/End
 // and PgUp/PgDn move. Held keys repeat. Ctrl-S saves. ESC cancels, except
 // that with unsaved changes the first ESC only warns and a second one

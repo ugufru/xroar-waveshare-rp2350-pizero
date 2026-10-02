@@ -94,6 +94,7 @@ bool text_editor_open(const char *path, const char *title, const char *template_
         free(tmp);
     }
     tek_init(&g_k);
+    g_k.caps = !tidy;                      // settings: lower case; autorun: BASIC's upper
     Serial.printf("[editor] open %s (%d bytes)\r\n", g_path, g_t->len);
     draw();
     return true;
