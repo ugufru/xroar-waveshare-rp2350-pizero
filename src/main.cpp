@@ -1311,13 +1311,13 @@ void setup() {
                                                  g_isl2[b][0], g_isl2[b][1], g_isl2[b][2]);
         dvi0.vblank_callback = swaptest_vblank_cb;
         dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg, &dvi0.dma_list_active, bp0, bk1, bk2);
-        Serial.print("[hdmi] M0 swaptest: per-line read_addr ping-pong\r\n");
+        Serial.print("[disp] M0 swaptest: per-line read_addr ping-pong\r\n");
 #elif defined(AV_AUDIO_STATIC)
         static uint32_t isl0[320], isl1[320], isl2[320];
         dvi_setup_scanline_for_vblank_island(&DVI_TIMING, dvi0.dma_cfg, false,
                                              &dvi0.dma_list_vblank_nosync, pkts, 6, isl0, isl1, isl2);
         dvi_setup_active_hdmi_framing(&DVI_TIMING, dvi0.dma_cfg, &dvi0.dma_list_active, bp0, bk1, bk2);
-        Serial.print("[hdmi] M4 step2a: static test tone in vblank\r\n");
+        Serial.print("[disp] M4 step2a: static test tone in vblank\r\n");
 #else
         // M2 final: vblank carries AVI/AudioIF/ACR; live audio is on ACTIVE lines.
         dvi_data_packet_t ipk[3];
@@ -1354,9 +1354,9 @@ void setup() {
         for (int i = 0; i < SYNTH_TBL; ++i)
             g_sine[i] = (int16_t)(6000.0f * sinf((float)i * (2.0f * 3.14159265f / SYNTH_TBL)));   // ~18% FS
         g_synth_inc = (uint32_t)((double)440.0 / 48000.0 * 4294967296.0);   // 440 Hz @ 48 kHz, 32-bit phase
-        Serial.print("[hdmi] M2 STREAM: 440 Hz synth, per-line IRQ encode (PIZERO-38)\r\n");
+        Serial.print("[disp] M2 STREAM: 440 Hz synth, per-line IRQ encode (PIZERO-38)\r\n");
 #else
-        Serial.print("[hdmi] M2 STREAM: live per-line IRQ encode (PIZERO-38)\r\n");
+        Serial.print("[disp] M2 STREAM: live per-line IRQ encode (PIZERO-38)\r\n");
 #endif
         dvi0.active_line_callback = stream_audio_cb;
 #else
@@ -1392,12 +1392,12 @@ void setup() {
             const int gi = (int)((long)j * 523 / N_ALINES);
             if (gi < 480) g_aslot[gi] = (int16_t)j; else g_vaslot[gi - 480] = (int16_t)j;
         }
-        Serial.print("[hdmi] M2: EVEN audio across active+vblank (PIZERO-34)\r\n");
+        Serial.print("[disp] M2: EVEN audio across active+vblank (PIZERO-34)\r\n");
 #else
         // Spread N_ALINES audio lines evenly across the 480 active scanlines.
         for (int i = 0; i < 480; ++i) g_aslot[i] = -1;
         for (int j = 0; j < N_ALINES; ++j) g_aslot[(j * 480) / N_ALINES] = (int16_t)j;
-        Serial.print("[hdmi] M2: active-line audio, ~924 samp/frame @ 51.95Hz\r\n");
+        Serial.print("[disp] M2: active-line audio, ~924 samp/frame @ 51.95Hz\r\n");
 #endif
         dvi0.active_line_callback = active_audio_cb;
 #endif // AV_STREAM_AUDIO
