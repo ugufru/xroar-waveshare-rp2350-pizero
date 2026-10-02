@@ -29,7 +29,7 @@ than just handing someone a board.
 |---|---|
 | USB-C keyboard | Any **simple wired** one. One with the older USB-A plug needs a USB-C to USB-A adapter. See the USB 1.1 limit in §4 |
 | USB-C gamepad *(optional)* | Works as the CoCo joysticks. A USB-A one needs the same adapter. With a keyboard too, needs a simple USB-C hub (§4) |
-| microSD card | Any size; FAT32 |
+| microSD card | A name-brand SDHC card, 4 to 32 GB, formatted FAT32. Not every card works: see §2 |
 | USB-C power | Any phone charger or battery bank |
 | Display | Any TV or computer monitor with a digital video input |
 | **CoCo ROMs** | `bas12.rom` is **required**. We ship none; see §6 |
@@ -51,7 +51,7 @@ placeholders and confirm at order time.
 | Printed case + 4 screws | 10 | ~**$0.55** | `hardware/case/`, self-printed | **Sourced** |
 | mini video cable | 10 | ~$7–10 | Amazon | *Estimate* |
 | USB-C → USB-A OTG adapter | 10 | ~$3–5 (cheaper in multipacks) | Amazon | *Estimate* |
-| microSD card *(optional)* | 10 | ~$5 | Amazon | *Estimate* |
+| microSD card *(optional)*: name-brand SDHC, 4 to 32 GB | 10 | ~$5 | Amazon | *Estimate* |
 
 **Roughly $23/unit, ~$230 for ten**, before shipping. It was $28/unit until
 the case became a printed part; that change takes about $55 off a batch of
@@ -64,6 +64,15 @@ Two things worth knowing:
   between ~$100 and ~$172.
 - **Order spare boards.** Twelve for a batch of ten. It is the one part with no
   substitute, spares cost $10, and a re-order costs shipping and a week.
+- **Buy name-brand microSD cards** (SanDisk, Samsung, Kingston), SDHC, 4 to
+  32 GB, Class 10. The board talks to the card in SPI mode, which a computer
+  never uses, so **a card that works in a computer proves nothing**. Cheap
+  no-name cards are the ones that fail, especially small 2 GB "SDSC" cards: the
+  board shows NO SD CARD with the card in. A pack of Lerdisk 2 GB cards did
+  exactly this on 2026-10-02, every card in it (PIZERO-184). On a Mac, System
+  Information (Card Reader) shows such a card's ID as product name `??asdfg`,
+  manufacturer ID `0x05`, SD spec 1.1. Test one card from every pack in a
+  board before buying more.
 
 Amazon blocks automated price retrieval, so the accessory figures above are
 estimates rather than quotes. Fill in real numbers when ordering.
@@ -101,11 +110,17 @@ estimates rather than quotes. Fill in real numbers when ordering.
    The sample `autorun.txt` is a self-running graphics demo, which doubles as a
    display test. It needs BASIC, so it does nothing until ROMs are added.
 
+   The folder names must be exactly these: `roms`, `dsk`, `bin` (programs) and
+   `cart` (cartridges). A folder called `bins`, say, is not looked in, and its
+   programs never appear in the F9 list.
+
 4. **Test before boxing.** You need a ROM-equipped SD card of your own for this.
    A unit with no ROMs only shows its NO ROM FOUND page, which proves little
    beyond the display (see §6). Power it up with a keyboard attached and confirm the BASIC `OK` prompt appears.
    Thirty seconds, and it catches a bad board, a bad flash, and a case that
-   shorts something. Keep one "known-good" test card in the build kit.
+   shorts something. Keep one "known-good" test card in the build kit, and
+   put every card you ship in a board once too: a card that will not mount
+   shows NO SD CARD (§2).
 
 ## 4. The card that goes in the box
 
@@ -128,8 +143,9 @@ These points account for essentially every question you will be asked.
 > the case does not label them. See §5.)*
 >
 > **4. You need to supply CoCo ROMs.** Until you do, the screen shows
-> **NO ROM FOUND** (or **NO SD CARD** with no card in). That does *not* mean
-> the unit is broken. Format a microSD as FAT32 and put `bas12.rom` in
+> **NO ROM FOUND** (or **NO SD CARD** with no card in, or a card it cannot
+> read). That does *not* mean the unit is broken. Use a name-brand microSD
+> card (cheap no-name cards often do not work), format it FAT32, and put `bas12.rom` in
 > `/coco/roms/`; that one is required. `extbas11.rom` and `disk11.rom` are
 > strongly recommended. We do not distribute them; they are still under
 > copyright, so dump or source your own.
