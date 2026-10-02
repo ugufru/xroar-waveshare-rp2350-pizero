@@ -459,6 +459,11 @@ static volatile bool g_audio_paused = false;
 // PIZERO-152: a key pressed while a boot page is up (before the machine runs).
 static bool g_boot_key = false;
 static uint8_t g_hid_prev_codes[6] = {0};
+// PIZERO-182: when the USB host started, when a keyboard mounted (0: none
+// yet) and whether it has sent a report, for the Space/BREAK check at boot.
+static uint32_t g_usb_up_ms = 0;
+static volatile uint32_t g_kb_mount_ms = 0;
+static volatile bool g_kb_reported = false;
 // PIZERO-163: the USB keys held and the CoCo key each chose (key_translate.h).
 static struct kt_state g_kt;
 
@@ -527,6 +532,7 @@ static void hid_keyboard_apply(const uint8_t *report) {
 
     // PIZERO-152: before the machine runs, a key only dismisses a boot page;
     // it is tracked but not pressed, so it cannot reach BASIC as a keystroke.
+    g_kb_reported = true;                    // PIZERO-182
     if (!g_machine_running) {
         for (int i = 0; i < 6; i++) {
             if (!codes[i]) continue;
@@ -1054,11 +1060,11 @@ static void settings_apply(void) {
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     dvi_sio_tmds_encode = st->video_hw_encode;   // PIZERO-175: from the next scanline
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "reset_button=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u video_encoder=%s colors_overridden=%04x\r\n",
+                  "autorun=%s reset_button=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u video_encoder=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
-                  st->reset_to_basic ? "basic" : "power_on", st->serial_keyboard ? "on" : "off",
+                  st->autorun ? "on" : "off", st->reset_to_basic ? "basic" : "autorun", st->serial_keyboard ? "on" : "off",
                   st->joystick_swap ? "on" : "off",
                   st->font == FONT_CLASSIC ? "classic" : st->font == FONT_6847T1 ? "6847t1" : "6847t2",
                   st->lowercase ? "on" : "off",
@@ -1403,6 +1409,7 @@ void setup() {
         // mouse). Has to be set BEFORE begin().
         tuh_hid_set_default_protocol(HID_PROTOCOL_BOOT);
         USBHost.begin(1);
+        g_usb_up_ms = millis();                // PIZERO-182
         Serial.printf("USB host up: PIO-USB D+=%d/D-=%d on pio1\r\n",
                       HOST_PIN_DP, HOST_PIN_DP + 1);
         Serial.flush();
@@ -1654,6 +1661,12 @@ void setup() {
     coco_boot_recover_text("0:/coco/autorun.txt");    // PIZERO-147: finish a cut-off save
     bool have_autorun = coco_boot_load_autorun(&autorun);
 
+    // PIZERO-182: autorun = off in settings.txt: never run it.
+    if (have_autorun && !g_settings.autorun) {
+        Serial.print("[autorun] off in settings.txt (PIZERO-182)\r\n");
+        have_autorun = false;
+    }
+
     // PIZERO-116: a RUN press is a cold start straight to the BASIC prompt.
     // Ignore autorun.txt entirely, so boot takes exactly the path a card
     // without one takes: Disk BASIC, the default disk attached, nothing
@@ -1663,6 +1676,40 @@ void setup() {
         boot_page(MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL);
         boot_wait(2500);          // a key skips it (PIZERO-152)
         have_autorun = false;
+    }
+
+    // PIZERO-182: Space or BREAK held down while the board starts skips
+    // autorun the same way. The keyboard may still be enumerating, so wait
+    // for it: until it has reported, or briefly after it mounted (a key held
+    // through enumeration shows in its first reports), or, with no keyboard,
+    // until KB_WAIT_MS after the USB host started. Measured: a keyboard behind
+    // a hub, after a gamepad, mounts about 1.4 s after the host starts. With
+    // nothing plugged into the USB-C port at all, there is no wait.
+    if (have_autorun) {
+        const uint32_t KB_WAIT_MS = 2500, KB_SETTLE_MS = 150, KB_DETECT_MS = 300;
+        uint32_t t0 = millis();
+        while (true) {
+            uint32_t now = millis(), mounted = g_kb_mount_ms;
+            if (g_kb_reported) break;
+            if (mounted && now - mounted >= KB_SETTLE_MS) break;
+            if (!mounted && now - g_usb_up_ms >= KB_WAIT_MS) break;
+            if (!mounted && now - g_usb_up_ms >= KB_DETECT_MS && !usbdiag_connected()) break;
+            USBHost.task();
+            delay(2);
+        }
+        bool held = false;
+        for (int i = 0; i < 6; i++) {
+            uint8_t c = g_hid_prev_codes[i];
+            if (c == 0x2C || c == 0x29 || c == 0x48) held = true;   // Space, Esc (BREAK), Pause
+        }
+        Serial.printf("[autorun] key check: waited %lums, keyboard %s, %s\r\n",
+                      (unsigned long)(millis() - t0),
+                      g_kb_mount_ms ? "present" : "none", held ? "Space/BREAK held: skipped" : "nothing held");
+        if (held) {
+            boot_page(MSG_RUNSKIP_TITLE, MSG_KEYSKIP_BODY, MSG_KEYSKIP_DETAIL);
+            boot_wait(2500);
+            have_autorun = false;
+        }
     }
 
     // PIZERO-152: a name autorun.txt gives that is not on the card is
@@ -2080,6 +2127,8 @@ void tuh_hid_mount_cb(uint8_t daddr, uint8_t idx,
     Serial.printf("[usb] HID mount addr=%u idx=%u vid=%04X pid=%04X proto=%u (%s) desc_len=%u\r\n",
                   daddr, idx, vid, pid, proto, kind, desc_len);
     if (daddr <= USB_PAD_MAX_DADDR) g_pad_kind_of[daddr] = pad;
+    if (pad == PAD_NONE && proto == HID_ITF_PROTOCOL_KEYBOARD && !g_kb_mount_ms)
+        g_kb_mount_ms = millis() | 1;          // PIZERO-182 (never 0)
 #if PAD_PROBE
     if (pad != PAD_NONE) {                     // the layout, for decoding by hand
         Serial.printf("[pad] descriptor %u bytes:", desc_len);

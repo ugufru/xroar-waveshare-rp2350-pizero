@@ -255,7 +255,15 @@ Switching the power off and on runs AUTORUN again as usual. In the printed
 case, RUN is reached through the vent slots with a thin wire.
 
 To make the reset button behave like power-on instead, autorun included, put
-`reset_button = power_on` in `settings.txt`.
+`reset_button = autorun` in `settings.txt`.
+
+**Hold Space or BREAK (Esc) while the board starts** (PIZERO-182). Boot waits
+a moment for the keyboard (about a second and a half behind a hub), and if
+either key is down, it skips `autorun.txt` the same way, with the same
+"AUTORUN SKIPPED" page. Start again without holding a key to autorun.
+
+**To turn autorun off altogether**, put `autorun = off` in `settings.txt`.
+The file stays on the card, ready for when you turn it back on.
 
 ### F. Missing SD card or ROMs
 
