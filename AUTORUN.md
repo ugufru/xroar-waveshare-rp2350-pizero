@@ -260,8 +260,8 @@ To make the reset button behave like power-on instead, autorun included, put
 **Tap Space or BREAK (Esc) while the board starts** (PIZERO-182), from the
 moment you switch on or press the reset button until the screen appears.
 Boot watches the keyboard briefly once it is ready (about a second and a
-half behind a hub), and a tap skips `autorun.txt` the same way, with the
-same "AUTORUN SKIPPED" page. Some keyboards, a Keychron K2 among them, do not
+half behind a hub), and a tap skips `autorun.txt`: the machine comes up
+at the BASIC prompt, with no page in between. Some keyboards, a Keychron K2 among them, do not
 report a key that is already held down as they start, so tap rather than
 hold. Start again without pressing a key to autorun.
 

@@ -1107,18 +1107,6 @@ static void boot_wait(uint32_t max_ms) {
     }
 }
 
-// PIZERO-182: hold a boot page for ms whatever is pressed, still servicing
-// the USB host. For a page reached by tapping a key, where the next tap
-// would otherwise dismiss it before it can be read.
-static void boot_hold(uint32_t ms) {
-    uint32_t t0 = millis();
-    while (millis() - t0 < ms) {
-        USBHost.task();
-        delay(2);
-    }
-    g_boot_key = false;
-}
-
 static void boot_page(const char *title, const char *body, const char *detail) {
     coco_boot_card_clear();
     coco_boot_card_center(1, title);
@@ -1741,11 +1729,7 @@ void setup() {
                       g_kb_state[0], g_kb_state[1], g_kb_state[2], g_kb_state[3],
                       g_kb_state[4], g_kb_state[5], g_kb_state[6], g_kb_state[7],
                       held ? "Space/BREAK: skipped" : "no Space/BREAK");
-        if (held) {
-            boot_page(MSG_RUNSKIP_TITLE, MSG_KEYSKIP_BODY, MSG_KEYSKIP_DETAIL);
-            boot_hold(2000);          // not boot_wait: the next tap would close it unread
-            have_autorun = false;
-        }
+        if (held) have_autorun = false;           // no page: straight to BASIC
     }
 
     // PIZERO-152: a name autorun.txt gives that is not on the card is
