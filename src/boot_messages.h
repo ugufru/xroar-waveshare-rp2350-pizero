@@ -51,10 +51,15 @@
                            "AT THE BASIC PROMPT AND IGNORES /COCO/AUTORUN.TXT."
 #define MSG_RUNSKIP_DETAIL "TO USE AUTORUN, SWITCH THE POWER OFF AND ON AGAIN."
 
-// PIZERO-182: the same, for Space or BREAK held down while the board starts.
-#define MSG_KEYSKIP_BODY   "SPACE OR BREAK WAS HELD DOWN, SO THE MACHINE STARTS " \
+// PIZERO-182: shown while boot watches the keyboard for a Space or BREAK,
+// so it is clear when a press counts.
+#define MSG_ARWAIT_TITLE   "AUTORUN"
+#define MSG_ARWAIT_BODY    "PRESS SPACE OR BREAK TO SKIP IT AND START AT THE BASIC PROMPT."
+
+// PIZERO-182: the same, for Space or BREAK pressed while the board starts.
+#define MSG_KEYSKIP_BODY   "SPACE OR BREAK WAS PRESSED, SO THE MACHINE STARTS " \
                            "AT THE BASIC PROMPT AND IGNORES /COCO/AUTORUN.TXT."
-#define MSG_KEYSKIP_DETAIL "TO USE AUTORUN, START AGAIN WITHOUT HOLDING A KEY."
+#define MSG_KEYSKIP_DETAIL "TO USE AUTORUN, START AGAIN WITHOUT PRESSING A KEY."
 
 // PIZERO-152: autorun.txt named something that is not on the card. The body
 // is a format: the directive (@DISK, @CART, @DIRECT) and the name as written.

@@ -464,6 +464,13 @@ static uint8_t g_hid_prev_codes[6] = {0};
 static uint32_t g_usb_up_ms = 0;
 static volatile uint32_t g_kb_mount_ms = 0;
 static volatile bool g_kb_reported = false;
+// The keyboard's state asked for with GET_REPORT, because many keyboards
+// (a Keychron K2, for one) only send a report when a key changes, so a key
+// already down as it connects is never reported. done: 0 waiting, 1 got it,
+// 2 the keyboard refused.
+static uint8_t g_kb_daddr = 0, g_kb_idx = 0;
+static uint8_t g_kb_state[8];
+static volatile uint8_t g_kb_state_done = 0;
 // PIZERO-163: the USB keys held and the CoCo key each chose (key_translate.h).
 static struct kt_state g_kt;
 
@@ -1100,6 +1107,18 @@ static void boot_wait(uint32_t max_ms) {
     }
 }
 
+// PIZERO-182: hold a boot page for ms whatever is pressed, still servicing
+// the USB host. For a page reached by tapping a key, where the next tap
+// would otherwise dismiss it before it can be read.
+static void boot_hold(uint32_t ms) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < ms) {
+        USBHost.task();
+        delay(2);
+    }
+    g_boot_key = false;
+}
+
 static void boot_page(const char *title, const char *body, const char *detail) {
     coco_boot_card_clear();
     coco_boot_card_center(1, title);
@@ -1681,36 +1700,54 @@ void setup() {
         have_autorun = false;
     }
 
-    // PIZERO-182: Space or BREAK held down while the board starts skips
-    // autorun the same way. The keyboard may still be enumerating, so wait
-    // for it: until it has reported, or briefly after it mounted (a key held
-    // through enumeration shows in its first reports), or, with no keyboard,
-    // until KB_WAIT_MS after the USB host started. Measured: a keyboard behind
-    // a hub, after a gamepad, mounts about 1.4 s after the host starts. With
-    // nothing plugged into the USB-C port at all, there is no wait.
+    // PIZERO-182: Space or BREAK, held or tapped while the board starts,
+    // skips autorun the same way. The keyboard is still enumerating, so boot
+    // waits for it, then watches for KB_WATCH_MS after it mounts, with a
+    // prompt on screen so it is clear when a press counts. Measured on a
+    // Keychron K2 behind a hub: taps reported from 45 ms after it mounts. A tap is
+    // needed on keyboards that only report changes: a Keychron K2 never
+    // reports a key already down as it connects, and answers GET_REPORT with
+    // an empty report (measured), so a hold alone is invisible there. The
+    // GET_REPORT still catches a hold on keyboards that answer it properly.
+    // Measured: a keyboard behind a hub, after a gamepad, mounts about 1.4 s
+    // after the host starts. No keyboard: give up KB_WAIT_MS after the host
+    // started, or at once when nothing is plugged into the USB-C port.
     if (have_autorun) {
-        const uint32_t KB_WAIT_MS = 2500, KB_SETTLE_MS = 150, KB_DETECT_MS = 300;
+        const uint32_t KB_WAIT_MS = 2500, KB_WATCH_MS = 1000, KB_DETECT_MS = 300;
+        auto skip_key = [](const uint8_t *codes) {
+            for (int i = 0; i < 6; i++)
+                if (codes[i] == 0x2C || codes[i] == 0x29 || codes[i] == 0x48) return true;   // Space, Esc (BREAK), Pause
+            return false;
+        };
         uint32_t t0 = millis();
-        while (true) {
+        bool asked = false, held = false, prompted = false;
+        while (!held) {
             uint32_t now = millis(), mounted = g_kb_mount_ms;
-            if (g_kb_reported) break;
-            if (mounted && now - mounted >= KB_SETTLE_MS) break;
+            if (mounted && !prompted) {
+                boot_page(MSG_ARWAIT_TITLE, MSG_ARWAIT_BODY, nullptr);
+                prompted = true;
+            }
+            // Ask the keyboard what is held; retried while its control
+            // endpoint is still busy finishing enumeration.
+            if (mounted && !asked)
+                asked = tuh_hid_get_report(g_kb_daddr, g_kb_idx, 0, HID_REPORT_TYPE_INPUT, g_kb_state, sizeof g_kb_state);
+            held = skip_key(g_hid_prev_codes) || (g_kb_state_done == 1 && skip_key(g_kb_state + 2));
+            if (mounted && now - mounted >= KB_WATCH_MS) break;
             if (!mounted && now - g_usb_up_ms >= KB_WAIT_MS) break;
             if (!mounted && now - g_usb_up_ms >= KB_DETECT_MS && !usbdiag_connected()) break;
             USBHost.task();
             delay(2);
         }
-        bool held = false;
-        for (int i = 0; i < 6; i++) {
-            uint8_t c = g_hid_prev_codes[i];
-            if (c == 0x2C || c == 0x29 || c == 0x48) held = true;   // Space, Esc (BREAK), Pause
-        }
-        Serial.printf("[autorun] key check: waited %lums, keyboard %s, %s\r\n",
-                      (unsigned long)(millis() - t0),
-                      g_kb_mount_ms ? "present" : "none", held ? "Space/BREAK held: skipped" : "nothing held");
+        Serial.printf("[autorun] key check: waited %lums, keyboard %s, get_report %s "
+                      "%02X %02X %02X %02X %02X %02X %02X %02X, %s\r\n",
+                      (unsigned long)(millis() - t0), g_kb_mount_ms ? "present" : "none",
+                      !asked ? "not sent" : g_kb_state_done == 1 ? "ok" : g_kb_state_done == 2 ? "refused" : "no answer",
+                      g_kb_state[0], g_kb_state[1], g_kb_state[2], g_kb_state[3],
+                      g_kb_state[4], g_kb_state[5], g_kb_state[6], g_kb_state[7],
+                      held ? "Space/BREAK: skipped" : "no Space/BREAK");
         if (held) {
             boot_page(MSG_RUNSKIP_TITLE, MSG_KEYSKIP_BODY, MSG_KEYSKIP_DETAIL);
-            boot_wait(2500);
+            boot_hold(2000);          // not boot_wait: the next tap would close it unread
             have_autorun = false;
         }
     }
@@ -2103,6 +2140,13 @@ static bool pad_addr(uint8_t daddr) {
 // TinyUSB looks up these weak symbols by C name; extern "C" prevents mangling.
 extern "C" {
 
+// PIZERO-182: the keyboard's answer to the boot-time GET_REPORT.
+void tuh_hid_get_report_complete_cb(uint8_t daddr, uint8_t idx, uint8_t report_id,
+                                    uint8_t report_type, uint16_t len) {
+    (void)report_id; (void)report_type;
+    if (daddr == g_kb_daddr && idx == g_kb_idx) g_kb_state_done = (len >= 8) ? 1 : 2;
+}
+
 void tuh_mount_cb(uint8_t daddr) {
     g_usb_devices++;
     Serial.printf("[usb] device attached, addr=%u\r\n", daddr);
@@ -2130,8 +2174,10 @@ void tuh_hid_mount_cb(uint8_t daddr, uint8_t idx,
     Serial.printf("[usb] HID mount addr=%u idx=%u vid=%04X pid=%04X proto=%u (%s) desc_len=%u\r\n",
                   daddr, idx, vid, pid, proto, kind, desc_len);
     if (daddr <= USB_PAD_MAX_DADDR) g_pad_kind_of[daddr] = pad;
-    if (pad == PAD_NONE && proto == HID_ITF_PROTOCOL_KEYBOARD && !g_kb_mount_ms)
-        g_kb_mount_ms = millis() | 1;          // PIZERO-182 (never 0)
+    if (pad == PAD_NONE && proto == HID_ITF_PROTOCOL_KEYBOARD && !g_kb_mount_ms) {
+        g_kb_daddr = daddr; g_kb_idx = idx;    // PIZERO-182
+        g_kb_mount_ms = millis() | 1;          // (never 0)
+    }
 #if PAD_PROBE
     if (pad != PAD_NONE) {                     // the layout, for decoding by hand
         Serial.printf("[pad] descriptor %u bytes:", desc_len);
