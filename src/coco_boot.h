@@ -41,7 +41,7 @@ struct coco_autorun {
 };
 
 // Read /coco/autorun.txt. Returns true if the file existed (whether or
-// not it had valid content); false if the file is missing — caller
+// not it had valid content); false if the file is missing, caller
 // should then proceed with defaults.
 bool coco_boot_load_autorun(struct coco_autorun *out);
 

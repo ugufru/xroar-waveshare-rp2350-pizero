@@ -1,4 +1,4 @@
-// coco_palette.h — the writable 16-entry palette register file, in the CoCo 3
+// coco_palette.h: the writable 16-entry palette register file, in the CoCo 3
 // GIME layout at $FFB0-$FFBF (PIZERO-55 part 1 / PIZERO-85).
 //
 // A real MC6847 has no palette registers at all; its colours are fixed in

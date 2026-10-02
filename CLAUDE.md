@@ -1,36 +1,36 @@
-# CLAUDE.md — agent working notes
+# CLAUDE.md: agent working notes
 
 XRoar (Tandy CoCo) on the **Waveshare RP2350-PiZero** (mini video port + USB host).
 
-**All project documentation lives in `README.md` and `docs/`** — hardware specs, the confirmed pinout,
+**All project documentation lives in `README.md` and `docs/`**: hardware specs, the confirmed pinout,
 the `libdvi`/HSTX rationale, the display geometry, and the clock-conflict risk are written up there, not
 here. Don't duplicate them. This file is just pointers and conventions for working in the repo.
 The end-to-end video+audio signal path (CoCo → video out) is mapped in `docs/pipeline.md`, which links the
 deeper `docs/video-audio-notes.md` and `docs/BUILD.md`.
-`docs/ROADMAP.md` sequences the open work (a navigation map over `issues.jsonl` — what's shipped,
+`docs/ROADMAP.md` sequences the open work (a navigation map over `issues.jsonl`: what's shipped,
 what's next, and dependencies); it points to tickets, it doesn't restate them.
 
 ## Local references (not committed)
 
-- `.ref/` (gitignored) — downloaded Waveshare vendor material:
+- `.ref/` (gitignored): downloaded Waveshare vendor material:
   - `.ref/RP2350-PiZero-schematic.pdf` (also committed to `docs/`)
-  - `.ref/demo/RP2350-PiZero/` — extracted official demo. **Authoritative source for pins and the
+  - `.ref/demo/RP2350-PiZero/`: extracted official demo. **Authoritative source for pins and the
     proven driver stack.** Key files:
-    - `Arduino/01-DVI/hello_dvi/` — libdvi + `common_dvi_pin_configs.h` (`pico_sock_cfg`), 320×240→640×480.
-    - `Arduino/02-USB/device_info/device_info.ino` — Pico-PIO-USB host: `HOST_PIN_DP=28`, CPU must be 120/240 MHz.
-    - `Arduino/03-MicroSD/hw_config.c` — SD SPI pins (SCK30/MOSI31/MISO40/CS43/CD22).
-    - `C/boards/waveshare_rp2350_pizero.h` — board defines (RP2350B, 16 MB flash, I2C0 6/7).
+    - `Arduino/01-DVI/hello_dvi/`: libdvi + `common_dvi_pin_configs.h` (`pico_sock_cfg`), 320×240→640×480.
+    - `Arduino/02-USB/device_info/device_info.ino`: Pico-PIO-USB host: `HOST_PIN_DP=28`, CPU must be 120/240 MHz.
+    - `Arduino/03-MicroSD/hw_config.c`: SD SPI pins (SCK30/MOSI31/MISO40/CS43/CD22).
+    - `C/boards/waveshare_rp2350_pizero.h`: board defines (RP2350B, 16 MB flash, I2C0 6/7).
 
 ## Source repos to adapt (read-only)
 
-- `~/github/coco-rp2350-waveshare-touch-amoled-18` — working XRoar port. Reuse `lib/xroar_core`,
+- `~/github/coco-rp2350-waveshare-touch-amoled-18`: working XRoar port. Reuse `lib/xroar_core`,
   `lib/coco_machine`, `src/coco_boot.cpp`, `src/main.cpp`, `AUTORUN.md`, `deploy.sh`.
-  Its `lib/sh8601`, `lib/qspi_pio`, `lib/hal`, `src/hw_config.c` are AMOLED-specific — do NOT copy.
-- `~/github/waveshare-rp2350-usb-a` — PIO-USB host reference.
+  Its `lib/sh8601`, `lib/qspi_pio`, `lib/hal`, `src/hw_config.c` are AMOLED-specific: do NOT copy.
+- `~/github/waveshare-rp2350-usb-a`: PIO-USB host reference.
 
 ## Building
 
-**`docs/BUILD.md` is the source of truth for how to build/flash this firmware** —
+**`docs/BUILD.md` is the source of truth for how to build/flash this firmware**:
 the PlatformIO envs, the full video/audio build-flag matrix, serial monitoring, and
 the toolchain gotchas. Read it before building; keep it in sync when you add/change
 a build flag.
@@ -41,7 +41,7 @@ a build flag.
   fallback; the rest are diagnostics tied to open issues. Before committing a
   change that adds RAM, also build `pizero_stream` and the double-buffered
   `pizero_wavmeas` (~99% RAM). Use a real env, never a
-  one-off `PLATFORMIO_BUILD_FLAGS` (it links stale objects — see BUILD.md §4b).
+  one-off `PLATFORMIO_BUILD_FLAGS` (it links stale objects, see BUILD.md §4b).
 
 ## Build gotchas to remember
 
@@ -59,10 +59,10 @@ a build flag.
 - Work requires an issue in `issues.jsonl`. Create one before starting.
 - Don't mark an issue `done` until the user confirms it works on hardware.
 - Ask before any git push.
-- **NEVER create git branches — ever. Commit directly to the current branch (`main`).**
+- **NEVER create git branches, ever. Commit directly to the current branch (`main`).**
   This overrides any default "branch before committing on the default branch" behavior.
   `main` is the only branch; `git branch` must print only `main`. No worktrees, no
-  branch-per-agent isolation, no "safety" branch for risky or half-working work — that
+  branch-per-agent isolation, no "safety" branch for risky or half-working work: that
   goes behind a build flag on `main`, or stays uncommitted. Archive dead exploratory
   history with a tag (`archive/<topic>`), never a lingering branch. See `CONTRIBUTING.md`.
 - Reference issue IDs (`PIZERO-NN`) in commit messages.
@@ -70,7 +70,7 @@ a build flag.
   gets printed must exist as a commit first, so the physical part in hand
   always maps to a recoverable version. Render, commit, then open the
   slicer. See `hardware/case/README.md`.
-- User preference: no AskUserQuestion popups — ask in plain prose.
+- User preference: no AskUserQuestion popups: ask in plain prose.
 - **Improvements are on by default.** A new setting that improves on the
   original machine (auto-repeat, the 6847t2 font, true lower case, and the
   like) defaults to on. Authentic behavior stays available as the other

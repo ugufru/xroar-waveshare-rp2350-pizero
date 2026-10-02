@@ -1,5 +1,5 @@
 /*
- * coco_machine — the integration glue that turns the vendored XRoar
+ * coco_machine: the integration glue that turns the vendored XRoar
  * modules (mc6809, mc6883, mc6821, mc6847) into a runnable CoCo 1/2.
  *
  * Public surface is small on purpose: init, advance time by N CPU
@@ -84,13 +84,13 @@ void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn);
 unsigned coco_machine_fdc_drive(void);
 
 /* Directly write `len` bytes from `src` into emulator RAM starting at
- * `addr`. Bypasses the 6809 / SAM / TY logic — used by AMOLED-26 to
+ * `addr`. Bypasses the 6809 / SAM / TY logic, used by AMOLED-26 to
  * direct-load LOADM .bin segments without going through DECB. Wraps
  * around at 64 KB. */
 void coco_machine_loadm_write(uint16_t addr, const uint8_t *src, uint16_t len);
 
 /* Set the 6809's PC register to `entry`. Used after coco_machine_loadm_write
- * to simulate an EXEC. Be careful — the CPU might be mid-instruction; this
+ * to simulate an EXEC. Be careful: the CPU might be mid-instruction; this
  * is intended to be called only when the machine is paused. */
 void coco_machine_jump(uint16_t entry);
 
@@ -127,7 +127,7 @@ void coco_machine_audio_counters(uint32_t *produced, uint32_t *tone);
 uint8_t coco_machine_vdg_mode_bits(void);
 uint8_t coco_machine_sam_v(void);   /* PIZERO-140: SAM VDG address mode, 0-7 */
 
-/* Pointer to the current VDG buffer — COCO_VDG_W * COCO_VDG_H bytes,
+/* Pointer to the current VDG buffer: COCO_VDG_W * COCO_VDG_H bytes,
  * one palette index per pixel. Stable for the lifetime of the
  * machine; callers should not free or modify it. */
 const uint8_t *coco_machine_get_vdg_buffer(void);
@@ -138,13 +138,13 @@ const uint8_t *coco_machine_get_vdg_buffer(void);
  * via SUPPRESS_RENDER_SCANLINE in this build. */
 void coco_machine_render_frame(void);
 
-/* Diagnostic accessors — useful for smoke tests. */
+/* Diagnostic accessors: useful for smoke tests. */
 uint16_t coco_machine_get_pc(void);
 uint32_t coco_machine_get_total_mem_cycles(void);
 uint32_t coco_machine_get_render_lines(void);
 const uint8_t *coco_machine_peek_ram(uint16_t addr);
 
-/* Keyboard injection — press/release simulated keys by DSCAN_* code
+/* Keyboard injection: press/release simulated keys by DSCAN_* code
  * (see lib/xroar_core/src/dkbd.h). The PIA0 port A pre-read hook resolves
  * the active row(s) from PIA0 port B at read time and pulls down the
  * matching column bits. All keys released initially. */

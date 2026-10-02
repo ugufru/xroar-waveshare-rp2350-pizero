@@ -1,4 +1,4 @@
-// text_card.h — the pure parts of the 32x16 diagnostic card (PIZERO-92),
+// text_card.h: the pure parts of the 32x16 diagnostic card (PIZERO-92),
 // split out so they can be tested on the host (PIZERO-109). The rendering
 // itself needs a framebuffer and the font, and lives in coco_boot.cpp.
 

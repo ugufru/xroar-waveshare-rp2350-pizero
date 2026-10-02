@@ -1,4 +1,4 @@
-// boot_messages.h — the words on the diagnostic pages (PIZERO-92).
+// boot_messages.h: the words on the diagnostic pages (PIZERO-92).
 //
 // They live here rather than inline in main.cpp so the host tests can check
 // what the reader will actually see: that every page wraps inside 32 columns,

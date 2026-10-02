@@ -1,4 +1,4 @@
-// audio_servo.h — hold the audio ring near half full (PIZERO-121).
+// audio_servo.h: hold the audio ring near half full (PIZERO-121).
 //
 // THE PROBLEM. The producer is paced by emulated CoCo time; the consumer is
 // paced by the real pixel clock. They are independent oscillators and they do

@@ -1,10 +1,10 @@
 /*
- * coco_machine.cpp — see coco_machine.h.
+ * coco_machine.cpp: see coco_machine.h.
  *
  * Owns:
  *   * 64 KB RAM in PSRAM
  *   * 16 KB ROM pointer (caller-owned, lives in flash)
- *   * MC6809, MC6883, two MC6821s, MC6847 — all via the XRoar part system
+ *   * MC6809, MC6883, two MC6821s, MC6847: all via the XRoar part system
  *   * The machine event list (assigned to xroar.h's global pointer)
  *   * 256x192 VDG palette-index buffer
  *
@@ -59,7 +59,7 @@ struct CocoMachine {
     int32_t cart_toggle_remaining = 0;   // 6809 cycles until next CART pulse
     bool    cart_cb1_level = true;
 
-    // Minimal WD279x-ish FDC state — enough for DECB sector reads.
+    // Minimal WD279x-ish FDC state, enough for DECB sector reads.
     // Registers map at $FF48 (status/cmd), $FF49 (track), $FF4A (sector),
     // $FF4B (data). $FF40 is the RSDOS latch (drive/density/halt).
     uint8_t fdc_status = 0x04;   // TRACK00 set when track==0
@@ -375,15 +375,15 @@ extern "C" void coco_machine_release_all_keys(void) {
 //
 // Emulates just the WD279x register-level behaviour DECB actually uses
 // for sector reads:
-//   $FF40 — RSDOS control latch: bit 4 = single/double density,
+//   $FF40: RSDOS control latch: bit 4 = single/double density,
 //           bits 0-3 = drive select, bit 5 = drive precomp/motor (we
-//           don't model timing), bit 7 = HALT enable (we ignore — our
+//           don't model timing), bit 7 = HALT enable (we ignore, our
 //           reads complete synchronously, so DECB's HALT wait just
 //           passes through immediately).
-//   $FF48 — read: status. write: command.
-//   $FF49 — track register.
-//   $FF4A — sector register.
-//   $FF4B — data register.
+//   $FF48: read: status. write: command.
+//   $FF49: track register.
+//   $FF4A: sector register.
+//   $FF4B: data register.
 //
 // All operations complete instantly (no DRQ/INTRQ delay). DECB polls
 // status looking for !BUSY + bytes available, and we satisfy that on
@@ -392,7 +392,7 @@ extern "C" void coco_machine_release_all_keys(void) {
 // Real CoCo wires FDC INTRQ through an NMI-enable flip-flop set by writes
 // to $FF40 with bit 7 (HALT enable). DECB sets this before each FDC command
 // and SYNCs the CPU waiting for the resulting NMI. So whenever an FDC
-// command completes we must pulse NMI on the 6809 — but only if HALT was
+// command completes we must pulse NMI on the 6809, but only if HALT was
 // armed in $FF40.
 static void fdc_signal_intrq(void) {
     if (g_m.cpu && (g_m.fdc_latch & 0x80)) {
@@ -403,14 +403,14 @@ static void fdc_signal_intrq(void) {
 static void fdc_handle_command(uint8_t cmd) {
     g_m.fdc_command = cmd;
     uint8_t top = cmd >> 4;
-    // Type IV — Force Interrupt
+    // Type IV: Force Interrupt
     if (top == 0xD) {
         g_m.fdc_busy = false;
         g_m.fdc_status = (g_m.fdc_track == 0) ? 0x04 : 0x00;
         g_m.fdc_buf_len = 0;
         return;  // Force Interrupt does not raise NMI on its own.
     }
-    // Type I — Restore, Seek, Step, StepIn, StepOut.
+    // Type I: Restore, Seek, Step, StepIn, StepOut.
     if (top <= 0x7) {
         switch (top) {
         case 0x0: g_m.fdc_track = 0; break;             // Restore
@@ -426,7 +426,7 @@ static void fdc_handle_command(uint8_t cmd) {
         fdc_signal_intrq();
         return;
     }
-    // Type II — Read Sector (top 0x8/0x9) / Write Sector (0xA/0xB).
+    // Type II: Read Sector (top 0x8/0x9) / Write Sector (0xA/0xB).
     if (top == 0x8 || top == 0x9) {
         g_m.fdc_buf_pos = 0;
         g_m.fdc_buf_len = 0;
@@ -450,7 +450,7 @@ static void fdc_handle_command(uint8_t cmd) {
         g_m.fdc_data = g_m.fdc_buf[0];
         g_m.fdc_status = 0x03;   // BUSY | DRQ
         g_m.fdc_busy = true;
-        // NMI fires after the last byte is consumed — see fdc_io_read.
+        // NMI fires after the last byte is consumed, see fdc_io_read.
         return;
     }
     if (top == 0xA || top == 0xB) {
@@ -459,7 +459,7 @@ static void fdc_handle_command(uint8_t cmd) {
         fdc_signal_intrq();
         return;
     }
-    // Type III — stubs.
+    // Type III: stubs.
     g_m.fdc_status = 0x10;
     g_m.fdc_busy = false;
     fdc_signal_intrq();
@@ -477,7 +477,7 @@ static uint8_t fdc_io_read(uint16_t A) {
             g_m.fdc_data = g_m.fdc_buf[g_m.fdc_buf_pos];
             g_m.fdc_status = 0x03;  // BUSY + DRQ
         } else if (g_m.fdc_busy) {
-            // last byte just delivered — clear BUSY + DRQ, set TRACK00 if t0,
+            // last byte just delivered: clear BUSY + DRQ, set TRACK00 if t0,
             // and fire NMI to wake DECB's SYNC waiting for FDC completion.
             g_m.fdc_busy = false;
             g_m.fdc_status = (g_m.fdc_track == 0) ? 0x04 : 0x00;
@@ -600,10 +600,10 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     // AMOLED-32 fast-path SAM decode. The generic mc6883_mem_cycle handles
     // Dragon32/64/CoCo1/2/3/MC10 + the '785 variant + fast/slow cycle state
     // machine. We're CoCo 2 only and don't care about cycle-accurate fast
-    // mode — flat 16-tick slow cycle per access matches default speed.
+    // mode: flat 16-tick slow cycle per access matches default speed.
     //
     // AMOLED-53 branch order: the overwhelming common case is A < 0xFF00
-    // (RAM / ROM / cart ROM — i.e. every instruction fetch and almost every
+    // (RAM / ROM / cart ROM, i.e. every instruction fetch and almost every
     // data access). Putting that first keeps the branch predictor happy.
     // SAM register writes ($FFC0-$FFDF) are rare but have full side effects
     // (V/F/M/P/R/TY + vdg_update delegate); punt to xroar.
@@ -619,7 +619,7 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         g_m.sam->S = S;
         ncycles = 16;
     } else if ((A & 0xFFE0) == 0xFFC0 && !RnW) {
-        // SAM register write — slow path.
+        // SAM register write: slow path.
         ncycles = mc6883_mem_cycle(g_m.sam, RnW, A);
         S = g_m.sam->S;
         // Shadow the TY bit for our fast decode.
@@ -660,7 +660,7 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     // AMOLED-53 IRQ-dirty tightening: per the 6821 datasheet only writes
     // to CRA/CRB (A0=1) and reads of PADR/PBDR (A0=0) can change the IRQ
     // output. The other two combinations (CRA/CRB read, PADR/PBDR write)
-    // cannot — skip the dirty mark in those cases so the IRQ-OR + macro
+    // cannot: skip the dirty mark in those cases so the IRQ-OR + macro
     // dispatch at the bottom runs less often.
     //
     // Now use SAM->S (set by mem_cycle) to route data on the bus.
@@ -697,7 +697,7 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
                  g_m.cpu->D = 0xFF; break;
         }
     } else {
-        // Real CoCo writes route by raw address — S=7 covers SAM regs +
+        // Real CoCo writes route by raw address: S=7 covers SAM regs +
         // any RAM-region write (RAS/nWE handles RAM in parallel).
         if ((A & 0xFFE0) == 0xFF00) {
             mc6821_write(g_m.pia0, A, g_m.cpu->D);
@@ -807,7 +807,7 @@ extern "C" void HOT_FUNC(coco_vdg_fetch)(void *sptr, uint16_t A, int nwords,
     (void)sptr;
     // AMOLED-26: use the SAM's F register (display base) we shadow on
     // every $FFC6-$FFD3 write. Falls back to $0400 if F is uninitialised
-    // (no write has happened) — matches DECB text-mode default.
+    // (no write has happened), matches DECB text-mode default.
     const uint16_t base = g_m.sam_f ? g_m.sam_f : 0x0400;
     for (int i = 0; i < nwords; i++) {
         uint16_t a = (base + A + i) & 0xFFFF;
@@ -824,20 +824,20 @@ extern "C" void HOT_FUNC(coco_vdg_render)(void *sptr, unsigned burst, unsigned n
 #ifdef SUPPRESS_RENDER_SCANLINE
     // vdg_buffer is produced whole-frame by coco_machine_render_frame()
     // instead of per-scanline here. xroar's render_scanline is suppressed,
-    // so the pixel_data this callback would pack is stale — skip it entirely.
+    // so the pixel_data this callback would pack is stale: skip it entirely.
     //
     // NOTE (PIZERO-83, 2026-08-17): the original AMOLED-57 comment said
     // "core 1 owns vdg_buffer now". That is NOT true on this port. Here
     // core 1 runs only libdvi scanout (core1_main, src/main.cpp:200, which
     // never returns); coco_machine_render_frame is called from core 0's
-    // loop() in the WP_RENDER phase. There is no cross-core race to avoid —
+    // loop() in the WP_RENDER phase. There is no cross-core race to avoid:
     // the buffer has a single writer on core 0.
     (void)data;
     return;
 #endif
     // render_line fires once per scanline including borders. Wrap to the
     // VDG's per-frame scanline count so each new frame starts re-capturing
-    // active rows 0..191 — without the wrap, the row index races off into
+    // active rows 0..191, without the wrap, the row index races off into
     // the millions and every call_idx falls outside the active window.
     int scanline = g_m.render_lines++ % VDG_FRAME_DURATION;
     if (!data) return;
@@ -902,7 +902,7 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
     g_m.pia1->b.data_postwrite = DELEGATE_AS0(void, coco_pia1b_postwrite, NULL);
 
     // AMOLED-38: select 6847T1 variant. CoCo 2 late boards (and most
-    // emulator targets) ship the T1 — it adds lowercase via the inverse
+    // emulator targets) ship the T1, it adds lowercase via the inverse
     // bit, mildly different ALPHA-mode border colour, and a few
     // text-mode features. With is_t1=true the non-T1 font path in
     // mc6847.c is dead at runtime, letting us drop font-6847.c.
@@ -1292,22 +1292,22 @@ extern "C" const uint8_t *coco_machine_get_vdg_buffer(void) {
 // Whole-frame VDG renderer. Reads PIA1 PB mode bits + SAM F register +
 // CoCo RAM and generates one frame's worth of palette indices into
 // g_m.vdg_buffer, replacing xroar's per-scanline render path (suppressed
-// by SUPPRESS_RENDER_SCANLINE). Called from core 0's loop() — see the
+// by SUPPRESS_RENDER_SCANLINE). Called from core 0's loop(), see the
 // WP_RENDER phase marker in src/main.cpp.
 //
 // Mode coverage (dispatch in coco_machine_render_frame below):
-//   * ALPHA  (PB7=0)          — font_6847t1 glyph via the g_alpha_lut fast
+//   * ALPHA  (PB7=0): font_6847t1 glyph via the g_alpha_lut fast
 //                               path; SG4 semigraphics handled per-byte
 //                               inside render_alpha_frame (ch & 0x80)
-//   * RG6    (PB7=1, GM=7)    — render_rg6_frame, incl. the NTSC-artifact
+//   * RG6    (PB7=1, GM=7): render_rg6_frame, incl. the NTSC-artifact
 //                               colour path (PIZERO-43 sets the phase)
-//   * GM 0-6 (PB7=1)          — render_graphics_frame: RG = 1 bit/pixel
+//   * GM 0-6 (PB7=1): render_graphics_frame: RG = 1 bit/pixel
 //                               fg/bg, CG = 2 bits/pixel (cg_base + value),
 //                               with horizontal replication and nLPR row
 //                               repetition
 //
 // Not implemented: SG6. (The original AMOLED-57 comment here listed SG4 and
-// CG1-6 as deferred "show black until implemented" — that went stale when
+// CG1-6 as deferred "show black until implemented", that went stale when
 // render_graphics_frame landed; corrected PIZERO-83, 2026-08-17.)
 //
 // Palette indices match g_vdg_rgb565[] in coco_boot.cpp:
@@ -1318,7 +1318,7 @@ extern "C" const uint8_t font_6847t1[];  // 128 chars × 12 rows = 1.5 KB
 extern "C" const uint8_t font_6847[];    // PIZERO-166: 64 chars, font = classic
 extern "C" const uint8_t font_6847t2[];  // PIZERO-166: ours, font = 6847t2
 
-// Palette indices — match g_vdg_rgb565[] in coco_boot.cpp.
+// Palette indices: match g_vdg_rgb565[] in coco_boot.cpp.
 #define PAL_GREEN       0
 #define PAL_YELLOW      1
 #define PAL_BLUE        2

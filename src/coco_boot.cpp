@@ -1,9 +1,9 @@
 /*
- * coco_boot.cpp — front-end glue between the XRoar core and the AMOLED panel.
+ * coco_boot.cpp: front-end glue between the XRoar core and the AMOLED panel.
  *
  *   * coco_boot_load_rom_from_sd() reads /coco/extbas11.rom and
  *     /coco/bas12.rom from the mounted SD card and concatenates them
- *     into a 16 KB image (ECB low half, BASIC high half — so that
+ *     into a 16 KB image (ECB low half, BASIC high half, so that
  *     ROM[A & 0x3FFF] resolves correctly for A in $8000-$BFFF and
  *     for the reset vector at $FFFE).
  *
@@ -13,7 +13,7 @@
  *     is inlined here (see src/main.cpp::plot() for the convention).
  *
  *   * coco_boot_blit_vdg_src() is the same blit with the source pointer
- *     passed in directly — used by main.cpp before XRoar is wired up
+ *     passed in directly, used by main.cpp before XRoar is wired up
  *     so the blitter can be tested in isolation.
  */
 
@@ -34,17 +34,17 @@ extern "C" {
 #include "png_write.h"          // PIZERO-165, host-tested
 #include "hardware/watchdog.h"   // PIZERO-165: fed while a screenshot writes
 
-// Panel native — must match src/main.cpp.
+// Panel native: must match src/main.cpp.
 #define LCD_W   368
 #define LCD_H   448
 
-// Logical landscape — must match src/main.cpp.
+// Logical landscape: must match src/main.cpp.
 #define SCREEN_W  448  // = LCD_H
 #define SCREEN_H  368  // = LCD_W
 
 // Full-screen anamorphic blit: source 256x192 stretched to 448x368 landscape
 // via nearest-neighbor lookup tables. Horizontal ratio 1.75, vertical ratio
-// ~1.917 — close to the real CoCo's wide NTSC pixel aspect.
+// ~1.917, close to the real CoCo's wide NTSC pixel aspect.
 //
 // Two tables built once at boot:
 //   g_cx_byte_for_py[]: panel row py (= landscape sx) -> source byte column
@@ -79,7 +79,7 @@ static void build_maps() {
 }
 
 // VDG palette (12 entries; indices 12..15 padded black). Each value is
-// stored byte-swapped — the SH8601 over QSPI consumes MSB-first, so the
+// stored byte-swapped: the SH8601 over QSPI consumes MSB-first, so the
 // framebuffer holds wire-order bytes. See AMOLED-21.
 #define BS(v) (uint16_t)(((uint16_t)(v) >> 8) | ((uint16_t)(v) << 8))
 static const uint16_t g_vdg_rgb565[16] = {
@@ -442,8 +442,8 @@ extern "C" bool coco_boot_load_rom_from_sd(uint8_t *rom16k) {
         return false;
     }
     if (n_ecb != 8192) {
-        Serial.println("[rom] extbas11.rom not found in /coco/roms/ or /coco/ "
-                       "— running Color BASIC only (no Extended/Disk BASIC)");
+        Serial.println("[rom] extbas11.rom not found in /coco/roms/ or /coco/, "
+                       "running Color BASIC only (no Extended/Disk BASIC)");
         memset(&rom16k[0x0000], 0xFF, 0x2000);
     }
     Serial.printf("[rom] reset vector -> $%02X%02X\n",
@@ -535,7 +535,7 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
             }
             continue;
         }
-        // Autotype line — append + '\r'. Truncate if buffer is full.
+        // Autotype line: append + '\r'. Truncate if buffer is full.
         size_t ll = strlen(p);
         if (at_used + ll + 1 < sizeof(out->autotype)) {
             memcpy(&out->autotype[at_used], p, ll);
@@ -694,7 +694,7 @@ extern "C" int coco_boot_disk_read_sector(unsigned drive, unsigned track,
 //   type = $FF → end marker, the two "addr" bytes are the entry vector,
 //                len bytes (usually 0) are ignored
 //
-// `cb` is called once per data segment with (addr, src_buf, len) — caller
+// `cb` is called once per data segment with (addr, src_buf, len), caller
 // decides whether to write into emulator RAM or just diagnose. Returns the
 // entry vector via *entry_out, or returns false on malformed file / I/O.
 typedef void (*coco_loadm_seg_cb)(uint16_t addr, const uint8_t *data, uint16_t len, void *ctx);

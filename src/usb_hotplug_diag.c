@@ -1,5 +1,5 @@
 /*
- * usb_hotplug_diag.c — PIZERO-11b diagnostics shim.
+ * usb_hotplug_diag.c: PIZERO-11b diagnostics shim.
  *
  * Pico-PIO-USB's internal header pio_usb_ll.h is C-only: it uses
  * `static inline __force_inline` which expands to a duplicate `inline` and
@@ -13,7 +13,7 @@
  *    This board is rev3, so the workaround is compiled out -> if an unplug
  *    still reads J/FS instead of SE0 here, that is the E9-masking signature.
  *  - connected: the stack's debounced view of whether a device is present.
- *    The key bisection — stays 1 after unplug => host never saw the disconnect.
+ *    The key bisection, stays 1 after unplug => host never saw the disconnect.
  *  - is_fullspeed / event: supporting detail.
  *
  * Diagnostic-only; remove (or flag-gate) with the rest of the PIZERO-11b
@@ -39,7 +39,7 @@ unsigned usbdiag_event(void) {
 
 /* Endpoint error / interrupt-status registers the stack maintains. A device
  * removed mid-operation can't answer IN polls, so these are where a disconnect
- * actually shows up (the line-state/connected flag are blind — the host drives
+ * actually shows up (the line-state/connected flag are blind: the host drives
  * the bus). */
 unsigned usbdiag_ep_error(void) {
     return (unsigned)PIO_USB_ROOT_PORT(0)->ep_error;
@@ -55,7 +55,7 @@ unsigned usbdiag_ints(void) {
  * pins the line at J/FS), so pio-usb's connection_check() never sets the DISCONNECT
  * interrupt and the TinyUSB host layer keeps the stale device mounted forever.
  * main.cpp detects the resulting phantom-report flood (PIZERO-11b) and calls this
- * to drive the library's OWN disconnect branch by hand — a byte-for-byte copy of
+ * to drive the library's OWN disconnect branch by hand: a byte-for-byte copy of
  * connection_check()'s disconnect path (pio_usb_host.c):
  *   - clear `connected` and set `suspended` so the SOF service stops driving the
  *     bus. With the SM released the line reads its true state again: SE0 while the

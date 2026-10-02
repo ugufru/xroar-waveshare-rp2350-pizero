@@ -1,7 +1,7 @@
 /*
  * Hardware configuration for the on-board microSD slot on the Waveshare
  * RP2350-PiZero. Pin map from the Waveshare RP2350-PiZero demo
- * (Arduino/03-MicroSD/hw_config.c) — PIZERO-01/08:
+ * (Arduino/03-MicroSD/hw_config.c): PIZERO-01/08:
  *
  *   spi1 SCK  = GPIO 30
  *   spi1 MOSI = GPIO 31
@@ -25,7 +25,7 @@ static spi_t g_sd_spi = {
     .mosi_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA,
     .sck_gpio_drive_strength  = GPIO_DRIVE_STRENGTH_12MA,
     .no_miso_gpio_pull_up     = true,
-    .baud_rate  = 12500 * 1000,  // 12.5 MHz — matches Waveshare demo.
+    .baud_rate  = 12500 * 1000,  // 12.5 MHz, matches Waveshare demo.
 };
 
 static sd_spi_if_t spi_if = {

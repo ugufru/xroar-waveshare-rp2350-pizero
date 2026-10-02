@@ -1,9 +1,9 @@
-// xroar-waveshare-rp2350-pizero — XRoar (Tandy CoCo) on a mini video port, DVI (PIZERO-09).
+// xroar-waveshare-rp2350-pizero: XRoar (Tandy CoCo) on a mini video port, DVI (PIZERO-09).
 //
 // Core 0: CoCo emulation (6809 + SAM + PIA + VDG) + serial/autotype keyboard +
 //         FDC sector reads from SD. Blits the VDG output into a 320x240 RGB565
 //         framebuffer once per emulated frame.
-// Core 1: libdvi static-framebuffer worker — continuously TMDS-encodes g_fb and
+// Core 1: libdvi static-framebuffer worker: continuously TMDS-encodes g_fb and
 //         scans it out at 640x480p60 (2x of 320x240). Decoupled from core 0, so
 //         emulation speed never starves the display (tearing instead of dropouts).
 //
@@ -30,7 +30,7 @@ extern "C" {
 
 // PIZERO-11: Pico-PIO-USB host on the PIO-USB port (D+=28, D-=29). Wiki
 // confirms host is supported (device_info demo enumerates a 2.4G wireless
-// receiver as ID 05ac:0256). Open issue tracked by RP2350 errata E9 — pins
+// receiver as ID 05ac:0256). Open issue tracked by RP2350 errata E9, pins
 // configured as pull-down input read HIGH due to leak current; Pico-PIO-USB
 // has a workaround gated on chip_version <= 2. We print the chip revision so
 // we can tell whether the workaround applies on this part.
@@ -39,7 +39,7 @@ extern "C" {
 #define HOST_PIN_DP  28
 static Adafruit_USBH_Host USBHost;
 static volatile uint32_t g_usb_devices = 0;
-// PIZERO-11b diag: HID report flow — the signal that actually changes on
+// PIZERO-11b diag: HID report flow, the signal that actually changes on
 // unplug (a removed device can't answer IN polls). rpts climbs while a device
 // streams reports; rfail counts tuh_hid_receive_report() rejections.
 static volatile uint32_t g_hid_reports   = 0;
@@ -53,7 +53,7 @@ extern "C" uint32_t pio_usb_host_get_frame_number(void);
 
 #ifdef USB_HOTPLUG_RECOVER
 // PIZERO-51: phantom-flood hot-replug recovery. On this rev3 board an unplugged
-// device is INVISIBLE to line_state/connected/ep_error/ints — the PIO SM pins the
+// device is INVISIBLE to line_state/connected/ep_error/ints: the PIO SM pins the
 // bus at J/FS, so PIO-USB decodes the held-idle line as a valid IN response and
 // "completes" a byte-IDENTICAL HID report ~180x/s forever (PIZERO-11b, HW-confirmed
 // 2026-06-29). A real boot keyboard reports only on key transitions (it NAKs while
@@ -451,7 +451,7 @@ static void pump_keyboard() {
     g_kb_hold = g_autotype ? 5 : 3;
 }
 
-// PIZERO-11b: hot-replug watchdog attempt — DISABLED. The premise (read
+// PIZERO-11b: hot-replug watchdog attempt: DISABLED. The premise (read
 // D+/D- via gpio_get + look for SE1) doesn't work because Pico-PIO-USB's
 // TX state machine holds the pins in J state between transmissions, so
 // the post-INOVER reading never changes on unplug. Bypassing the SM (pad
@@ -462,7 +462,7 @@ static void pump_keyboard() {
 
 // HID boot-keyboard report state. tuh_hid_report_received_cb fires from
 // USBHost.task() (called once per loop()), so this runs on core 0 alongside
-// the CoCo machine — no cross-core sync needed.
+// the CoCo machine: no cross-core sync needed.
 static bool    g_machine_running = false;
 // PIZERO-81c: frames since boot (key repeat timing), and the audio pause the
 // overlay asks for, read by core 1 in stream_next_sample.
@@ -973,13 +973,13 @@ static void audio_encode_frame(void) {
 // ── PIZERO-33: freeze auto-recovery + root-cause ──────────────────────────
 // A hardware watchdog, petted once per loop() on core 0, auto-reboots the board
 // if core 0 wedges anywhere (the recurring everyday freeze; suspected USB-host
-// path per PIZERO-11b). Phase markers written to watchdog SCRATCH registers —
-// which SURVIVE a watchdog reset (but not power-on) — record where core 0 last
+// path per PIZERO-11b). Phase markers written to watchdog SCRATCH registers
+// (which SURVIVE a watchdog reset, but not power-on) record where core 0 last
 // was, so after an auto-reboot we print exactly which operation hung. A magic in
 // scratch[0] distinguishes a real freeze record from power-on garbage. PIZERO-33
 // persistent log: scratch[3] packs a running freeze COUNT + the LAST stuck phase,
-// so the tally survives across auto-reboots and is shown in the [run] telemetry —
-// you can connect a monitor any time (while still powered) and see how many times
+// so the tally survives across auto-reboots and is shown in the [run] telemetry.
+// You can connect a monitor any time (while still powered) and see how many times
 // and where it froze, without catching the recovery boot live.
 //   scratch[0]=WD_MAGIC  scratch[1]=phase  scratch[2]=heartbeat
 //   scratch[3]=[31:8]=freeze count  [7:0]=last-freeze phase
@@ -1333,7 +1333,7 @@ void setup() {
     // A FORCEd reboot (power-on / manual reset / picotool / flash) is NOT TIMER, so
     // it starts a FRESH session (count back to 0) -- the tally means "freezes since
     // I last started it", and this also auto-clears the self-test's count on deploy.
-    // PIZERO-51: a deliberate USB-replug reboot is also a TIMER reset — distinguish
+    // PIZERO-51: a deliberate USB-replug reboot is also a TIMER reset: distinguish
     // it by the scratch[4] sentinel so it isn't logged/counted as a freeze. It
     // carries the running freeze tally across unchanged (not incremented).
     bool usb_replug_reboot = (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
@@ -1408,7 +1408,7 @@ void setup() {
     delay(10);
     set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);        // 240 MHz (PIZERO-02b) / 252 MHz std-timing
 
-    // Read RP2350 chip revision — relevant to errata E9 (pull-down input
+    // Read RP2350 chip revision: relevant to errata E9 (pull-down input
     // reads HIGH due to leak current). Pico-PIO-USB applies a workaround
     // only when chip_version <= 2 (A0..A2). Print so we know our part.
     uint32_t chip_id = *((volatile uint32_t *)(SYSINFO_BASE + SYSINFO_CHIP_ID_OFFSET));
@@ -1416,12 +1416,12 @@ void setup() {
                         SYSINFO_CHIP_ID_REVISION_LSB;
     Serial.printf("RP2350 chip_id=%08lx revision=%lu (E9 workaround active: %s)\r\n",
                   (unsigned long)chip_id, (unsigned long)chip_rev,
-                  chip_rev <= 2 ? "yes" : "NO — may explain pull-down-reads-HIGH");
+                  chip_rev <= 2 ? "yes" : "NO, may explain pull-down-reads-HIGH");
     Serial.flush();
 
 
     // PIZERO-11: PIO-USB host on core 0, PIO 1 (libdvi will own PIO 0).
-    // Init BEFORE multicore_launch_core1 — alarm_pool_create() needs
+    // Init BEFORE multicore_launch_core1: alarm_pool_create() needs
     // cross-core sync that deadlocks if core 1 is already in libdvi's
     // DMA-IRQ loop.
 #ifndef AV_STD_TIMING   // PIO-USB asserts CPU==120||240MHz; skip at 252 MHz std-timing test
@@ -1431,7 +1431,7 @@ void setup() {
         pio_cfg.pio_tx_num = 1;
         pio_cfg.pio_rx_num = 1;
         USBHost.configure_pio_usb(1, &pio_cfg);
-        // Default any HID interface to boot protocol at mount — that's how the
+        // Default any HID interface to boot protocol at mount, that's how the
         // common wireless keyboard/mouse dongles want to be talked to (and
         // simplifies the report layout: 8-byte boot keyboard, 3+1+ byte boot
         // mouse). Has to be set BEFORE begin().
@@ -1612,7 +1612,7 @@ void setup() {
 #endif
 
     if (!mount_sd()) {
-        Serial.print("SD mount FAILED — no ROMs, idle.\r\n");
+        Serial.print("SD mount FAILED: no ROMs, idle.\r\n");
         boot_page(MSG_NOSD_TITLE, MSG_NOSD_BODY, MSG_NOSD_DETAIL);
         return;
     }
@@ -1682,7 +1682,7 @@ void setup() {
 #ifdef AUDIO_WAV_DUMP
     // Validation build: ignore autorun and boot a clean BASIC OK prompt so the
     // injected SOUND test program actually runs. (The SD autorun.txt otherwise
-    // DIRECT-loads a game — e.g. spacewarp.bin — and our keystrokes go nowhere.)
+    // DIRECT-loads a game, e.g. spacewarp.bin, and our keystrokes go nowhere.)
     (void)autorun; (void)path;
 #else
     coco_boot_recover_text("0:/coco/autorun.txt");    // PIZERO-147: finish a cut-off save
@@ -1720,6 +1720,9 @@ void setup() {
         if (!direct) missing("@DIRECT", autorun.direct_name);
     }
     if (direct) {
+        // PIZERO-174: typed lines cannot be typed with no BASIC to take them.
+        if (autorun.autotype[0])
+            Serial.print("[autorun] @DIRECT: the typed lines in autorun.txt are ignored\r\n");
         snprintf(game, sizeof game, "%s", path);
         for (int i = 0; i < 30; i++) coco_machine_run_cycles(15000);  // let PIA DDRs settle
         uint16_t entry = 0;
@@ -1816,14 +1819,14 @@ void loop() {
     // was unplugged. RECOVERY = REBOOT into the cold-boot enumeration path.
     //
     // Why reboot rather than re-enumerate in place (learned the hard way on HW,
-    // 2026-07-22): on this rev3 board the USB line is a pathological liar — the SM
+    // 2026-07-22): on this rev3 board the USB line is a pathological liar, the SM
     // pins D+/D- at J/FS whether a device is present OR absent (E9 leak), so pio-usb
     // never sees SE0 and the tuh connect-check cannot tell "empty" from "present".
     //   - stop()/restart() only cycles the PIO timer; tuh never re-enumerates.
     //   - Forcing the pio-usb disconnect branch clears `connected`, but the very
     //     next connect-check re-latches it from the phantom J line -> tuh tries to
     //     enumerate a non-existent device, fails, and WEDGES (connected=1, usb=0,
-    //     no polling, unrecoverable) — confirmed by a 30 s flat capture.
+    //     no polling, unrecoverable), confirmed by a 30 s flat capture.
     //   - A clean full re-init is impossible: the pio-usb HCD implements no
     //     hcd_deinit and pio-usb has no host_deinit (a 2nd init re-claims PIO SMs).
     // The ONLY proven enumeration path on this board is a cold boot. A watchdog
@@ -2142,7 +2145,7 @@ void tuh_hid_report_received_cb(uint8_t daddr, uint8_t idx,
                                 uint8_t const *report, uint16_t len) {
     // PIZERO-12: treat any 8-byte report as boot keyboard (our test dongle
     // mislabels its keyboard interface as proto=2/mouse). 3-byte report is
-    // a boot mouse (no consumer yet — PIZERO-13). Other lengths: ignore.
+    // a boot mouse (no consumer yet: PIZERO-13). Other lengths: ignore.
     // PIZERO-13: the bound pad goes to the joysticks. Any known pad identity
     // is kept off the keyboard path: its 64-byte reports would type junk.
     if (pad_addr(daddr)) {

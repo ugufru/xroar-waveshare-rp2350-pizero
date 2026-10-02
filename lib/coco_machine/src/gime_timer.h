@@ -1,4 +1,4 @@
-// gime_timer.h — CoCo 3 / GIME programmable timer and a minimal interrupt
+// gime_timer.h: CoCo 3 / GIME programmable timer and a minimal interrupt
 // controller, in the real register layout (PIZERO-62).
 //
 // Why the authentic layout rather than our own: the point is that SOME

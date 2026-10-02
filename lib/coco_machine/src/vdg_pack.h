@@ -1,4 +1,4 @@
-// vdg_pack.h — VDG pixel packing, extracted so it can be tested on the host
+// vdg_pack.h: VDG pixel packing, extracted so it can be tested on the host
 // (PIZERO-109). Header-only and free of Arduino, Pico and machine state: the
 // firmware includes it from coco_machine.cpp, the native tests include it
 // directly.
