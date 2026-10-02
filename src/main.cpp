@@ -1661,8 +1661,11 @@ void setup() {
     coco_boot_recover_text("0:/coco/autorun.txt");    // PIZERO-147: finish a cut-off save
     bool have_autorun = coco_boot_load_autorun(&autorun);
 
-    // PIZERO-182: autorun = off in settings.txt: never run it.
-    if (have_autorun && !g_settings.autorun) {
+    // PIZERO-182: autorun = off in settings.txt: not at power-on. A RUN
+    // press with reset_button = autorun still runs it; that is what the
+    // setting asks the button to do.
+    bool run_wants_autorun = g_run_button_reset && !g_settings.reset_to_basic;
+    if (have_autorun && !g_settings.autorun && !run_wants_autorun) {
         Serial.print("[autorun] off in settings.txt (PIZERO-182)\r\n");
         have_autorun = false;
     }

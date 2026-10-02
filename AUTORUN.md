@@ -262,8 +262,10 @@ a moment for the keyboard (about a second and a half behind a hub), and if
 either key is down, it skips `autorun.txt` the same way, with the same
 "AUTORUN SKIPPED" page. Start again without holding a key to autorun.
 
-**To turn autorun off altogether**, put `autorun = off` in `settings.txt`.
-The file stays on the card, ready for when you turn it back on.
+**To turn autorun off at power-on**, put `autorun = off` in `settings.txt`.
+The file stays on the card, ready for when you turn it back on. With
+`reset_button = autorun` as well, the reset button still runs it: the board
+starts at BASIC, and RUN starts the autorun.
 
 ### F. Missing SD card or ROMs
 
