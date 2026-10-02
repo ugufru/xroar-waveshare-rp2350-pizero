@@ -257,11 +257,11 @@ case, RUN is reached through the vent slots with a thin wire.
 To make the reset button behave like power-on instead, autorun included, put
 `reset_button = autorun` in `settings.txt`.
 
-**Press Space or BREAK (Esc) while the board starts** (PIZERO-182). When the
-keyboard is ready (about a second and a half behind a hub), an "AUTORUN"
-page asks for it for one second; a press then skips `autorun.txt` the same
-way, with the same "AUTORUN SKIPPED" page. Tapping from the moment you
-switch on is the easy way. Some keyboards, a Keychron K2 among them, do not
+**Tap Space or BREAK (Esc) while the board starts** (PIZERO-182), from the
+moment you switch on or press the reset button until the screen appears.
+Boot watches the keyboard briefly once it is ready (about a second and a
+half behind a hub), and a tap skips `autorun.txt` the same way, with the
+same "AUTORUN SKIPPED" page. Some keyboards, a Keychron K2 among them, do not
 report a key that is already held down as they start, so tap rather than
 hold. Start again without pressing a key to autorun.
 

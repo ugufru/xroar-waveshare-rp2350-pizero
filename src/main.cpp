@@ -1700,33 +1700,29 @@ void setup() {
         have_autorun = false;
     }
 
-    // PIZERO-182: Space or BREAK, held or tapped while the board starts,
+    // PIZERO-182: Space or BREAK tapped (or held) while the board starts
     // skips autorun the same way. The keyboard is still enumerating, so boot
-    // waits for it, then watches for KB_WATCH_MS after it mounts, with a
-    // prompt on screen so it is clear when a press counts. Measured on a
-    // Keychron K2 behind a hub: taps reported from 45 ms after it mounts. A tap is
-    // needed on keyboards that only report changes: a Keychron K2 never
-    // reports a key already down as it connects, and answers GET_REPORT with
-    // an empty report (measured), so a hold alone is invisible there. The
+    // waits for it, then watches for KB_WATCH_MS after it mounts. No prompt
+    // (the user's call): tapping from switch-on is the way to use it.
+    // Measured on a Keychron K2 behind a hub, after a gamepad: it mounts
+    // about 1.4 s after the host starts, reports taps from 45 ms after it
+    // mounts, and a person tapping presses every 0.2 to 0.4 s. It never
+    // reports a key already down as it connects, and its GET_REPORT answer
+    // was empty in most tries, so a hold alone mostly goes unseen; the
     // GET_REPORT still catches a hold on keyboards that answer it properly.
-    // Measured: a keyboard behind a hub, after a gamepad, mounts about 1.4 s
-    // after the host starts. No keyboard: give up KB_WAIT_MS after the host
-    // started, or at once when nothing is plugged into the USB-C port.
+    // No keyboard: give up KB_WAIT_MS after the host started, or at once
+    // when nothing is plugged into the USB-C port.
     if (have_autorun) {
-        const uint32_t KB_WAIT_MS = 2500, KB_WATCH_MS = 1000, KB_DETECT_MS = 300;
+        const uint32_t KB_WAIT_MS = 2500, KB_WATCH_MS = 600, KB_DETECT_MS = 300;
         auto skip_key = [](const uint8_t *codes) {
             for (int i = 0; i < 6; i++)
                 if (codes[i] == 0x2C || codes[i] == 0x29 || codes[i] == 0x48) return true;   // Space, Esc (BREAK), Pause
             return false;
         };
         uint32_t t0 = millis();
-        bool asked = false, held = false, prompted = false;
+        bool asked = false, held = false;
         while (!held) {
             uint32_t now = millis(), mounted = g_kb_mount_ms;
-            if (mounted && !prompted) {
-                boot_page(MSG_ARWAIT_TITLE, MSG_ARWAIT_BODY, nullptr);
-                prompted = true;
-            }
             // Ask the keyboard what is held; retried while its control
             // endpoint is still busy finishing enumeration.
             if (mounted && !asked)
