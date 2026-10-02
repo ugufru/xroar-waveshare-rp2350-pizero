@@ -24,7 +24,7 @@ static void test_defaults_match_todays_behaviour(void) {
     TEST_ASSERT_EQUAL_UINT8(ART_ON, s.artifact);
     TEST_ASSERT_TRUE(s.gime_palette);
     TEST_ASSERT_TRUE(s.gime_timer);
-    TEST_ASSERT_TRUE(s.run_skips_autorun);
+    TEST_ASSERT_TRUE(s.reset_to_basic);
     TEST_ASSERT_TRUE(s.serial_keyboard);
     TEST_ASSERT_FALSE(s.joystick_swap);             // PIZERO-160: off by default
     TEST_ASSERT_EQUAL_UINT8(FONT_6847T2, s.font);   // PIZERO-166: ours by default
@@ -44,7 +44,10 @@ static void test_every_setting(void) {
     TEST_ASSERT_EQUAL_INT(SET_OK, line("artifact_colors = off"));    TEST_ASSERT_EQUAL_UINT8(ART_OFF, s.artifact);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("gime_palette = off"));       TEST_ASSERT_FALSE(s.gime_palette);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("gime_timer = no"));          TEST_ASSERT_FALSE(s.gime_timer);
-    TEST_ASSERT_EQUAL_INT(SET_OK, line("run_skips_autorun = 0"));    TEST_ASSERT_FALSE(s.run_skips_autorun);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("reset_button = power_on"));  TEST_ASSERT_FALSE(s.reset_to_basic);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("reset_button = BASIC"));     TEST_ASSERT_TRUE(s.reset_to_basic);
+    TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("reset_button = on"));
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("run_skips_autorun = 0"));    TEST_ASSERT_FALSE(s.reset_to_basic);  // old name still works
     TEST_ASSERT_EQUAL_INT(SET_OK, line("serial_keyboard = off"));    TEST_ASSERT_FALSE(s.serial_keyboard);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("joystick_swap = on"));       TEST_ASSERT_TRUE(s.joystick_swap);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("joystick_swap = sideways"));

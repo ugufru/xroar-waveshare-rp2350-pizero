@@ -246,7 +246,7 @@ the card from any computer works.
 
 ### E. Getting out of an autorun
 
-**Press the RUN button** (PIZERO-116). RUN restarts the board, and a restart
+**Press the reset button**, marked RUN on the board (PIZERO-116). It restarts the board, and a restart
 that came from RUN ignores `autorun.txt` entirely: the machine comes up
 exactly as it would with no `autorun.txt` on the card (Disk BASIC, the
 default disk mounted, nothing typed). When there was an `autorun.txt` to
@@ -254,8 +254,8 @@ skip, an "AUTORUN SKIPPED" page shows for a couple of seconds first.
 Switching the power off and on runs AUTORUN again as usual. In the printed
 case, RUN is reached through the vent slots with a thin wire.
 
-To make RUN behave like power-on instead, autorun included, put
-`run_skips_autorun = off` in `settings.txt`.
+To make the reset button behave like power-on instead, autorun included, put
+`reset_button = power_on` in `settings.txt`.
 
 ### F. Missing SD card or ROMs
 

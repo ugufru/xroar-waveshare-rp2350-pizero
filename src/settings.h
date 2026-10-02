@@ -13,7 +13,8 @@
 //   artifact_colors   = on | off | swapped    PMODE 4 color, or plain mono
 //   gime_palette      = on | off              CoCo 3-style palette at $FFB0
 //   gime_timer        = on | off              CoCo 3-style timer at $FF90
-//   run_skips_autorun = on | off              RUN goes straight to BASIC
+//   reset_button      = basic | power_on      RUN (reset) skips autorun, or not
+//                       (old name: run_skips_autorun = on | off, PIZERO-182)
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
 //   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
 //   font              = classic | 6847t1 | 6847t2   text font set (6847t2 default)
@@ -63,7 +64,7 @@ struct coco_settings {
     uint8_t artifact;                 // ART_*
     bool    gime_palette;
     bool    gime_timer;
-    bool    run_skips_autorun;
+    bool    reset_to_basic;           // PIZERO-182: reset_button = basic
     bool    serial_keyboard;
     bool    joystick_swap;            // PIZERO-160: pad sticks to the other ports
     uint8_t font;                     // PIZERO-166: FONT_*
@@ -90,7 +91,7 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->artifact = ART_ON;
     s->gime_palette = true;
     s->gime_timer = true;
-    s->run_skips_autorun = true;
+    s->reset_to_basic = true;
     s->serial_keyboard = true;
     s->font = FONT_6847T2;
     s->lowercase = true;              // improvements are on by default
@@ -182,7 +183,12 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     if (!strcmp(name, "sn76489"))           { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->sn76489 = b; }
     else if (!strcmp(name, "gime_palette")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_palette = b; }
     else if (!strcmp(name, "gime_timer"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_timer = b; }
-    else if (!strcmp(name, "run_skips_autorun")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->run_skips_autorun = b; }
+    else if (!strcmp(name, "run_skips_autorun")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->reset_to_basic = b; }  // the old name
+    else if (!strcmp(name, "reset_button")) {
+        if (!strcmp(v, "basic"))         s->reset_to_basic = true;
+        else if (!strcmp(v, "power_on")) s->reset_to_basic = false;
+        else return SET_BAD_VALUE;
+    }
     else if (!strcmp(name, "serial_keyboard"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->serial_keyboard = b; }
     else if (!strcmp(name, "joystick_swap"))     { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_swap = b; }
     else if (!strcmp(name, "lowercase"))         { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->lowercase = b; }
@@ -335,7 +341,7 @@ static inline int settings_template(char *out, size_t n) {
         "artifact_colors = %s\n"
         "gime_palette = %s\n"
         "gime_timer = %s\n"
-        "run_skips_autorun = %s\n"
+        "reset_button = %s\n"
         "serial_keyboard = %s\n"
         "joystick_swap = %s\n"
         "font = %s\n"
@@ -349,7 +355,7 @@ static inline int settings_template(char *out, size_t n) {
         d.sn76489 ? "on" : "off", d.volume,
         d.artifact == ART_OFF ? "off" : d.artifact == ART_SWAPPED ? "swapped" : "on",
         d.gime_palette ? "on" : "off", d.gime_timer ? "on" : "off",
-        d.run_skips_autorun ? "on" : "off", d.serial_keyboard ? "on" : "off",
+        d.reset_to_basic ? "basic" : "power_on", d.serial_keyboard ? "on" : "off",
         d.joystick_swap ? "on" : "off",
         d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
         d.lowercase ? "on" : "off", d.key_repeat ? "on" : "off",

@@ -1054,11 +1054,11 @@ static void settings_apply(void) {
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     dvi_sio_tmds_encode = st->video_hw_encode;   // PIZERO-175: from the next scanline
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u video_encoder=%s colors_overridden=%04x\r\n",
+                  "reset_button=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u video_encoder=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
-                  st->run_skips_autorun ? "on" : "off", st->serial_keyboard ? "on" : "off",
+                  st->reset_to_basic ? "basic" : "power_on", st->serial_keyboard ? "on" : "off",
                   st->joystick_swap ? "on" : "off",
                   st->font == FONT_CLASSIC ? "classic" : st->font == FONT_6847T1 ? "6847t1" : "6847t2",
                   st->lowercase ? "on" : "off",
@@ -1610,7 +1610,7 @@ void setup() {
     }
 
     // PIZERO-145: settings from the card, now that the machine exists to
-    // take them and before AUTORUN, which run_skips_autorun governs.
+    // take them and before AUTORUN, which reset_button governs.
     coco_boot_recover_text("0:/coco/settings.txt");   // PIZERO-146: finish a cut-off save
     if (!coco_boot_load_settings(&g_settings))
         Serial.print("[settings] no /coco/settings.txt: defaults\r\n");
@@ -1658,7 +1658,7 @@ void setup() {
     // Ignore autorun.txt entirely, so boot takes exactly the path a card
     // without one takes: Disk BASIC, the default disk attached, nothing
     // typed. Say so on screen, but only when there was something to skip.
-    if (g_run_button_reset && have_autorun && g_settings.run_skips_autorun) {
+    if (g_run_button_reset && have_autorun && g_settings.reset_to_basic) {
         Serial.print("[autorun] skipped: RUN button reset (PIZERO-116)\r\n");
         boot_page(MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL);
         boot_wait(2500);          // a key skips it (PIZERO-152)
