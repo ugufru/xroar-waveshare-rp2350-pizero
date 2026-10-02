@@ -524,7 +524,8 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
             char *body = p + 1;
             const char *arg;
             if (prefix_eq(body, "DISK", &arg)) {
-                strncpy(out->disk_name, arg, sizeof(out->disk_name) - 1);
+                // PIZERO-183: drive 0 is the remembered drive now.
+                Serial.printf("[autorun] @DISK is no longer used, ignored: %s\n", arg);
             } else if (prefix_eq(body, "CART", &arg)) {
                 strncpy(out->cart_name, arg, sizeof(out->cart_name) - 1);
             } else if (prefix_eq(body, "DIRECT", &arg)) {
@@ -546,8 +547,8 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
         }
     }
     f_close(&f);
-    Serial.printf("[autorun] parsed: cart='%s' disk='%s' direct='%s' autotype=%u bytes\n",
-                  out->cart_name, out->disk_name, out->direct_name,
+    Serial.printf("[autorun] parsed: cart='%s' direct='%s' autotype=%u bytes\n",
+                  out->cart_name, out->direct_name,
                   (unsigned)at_used);
     return true;
 }
@@ -565,8 +566,28 @@ static FIL  g_dsk_file[COCO_NDRIVE];
 static bool g_dsk_open[COCO_NDRIVE];
 static char g_dsk_path[COCO_NDRIVE][96];
 
-extern "C" void coco_boot_eject_drive(unsigned drive) {
-    if (drive >= COCO_NDRIVE) return;
+// PIZERO-183: /coco/drives.txt, one line per drive, "N = path" ("N =" for
+// an empty drive). Written by the board, so it is plain and fixed; read back
+// leniently. g_drives_saved is what the file holds, so an unchanged state
+// is never rewritten; g_drives_quiet holds saving off during the restore.
+#define DRIVES_PATH "0:/coco/drives.txt"
+static char g_drives_saved[COCO_NDRIVE * 104];
+static bool g_drives_quiet = false;
+
+static void drives_save(void) {
+    if (g_drives_quiet) return;
+    char text[sizeof g_drives_saved];
+    int k = 0;
+    for (unsigned d = 0; d < COCO_NDRIVE; d++)
+        k += snprintf(text + k, sizeof text - k, "%u = %s\n", d, g_dsk_open[d] ? g_dsk_path[d] : "");
+    if (!strcmp(text, g_drives_saved)) return;
+    if (coco_boot_save_text(DRIVES_PATH, text, (uint32_t)k)) {
+        strcpy(g_drives_saved, text);
+        Serial.print("[dsk] drives saved\n");
+    }
+}
+
+static void eject_quiet(unsigned drive) {
     if (g_dsk_open[drive]) {
         f_close(&g_dsk_file[drive]);
         Serial.printf("[dsk] drive %u ejected %s\n", drive, g_dsk_path[drive]);
@@ -575,28 +596,66 @@ extern "C" void coco_boot_eject_drive(unsigned drive) {
     g_dsk_path[drive][0] = '\0';
 }
 
+extern "C" void coco_boot_eject_drive(unsigned drive) {
+    if (drive >= COCO_NDRIVE) return;
+    eject_quiet(drive);
+    drives_save();
+}
+
 extern "C" bool coco_boot_mount_drive(unsigned drive, const char *path) {
     if (drive >= COCO_NDRIVE || !path) return false;
-    coco_boot_eject_drive(drive);
-    if (strlen(path) >= sizeof g_dsk_path[drive]) return false;
+    eject_quiet(drive);
+    if (strlen(path) >= sizeof g_dsk_path[drive]) { drives_save(); return false; }
     FRESULT fr = f_open(&g_dsk_file[drive], path, FA_READ);
     if (fr != FR_OK) {
         Serial.printf("[dsk] drive %u open %s failed: %s (%d)\n",
                       drive, path, FRESULT_str(fr), fr);
+        drives_save();
         return false;
     }
     g_dsk_open[drive] = true;
     strcpy(g_dsk_path[drive], path);
     Serial.printf("[dsk] drive %u mounted %s (%lu bytes)\n",
                   drive, path, (unsigned long)f_size(&g_dsk_file[drive]));
+    drives_save();
     return true;
+}
+
+extern "C" bool coco_boot_restore_drives(char *path0, size_t path0_sz) {
+    coco_boot_recover_text(DRIVES_PATH);
+    char text[sizeof g_drives_saved];
+    uint32_t n = 0;
+    if (!coco_boot_load_text(DRIVES_PATH, text, sizeof text - 1, &n)) return false;
+    text[n] = '\0';
+    // What the file says is what is saved, even where a disk is now missing,
+    // so the next real change rewrites it rather than a failed mount here.
+    snprintf(g_drives_saved, sizeof g_drives_saved, "%s", text);
+    g_drives_quiet = true;
+    for (char *line = text, *nl; line && *line; line = nl) {
+        nl = strchr(line, '\n');
+        if (nl) *nl++ = '\0';
+        char *eq = strchr(line, '=');
+        if (!eq || line[0] < '0' || line[0] > '3') continue;
+        unsigned d = (unsigned)(line[0] - '0');
+        char *p = eq + 1;
+        while (*p == ' ' || *p == '\t') p++;
+        size_t l = strlen(p);
+        while (l && (p[l - 1] == '\r' || p[l - 1] == ' ' || p[l - 1] == '\t')) p[--l] = '\0';
+        if (!*p) continue;
+        if (!coco_boot_mount_drive(d, p))
+            Serial.printf("[dsk] drive %u: remembered %s is gone\n", d, p);
+    }
+    g_drives_quiet = false;
+    const char *p0 = coco_boot_drive_path(0);
+    if (p0) snprintf(path0, path0_sz, "%s", p0);
+    return p0 != nullptr;
 }
 
 extern "C" const char *coco_boot_drive_path(unsigned drive) {
     return (drive < COCO_NDRIVE && g_dsk_open[drive]) ? g_dsk_path[drive] : nullptr;
 }
 
-// Boot-time autorun path: @DISK and the default disk go to drive 0.
+// Boot: the default disk goes to drive 0 when nothing is remembered.
 extern "C" bool coco_boot_attach_dsk(const char *path) {
     return coco_boot_mount_drive(0, path);
 }

@@ -400,6 +400,11 @@ static void video_bench_print(void) {
 
 static const char *g_autotype        = nullptr;
 static int         g_autotype_warmup = 0;
+// PIZERO-182: the queued typing is autorun (a disk's program, or the typed
+// lines of autorun.txt), and a Space or BREAK tap since the boot began
+// cancels it while it is still waiting for BASIC.
+static bool        g_autotype_autorun = false;
+static bool        g_autorun_cancel   = false;
 
 // PIZERO-163: the CoCo key names and the character chords live in
 // key_translate.h (host-tested), shared by serial typing and the USB keyboard.
@@ -410,7 +415,14 @@ static int g_kb_gap  = 0;
 
 static int next_keychar() {
     if (g_autotype) {
+        if (g_autotype_autorun && g_autorun_cancel && g_autotype_warmup > 0) {
+            Serial.print("[autorun] cancelled: Space or BREAK (PIZERO-182)\r\n");
+            g_autotype = nullptr;
+            g_autotype_autorun = false;
+            return -1;
+        }
         if (g_autotype_warmup > 0) { g_autotype_warmup--; return -1; }
+        g_autotype_autorun = false;           // typing has begun: no longer cancellable
         char c = *g_autotype;
         if (c == '\0') { g_autotype = nullptr; return -1; }
         g_autotype++;
@@ -459,18 +471,6 @@ static volatile bool g_audio_paused = false;
 // PIZERO-152: a key pressed while a boot page is up (before the machine runs).
 static bool g_boot_key = false;
 static uint8_t g_hid_prev_codes[6] = {0};
-// PIZERO-182: when the USB host started, when a keyboard mounted (0: none
-// yet) and whether it has sent a report, for the Space/BREAK check at boot.
-static uint32_t g_usb_up_ms = 0;
-static volatile uint32_t g_kb_mount_ms = 0;
-static volatile bool g_kb_reported = false;
-// The keyboard's state asked for with GET_REPORT, because many keyboards
-// (a Keychron K2, for one) only send a report when a key changes, so a key
-// already down as it connects is never reported. done: 0 waiting, 1 got it,
-// 2 the keyboard refused.
-static uint8_t g_kb_daddr = 0, g_kb_idx = 0;
-static uint8_t g_kb_state[8];
-static volatile uint8_t g_kb_state_done = 0;
 // PIZERO-163: the USB keys held and the CoCo key each chose (key_translate.h).
 static struct kt_state g_kt;
 
@@ -537,9 +537,23 @@ static void hid_keyboard_apply(const uint8_t *report) {
     g_hid_mods = mods;
     const uint8_t *codes = &report[2];
 
+    // PIZERO-182: a Space or BREAK (Esc, or Pause) tap while the machine
+    // boots, or while autorun's typing still waits for BASIC, cancels it.
+    {
+        static uint8_t prev[6];
+        for (int i = 0; i < 6; i++) {
+            uint8_t c = codes[i];
+            if (c != 0x2C && c != 0x29 && c != 0x48) continue;
+            bool was = false;
+            for (int j = 0; j < 6; j++) if (prev[j] == c) was = true;
+            if (!was && (!g_machine_running || (g_autotype && g_autotype_autorun && g_autotype_warmup > 0)))
+                g_autorun_cancel = true;
+        }
+        memcpy(prev, codes, 6);
+    }
+
     // PIZERO-152: before the machine runs, a key only dismisses a boot page;
     // it is tracked but not pressed, so it cannot reach BASIC as a keystroke.
-    g_kb_reported = true;                    // PIZERO-182
     if (!g_machine_running) {
         for (int i = 0; i < 6; i++) {
             if (!codes[i]) continue;
@@ -1253,9 +1267,16 @@ static void perform_launch(void) {
         coco_machine_install_disk_reader(coco_boot_disk_read_sector);
         settings_for_game(g_launch_path);         // PIZERO-154
         coco_machine_cold_reset();
-        if (disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
+        // PIZERO-182: a boot like any other, so autorun decides: on, type
+        // the disk's first program once BASIC is up (a Space or BREAK tap
+        // before then cancels it); off, the BASIC prompt with the disk in.
+        g_autorun_cancel = false;
+        if (!g_settings.autorun) {
+            Serial.print("[launch] autorun = off: BASIC prompt\r\n");
+        } else if (disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
             g_autotype = g_launch_cmd;
             g_autotype_warmup = 180;              // same wait as autorun.txt
+            g_autotype_autorun = true;
             Serial.printf("[launch] will type %s\n", g_launch_cmd);
         } else {
             Serial.print("[launch] no program on the disk: BASIC prompt\r\n");
@@ -1416,7 +1437,6 @@ void setup() {
         // mouse). Has to be set BEFORE begin().
         tuh_hid_set_default_protocol(HID_PROTOCOL_BOOT);
         USBHost.begin(1);
-        g_usb_up_ms = millis();                // PIZERO-182
         Serial.printf("USB host up: PIO-USB D+=%d/D-=%d on pio1\r\n",
                       HOST_PIN_DP, HOST_PIN_DP + 1);
         Serial.flush();
@@ -1666,82 +1686,31 @@ void setup() {
     (void)autorun; (void)path;
 #else
     coco_boot_recover_text("0:/coco/autorun.txt");    // PIZERO-147: finish a cut-off save
-    bool have_autorun = coco_boot_load_autorun(&autorun);
 
-    // PIZERO-182: autorun = off in settings.txt: not at power-on. A RUN
-    // press with reset_button = autorun still runs it; that is what the
-    // setting asks the button to do.
-    bool run_wants_autorun = g_run_button_reset && !g_settings.reset_to_basic;
-    if (have_autorun && !g_settings.autorun && !run_wants_autorun) {
-        Serial.print("[autorun] off in settings.txt (PIZERO-182)\r\n");
-        have_autorun = false;
-    }
-
-    // PIZERO-116: a RUN press is a cold start straight to the BASIC prompt.
-    // Ignore autorun.txt entirely, so boot takes exactly the path a card
-    // without one takes: Disk BASIC, the default disk attached, nothing
-    // typed. No page (PIZERO-182, the user's call): straight to BASIC.
-    if (g_run_button_reset && have_autorun && g_settings.reset_to_basic) {
-        Serial.print("[autorun] skipped: RUN button reset (PIZERO-116)\r\n");
-        have_autorun = false;
-    }
-
-    // PIZERO-182: Space or BREAK tapped (or held) while the board starts
-    // skips autorun the same way. The keyboard is still enumerating, so boot
-    // waits for it, then watches for KB_WATCH_MS after it mounts. No prompt
-    // (the user's call): tapping from switch-on is the way to use it.
-    // Measured on a Keychron K2 behind a hub, after a gamepad: it mounts
-    // about 1.4 s after the host starts, reports taps from 45 ms after it
-    // mounts, and a person tapping presses every 0.2 to 0.4 s. It never
-    // reports a key already down as it connects, and its GET_REPORT answer
-    // was empty in most tries, so a hold alone mostly goes unseen; the
-    // GET_REPORT still catches a hold on keyboards that answer it properly.
-    // No keyboard: give up KB_WAIT_MS after the host started, or at once
-    // when nothing is plugged into the USB-C port.
-    if (have_autorun) {
-        const uint32_t KB_WAIT_MS = 2500, KB_WATCH_MS = 600, KB_DETECT_MS = 300;
-        auto skip_key = [](const uint8_t *codes) {
-            for (int i = 0; i < 6; i++)
-                if (codes[i] == 0x2C || codes[i] == 0x29 || codes[i] == 0x48) return true;   // Space, Esc (BREAK), Pause
-            return false;
-        };
-        uint32_t t0 = millis();
-        bool asked = false, held = false;
-        while (!held) {
-            uint32_t now = millis(), mounted = g_kb_mount_ms;
-            // Ask the keyboard what is held; retried while its control
-            // endpoint is still busy finishing enumeration.
-            if (mounted && !asked)
-                asked = tuh_hid_get_report(g_kb_daddr, g_kb_idx, 0, HID_REPORT_TYPE_INPUT, g_kb_state, sizeof g_kb_state);
-            held = skip_key(g_hid_prev_codes) || (g_kb_state_done == 1 && skip_key(g_kb_state + 2));
-            if (mounted && now - mounted >= KB_WATCH_MS) break;
-            if (!mounted && now - g_usb_up_ms >= KB_WAIT_MS) break;
-            if (!mounted && now - g_usb_up_ms >= KB_DETECT_MS && !usbdiag_connected()) break;
-            USBHost.task();
-            delay(2);
-        }
-        Serial.printf("[autorun] key check: waited %lums, keyboard %s, get_report %s "
-                      "%02X %02X %02X %02X %02X %02X %02X %02X, %s\r\n",
-                      (unsigned long)(millis() - t0), g_kb_mount_ms ? "present" : "none",
-                      !asked ? "not sent" : g_kb_state_done == 1 ? "ok" : g_kb_state_done == 2 ? "refused" : "no answer",
-                      g_kb_state[0], g_kb_state[1], g_kb_state[2], g_kb_state[3],
-                      g_kb_state[4], g_kb_state[5], g_kb_state[6], g_kb_state[7],
-                      held ? "Space/BREAK: skipped" : "no Space/BREAK");
-        if (held) have_autorun = false;           // no page: straight to BASIC
-    }
+    // PIZERO-182: autorun is one boot-time feature. On, this boot reads
+    // autorun.txt and, once BASIC is up, runs drive 0's program (or the
+    // typed lines). Off, autorun.txt is not even read: Disk BASIC, the
+    // default disk in drive 0, nothing typed. A RUN press with
+    // reset_button = basic turns it off for that boot only. A Space or BREAK
+    // tap before the typing starts cancels it (hid_keyboard_apply).
+    bool autorun_on = g_settings.autorun && !(g_run_button_reset && g_settings.reset_to_basic);
+    bool have_autorun = false;
+    if (autorun_on) have_autorun = coco_boot_load_autorun(&autorun);
+    else Serial.printf("[autorun] off for this boot (%s): autorun.txt not read\r\n",
+                       g_settings.autorun ? "RUN button, reset_button = basic" : "autorun = off");
 
     // PIZERO-152: a name autorun.txt gives that is not on the card is
     // reported (serial, and a boot page for the first one), and boot carries
-    // on as if that line were not there: Disk BASIC for a missing @CART, the
-    // default disk for a missing @DISK, a normal boot for a missing @DIRECT.
+    // on as if that line were not there: Disk BASIC for a missing @CART, a
+    // normal boot for a missing @DIRECT.
     const char *miss_kind = nullptr, *miss_name = nullptr;
     auto missing = [&](const char *kind, const char *name) {
         Serial.printf("[autorun] %s %s: not found on the card, skipped\r\n", kind, name);
         if (!miss_kind) { miss_kind = kind; miss_name = name; }
     };
 
-    // PIZERO-154: what autorun.txt starts, for its own settings file: the
-    // @DIRECT program, else a named cartridge, else the named disk.
+    // PIZERO-154: what autorun starts, for its own settings file: the
+    // @DIRECT program, else a named cartridge, else drive 0's disk.
     static char game[96];
     game[0] = '\0';
 
@@ -1771,14 +1740,9 @@ void setup() {
             cart_ok = coco_boot_resolve_cart("disk11.rom", cart_path, sizeof cart_path)
                       && install_cart_file(cart_path);
         if (cart_ok) {
-            bool named_dsk = false, dsk = false;
-            if (have_autorun && autorun.disk_name[0]) {
-                named_dsk = coco_boot_resolve("dsk", autorun.disk_name, path, sizeof(path))
-                            && coco_boot_attach_dsk(path);
-                if (!named_dsk) missing("@DISK", autorun.disk_name);
-                else if (!game[0]) snprintf(game, sizeof game, "%s", path);
-                dsk = named_dsk;
-            }
+            // PIZERO-183: the drives as they were at power-off; on a card
+            // with nothing remembered, the first disk alphabetically.
+            bool dsk = coco_boot_restore_drives(path, sizeof path);
             if (!dsk)
                 dsk = coco_boot_find_default_dsk(path, sizeof(path)) && coco_boot_attach_dsk(path);
             // PIZERO-114: install the reader even with nothing mounted, so
@@ -1789,13 +1753,16 @@ void setup() {
             if (have_autorun && autorun.autotype[0]) {
                 g_autotype = autorun.autotype;
                 g_autotype_warmup = 180;
-            } else if (named_dsk && disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
-                // PIZERO-152: @DISK with nothing to type runs the disk's
-                // first program, as the F12 overlay's ENTER does. Only for a
-                // disk autorun.txt named; the default disk never auto-runs.
+                g_autotype_autorun = true;
+            } else if (autorun_on && dsk && disk_run_command(g_launch_cmd, sizeof g_launch_cmd)) {
+                // PIZERO-152/182: nothing typed in autorun.txt (or no file):
+                // run drive 0's first program, named disk or default disk,
+                // as the F12 overlay's ENTER does.
                 g_autotype = g_launch_cmd;
                 g_autotype_warmup = 180;
-                Serial.printf("[autorun] no typed lines: will type %s\n", g_launch_cmd);
+                g_autotype_autorun = true;
+                if (!game[0]) snprintf(game, sizeof game, "%s", path);   // its own settings, as ENTER
+                Serial.printf("[autorun] will type %s\n", g_launch_cmd);
             }
         }
     }
@@ -2118,13 +2085,6 @@ static bool pad_addr(uint8_t daddr) {
 // TinyUSB looks up these weak symbols by C name; extern "C" prevents mangling.
 extern "C" {
 
-// PIZERO-182: the keyboard's answer to the boot-time GET_REPORT.
-void tuh_hid_get_report_complete_cb(uint8_t daddr, uint8_t idx, uint8_t report_id,
-                                    uint8_t report_type, uint16_t len) {
-    (void)report_id; (void)report_type;
-    if (daddr == g_kb_daddr && idx == g_kb_idx) g_kb_state_done = (len >= 8) ? 1 : 2;
-}
-
 void tuh_mount_cb(uint8_t daddr) {
     g_usb_devices++;
     Serial.printf("[usb] device attached, addr=%u\r\n", daddr);
@@ -2152,10 +2112,6 @@ void tuh_hid_mount_cb(uint8_t daddr, uint8_t idx,
     Serial.printf("[usb] HID mount addr=%u idx=%u vid=%04X pid=%04X proto=%u (%s) desc_len=%u\r\n",
                   daddr, idx, vid, pid, proto, kind, desc_len);
     if (daddr <= USB_PAD_MAX_DADDR) g_pad_kind_of[daddr] = pad;
-    if (pad == PAD_NONE && proto == HID_ITF_PROTOCOL_KEYBOARD && !g_kb_mount_ms) {
-        g_kb_daddr = daddr; g_kb_idx = idx;    // PIZERO-182
-        g_kb_mount_ms = millis() | 1;          // (never 0)
-    }
 #if PAD_PROBE
     if (pad != PAD_NONE) {                     // the layout, for decoding by hand
         Serial.printf("[pad] descriptor %u bytes:", desc_len);

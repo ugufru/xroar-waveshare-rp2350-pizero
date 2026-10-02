@@ -1,9 +1,11 @@
 # `autorun.txt`: boot configuration for CoCo content
 
 When the device boots, it mounts the microSD card and looks for files in
-`/coco/`. If `/coco/autorun.txt` exists, it controls what happens after
-the system ROMs load: which disk to mount, which cart to install, and
-what gets typed into Disk BASIC (or whether to bypass BASIC entirely).
+`/coco/`. With autorun on (`autorun = on` in `settings.txt`, the default),
+`/coco/autorun.txt`, if it exists, controls what happens after the system
+ROMs load: which cart to install, and what gets typed into Disk BASIC (or
+whether to bypass BASIC entirely). Without typed lines, autorun runs the
+first program on the disk in drive 0. See [Autorun on and off](#e-autorun-on-and-off).
 
 This is the implemented behavior. The parser lives in `src/coco_boot.cpp`
 (`coco_boot_load_autorun`) and the boot steps in `src/main.cpp`.
@@ -91,33 +93,24 @@ take effect during boot setup (before BASIC starts typing).
 
 ## Directives
 
-A name in `@DISK`, `@CART` or `@DIRECT` that is not on the card is reported
-on screen ("AUTORUN.TXT: NOT FOUND", naming it) and on serial, and boot
-carries on as if that line were not there: Disk BASIC for a missing `@CART`,
-the default disk for a missing `@DISK`, a normal boot for a missing
-`@DIRECT` (PIZERO-152). File names are not case-sensitive.
+A name in `@CART` or `@DIRECT` that is not on the card is reported on screen
+("AUTORUN.TXT: NOT FOUND", naming it) and on serial, and boot carries on as
+if that line were not there: Disk BASIC for a missing `@CART`, a normal boot
+for a missing `@DIRECT` (PIZERO-152). File names are not case-sensitive.
 
-### `@DISK filename.dsk`
-Mount this disk image as drive 0.
+### Drive 0: no directive
 
-If the file has **no typed lines**, the disk's first program is run as well,
-the same way the F12 overlay's ENTER does: the machine reads the disk's
-directory and types `RUN"NAME"` for a BASIC program or `LOADM"NAME":EXEC`
-for machine code (PIZERO-152). So a one-line `autorun.txt` is enough:
+There is no directive for disks (`@DISK` was removed in PIZERO-183; an old
+`@DISK` line is ignored, with a note on serial). The drives are remembered
+instead: whatever **F12** puts in drives 0 to 3 (ENTER on a disk, or the
+0 to 3 keys) is saved to `/coco/drives.txt` and comes back at the next boot,
+after power-off too. On a card with nothing remembered, drive 0 gets the
+first `.dsk` in `/coco/dsk/` or `/coco/` (alphabetical). A remembered disk
+that is no longer on the card leaves its drive empty.
 
-```
-@DISK SPACEWARP.DSK
-```
-
-With typed lines present, only those are typed, as before.
-
-If absent: the loader mounts the first `.dsk` found in `/coco/dsk/`
-or `/coco/` (alphabetical). If no disks exist, no disk is mounted.
-
-After boot, **F12** opens the disk drives overlay, which can put any
-`.dsk` from `/coco/dsk` or `/coco` into drives 0 to 3, replacing what
-`@DISK` mounted (PIZERO-114). `@DISK` only decides what drive 0 holds at
-power-on.
+`/coco/drives.txt` is written by the board, one line per drive
+(`0 = 0:/coco/dsk/SWORD.DSK`, `1 =` for an empty drive). There is no need
+to edit it.
 
 ### `@CART filename.ccc` (or `.rom`)
 Install this cartridge ROM at `$C000`. Searched in `/coco/cart/` first, then
@@ -171,9 +164,9 @@ Special handling:
 LOADM"PARTCLES":EXEC
 ```
 
-The loader mounts the first `.dsk` it finds, installs `disk11.rom`,
-waits for the OK prompt, then types `LOADM"PARTCLES":EXEC<Enter>`.
-Requires `PARTCLES.BIN` to exist inside the mounted disk image.
+The loader installs `disk11.rom` with drive 0's disk, waits for the OK
+prompt, then types `LOADM"PARTCLES":EXEC<Enter>`. Requires `PARTCLES.BIN`
+to exist on the disk in drive 0.
 
 ### 2. Auto-launch a 64K demo via direct-load
 
@@ -184,28 +177,21 @@ Requires `PARTCLES.BIN` to exist inside the mounted disk image.
 No BASIC. Loader reads `/coco/bin/INVADERS.BIN` (or `/coco/INVADERS.BIN`),
 pokes its segments into emulator RAM, jumps to the entry point.
 
-### 3. Specific disk + auto-load a game
+### 3. Run a disk's game at every boot
 
-```
-@DISK arcade.dsk
-LOADM"DEFENDER":EXEC
-```
+No `autorun.txt` needed. Put the disk in drive 0 once (F12, ENTER on it),
+and with `autorun = on` every boot runs its first program: `RUN"NAME"` for
+BASIC, `LOADM"NAME":EXEC` for machine code.
 
-### 4. Just boot to BASIC OK with a specific disk mounted
+### 4. Boot to the OK prompt with a disk ready
 
-```
-@DISK utilities.dsk
-DIR
-```
-
-`@DISK` alone would run the disk's first program, so give it a typed line
-of your own. Here `DIR` lists the disk and leaves you at the OK prompt with
-`utilities.dsk` ready to explore.
+Put `autorun = off` in `settings.txt`. `autorun.txt` is not read, and every
+boot stops at the OK prompt with the remembered disks in their drives.
 
 ### 5. No autorun.txt at all
 
-Loader installs `disk11.rom` if present, mounts first `.dsk` if
-present, lands at the OK prompt. This is the default behavior.
+Loader installs `disk11.rom` if present, mounts the remembered disks (or the
+first `.dsk`), and, with autorun on, runs drive 0's first program.
 
 ### 6. Multi-command autotype with a comment
 
@@ -236,38 +222,36 @@ Reported on screen and on serial, and boot continues without that line
 
 Names are not restricted. The name is added to the end of the `/coco/`
 search paths, so it is always looked up under `/coco/` (for example
-`@DISK games/arcade.dsk` finds `/coco/dsk/games/arcade.dsk` or
-`/coco/games/arcade.dsk`). Names can be up to 63 characters.
+`@DIRECT games/orbit.bin` finds `/coco/bin/games/orbit.bin` or
+`/coco/games/orbit.bin`). Names can be up to 63 characters.
 
 ### D. Case sensitivity
 
 None. Names match whatever their case on the card, as FAT does, so editing
 the card from any computer works.
 
-### E. Getting out of an autorun
+### E. Autorun on and off
 
-**Press the reset button**, marked RUN on the board (PIZERO-116). It restarts the board, and a restart
-that came from RUN ignores `autorun.txt` entirely: the machine comes up
-exactly as it would with no `autorun.txt` on the card (Disk BASIC, the
-default disk mounted, nothing typed), with no page in between.
-Switching the power off and on runs AUTORUN again as usual. In the printed
+Autorun is one boot-time feature (PIZERO-182). With `autorun = on` (the
+default), every boot ends the same way: switching on, the reset button
+(marked RUN), and ENTER on a disk in the F12 list. Once BASIC is up, it types
+`autorun.txt`'s lines, or with none, the run command for the first program
+on the disk in drive 0 (the first `.BIN` or `.BAS`).
+
+- **Tap Space or BREAK (Esc)** before the typing starts (about 3 seconds
+  after BASIC comes up, or from the moment you switch on) to cancel it for
+  that boot. You get the OK prompt with the disk in drive 0.
+- **`autorun = off`** turns it off. `autorun.txt` is not even read: every
+  boot stops at the OK prompt, and ENTER on a disk puts it in drive 0
+  without running anything. The file stays on the card for later.
+- **`reset_button = basic`** (the default) turns it off for a reset-button
+  boot only: the way out when an autorun game hangs. `reset_button =
+  autorun` makes the reset button autorun, even with `autorun = off`, so a
+  board can start at BASIC and run the demo on a press of RUN.
+
+`@DIRECT` and `@CART` start as the machine does, before the keyboard is
+ready, so a tap cannot cancel those; use the reset button. In the printed
 case, RUN is reached through the vent slots with a thin wire.
-
-To make the reset button behave like power-on instead, autorun included, put
-`reset_button = autorun` in `settings.txt`.
-
-**Tap Space or BREAK (Esc) while the board starts** (PIZERO-182), from the
-moment you switch on or press the reset button until the screen appears.
-Boot watches the keyboard briefly once it is ready (about a second and a
-half behind a hub), and a tap skips `autorun.txt`: the machine comes up
-at the BASIC prompt, with no page in between. Some keyboards, a Keychron K2 among them, do not
-report a key that is already held down as they start, so tap rather than
-hold. Start again without pressing a key to autorun.
-
-**To turn autorun off at power-on**, put `autorun = off` in `settings.txt`.
-The file stays on the card, ready for when you turn it back on. With
-`reset_button = autorun` as well, the reset button still runs it: the board
-starts at BASIC, and RUN starts the autorun.
 
 ### F. Missing SD card or ROMs
 
@@ -284,8 +268,8 @@ too.
 
 ### G. More than one disk
 
-**F12** puts disks in drives 0 to 3 after boot. `@DISK` sets drive 0 only;
-there is no directive for the other drives.
+**F12** puts disks in drives 0 to 3, and all four are remembered across
+power-off (PIZERO-183). See [Drive 0](#drive-0-no-directive).
 
 ### H. Cassettes and BASIC listings
 
@@ -296,7 +280,7 @@ reported on serial and skipped.
 
 A game started by `autorun.txt` gets its own settings file, just as when it
 is started from its list: the `@DIRECT` program's, else the `@CART`
-cartridge's, else the `@DISK` disk's. `ORBIT.TXT` beside `ORBIT.BIN` is
+cartridge's, else drive 0's disk when autorun runs it. `ORBIT.TXT` beside `ORBIT.BIN` is
 loaded on top of `settings.txt` (see `SETTINGS.md`).
 
 ---
@@ -316,10 +300,10 @@ Boot
  │
  ├─ Load /coco/settings.txt  (if present)
  │
- ├─ Parse /coco/autorun.txt  (if present)
- │   ├─ autorun = off (switched on) → ignore it
- │   ├─ Restarted by the RUN button, reset_button = basic → ignore it
- │   └─ Space or BREAK tapped as the keyboard comes up → ignore it
+ ├─ Autorun on for this boot?  (autorun = on, and not a RUN restart
+ │   with reset_button = basic)
+ │   ├─ yes → parse /coco/autorun.txt  (if present)
+ │   └─ no  → do not read it
  │
  ├─ @DIRECT mode? ──► load .bin into RAM, jump, done
  │
@@ -328,15 +312,16 @@ Boot
  │     else             → use disk11.rom if present
  │     neither          → no cart, no disk, nothing typed
  │
- ├─ Mount disk:
- │     @DISK specified  → use that
- │     else             → use first .dsk found alphabetically (if any)
+ ├─ Mount disks:
+ │     the drives remembered in /coco/drives.txt
+ │     else drive 0 = first .dsk found alphabetically (if any)
  │
  ├─ Apply the started game's own settings file  (if any)
  │
  ├─ Boot emulator to Disk BASIC OK prompt
  │
- └─ Autotype lines from autorun.txt  (if any; @DISK alone runs the disk)
+ └─ Autorun on: type autorun.txt's lines, or else run drive 0's first
+     program (cancelled by a Space or BREAK tap before it starts)
 ```
 
 ---

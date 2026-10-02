@@ -45,7 +45,7 @@
 #define MSG_CBONLY_DETAIL "STARTING IN A MOMENT."
 
 // PIZERO-152: autorun.txt named something that is not on the card. The body
-// is a format: the directive (@DISK, @CART, @DIRECT) and the name as written.
+// is a format: the directive (@CART, @DIRECT) and the name as written.
 #define MSG_ARMISS_TITLE  "AUTORUN.TXT: NOT FOUND"
 #define MSG_ARMISS_BODY   "%s %s IS NOT ON THE SD CARD, SO THE MACHINE " \
                           "STARTS WITHOUT IT."

@@ -14,7 +14,6 @@
     "# THE MACHINE; OTHER LINES ARE\n" \
     "# TYPED AT THE BASIC PROMPT.\n" \
     "#\n" \
-    "# @DISK GAMES.DSK\n" \
     "# @CART POLARIS.CCC\n" \
     "# @DIRECT ORBIT.BIN\n" \
     "# RUN\"HELLO\"\n"

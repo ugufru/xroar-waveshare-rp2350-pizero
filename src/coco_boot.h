@@ -36,7 +36,6 @@ const struct dsk_catalog *coco_boot_dsk_catalog(void);
 // non-comment non-directive lines, each terminated with '\r'.
 struct coco_autorun {
     char cart_name[64];
-    char disk_name[64];
     char direct_name[64];
     char autotype[1024];
 };
@@ -87,6 +86,12 @@ bool coco_boot_attach_dsk(const char *path);
 bool coco_boot_mount_drive(unsigned drive, const char *path);
 void coco_boot_eject_drive(unsigned drive);
 const char *coco_boot_drive_path(unsigned drive);
+
+// PIZERO-183: the four drives are remembered across power-off in
+// /coco/drives.txt, written by the board on every mount and eject (only when
+// it changes). Restore mounts what it names, at boot; returns true if drive 0
+// was mounted, with its path in `path0`.
+bool coco_boot_restore_drives(char *path0, size_t path0_sz);
 
 // Sector read for the WD2797 emulator (set up in coco_machine).
 int coco_boot_disk_read_sector(unsigned drive, unsigned track,
