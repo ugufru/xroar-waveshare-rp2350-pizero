@@ -252,11 +252,79 @@ static uint32_t g_bench_pix8[640 / 4];           // 640 one-byte pixels
 static uint32_t g_bench_sym[3 * 640];            // symbols, all 3 channels
 static uint32_t g_bench_pal[6 * 256];            // TMDS palette
 struct bench_result { const char *name; uint32_t ns_per_line; };
-static struct bench_result g_bench[8];
+static struct bench_result g_bench[12];
 static int g_bench_n = 0;
 
 static void bench_add(const char *name, uint32_t us_total) {
-    if (g_bench_n < 8) g_bench[g_bench_n++] = { name, us_total * 1000u / BENCH_LINES };
+    if (g_bench_n < 12) g_bench[g_bench_n++] = { name, us_total * 1000u / BENCH_LINES };
+}
+
+// The RP2350's own TMDS encoder in the SIO block (one per core), which libdvi
+// predates. One write of two RGB565 pixels, then each lane's two symbols are
+// one read each, in the two-symbols-per-word format libdvi sends.
+#define BENCH_TMDS_RGB565 ((13u << SIO_TMDS_CTRL_L0_ROT_LSB) | (3u << SIO_TMDS_CTRL_L1_ROT_LSB) | \
+                           (8u << SIO_TMDS_CTRL_L2_ROT_LSB) | (4u << SIO_TMDS_CTRL_L0_NBITS_LSB) | \
+                           (5u << SIO_TMDS_CTRL_L1_NBITS_LSB) | (4u << SIO_TMDS_CTRL_L2_NBITS_LSB) | \
+                           (5u << SIO_TMDS_CTRL_PIX_SHIFT_LSB))
+static void __not_in_flash_func(bench_hw_640_16bpp)(const uint32_t *pix, uint32_t *sym, int n_words) {
+    sio_hw->tmds_ctrl = BENCH_TMDS_RGB565 | SIO_TMDS_CTRL_CLEAR_BALANCE_BITS;
+    uint32_t *l1 = sym + n_words, *l2 = sym + 2 * n_words;
+    for (int i = 0; i < n_words; i++) {
+        sio_hw->tmds_wdata = pix[i];
+        sym[i] = sio_hw->tmds_peek_double_l0;
+        l1[i]  = sio_hw->tmds_peek_double_l1;
+        l2[i]  = sio_hw->tmds_peek_double_l2;
+    }
+}
+// Same, from one-byte palette indices: what a GIME or TMS9918A line would be.
+static void __not_in_flash_func(bench_hw_640_pal8)(const uint8_t *pix, const uint16_t *pal, uint32_t *sym, int n_words) {
+    sio_hw->tmds_ctrl = BENCH_TMDS_RGB565 | SIO_TMDS_CTRL_CLEAR_BALANCE_BITS;
+    uint32_t *l1 = sym + n_words, *l2 = sym + 2 * n_words;
+    for (int i = 0; i < n_words; i++) {
+        sio_hw->tmds_wdata = pal[pix[2 * i]] | ((uint32_t)pal[pix[2 * i + 1]] << 16);
+        sym[i] = sio_hw->tmds_peek_double_l0;
+        l1[i]  = sio_hw->tmds_peek_double_l1;
+        l2[i]  = sio_hw->tmds_peek_double_l2;
+    }
+}
+// Today's 320 doubled to 640, on the hardware encoder (PIX2_NOSHIFT).
+static void __not_in_flash_func(bench_hw_320x2_16bpp)(const uint32_t *pix, uint32_t *sym, int n_words) {
+    sio_hw->tmds_ctrl = BENCH_TMDS_RGB565 | SIO_TMDS_CTRL_PIX2_NOSHIFT_BITS | SIO_TMDS_CTRL_CLEAR_BALANCE_BITS;
+    uint32_t *l1 = sym + 2 * n_words, *l2 = sym + 4 * n_words;
+    for (int i = 0; i < n_words; i++) {
+        sio_hw->tmds_wdata = pix[i];
+        sym[2 * i] = sio_hw->tmds_peek_double_l0;
+        l1[2 * i]  = sio_hw->tmds_peek_double_l1;
+        l2[2 * i]  = sio_hw->tmds_pop_double_l2;
+        sym[2 * i + 1] = sio_hw->tmds_peek_double_l0;
+        l1[2 * i + 1]  = sio_hw->tmds_peek_double_l1;
+        l2[2 * i + 1]  = sio_hw->tmds_peek_double_l2;
+    }
+}
+
+// Decode one 10-bit TMDS data symbol back to its 8-bit value.
+static uint32_t bench_tmds_decode(uint32_t q) {
+    uint32_t d = (q & 0x200) ? (~q & 0xff) : (q & 0xff), v = d & 1;
+    for (int i = 1; i < 8; i++) {
+        uint32_t b = ((d >> i) ^ (d >> (i - 1))) & 1;
+        v |= ((q & 0x100) ? b : b ^ 1) << i;
+    }
+    return v;
+}
+// Mismatches between hw_640_16bpp's symbols and the pixels they encode, in
+// libdvi's order (first pixel in the low 10 bits) and its lane order (0 blue).
+static uint32_t g_bench_hw_errors = 0;
+static void bench_hw_check(void) {
+    bench_hw_640_16bpp(g_bench_pix16, g_bench_sym, 320);
+    for (int i = 0; i < 320; i++) {
+        for (int half = 0; half < 2; half++) {
+            uint32_t px = (g_bench_pix16[i] >> (16 * half)) & 0xffff;
+            uint32_t want[3] = { (px & 0x1f) << 3, ((px >> 5) & 0x3f) << 2, (px >> 11) << 3 };
+            for (int lane = 0; lane < 3; lane++)
+                if (bench_tmds_decode((g_bench_sym[lane * 320 + i] >> (10 * half)) & 0x3ff) != want[lane])
+                    g_bench_hw_errors++;
+        }
+    }
 }
 
 static void video_bench_run(void) {
@@ -304,13 +372,29 @@ static void video_bench_run(void) {
         tmds_encode_2bpp(g_bench_pix16, g_bench_sym, 640);
     bench_add("gray_640_2bpp", (uint32_t)(time_us_64() - t));
 
+    t = time_us_64();
+    for (int l = 0; l < BENCH_LINES; l++)
+        bench_hw_320x2_16bpp(g_bench_pix16, g_bench_sym, 160);
+    bench_add("hw_320x2_16bpp", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();
+    for (int l = 0; l < BENCH_LINES; l++)
+        bench_hw_640_16bpp(g_bench_pix16, g_bench_sym, 320);
+    bench_add("hw_640_16bpp", (uint32_t)(time_us_64() - t));
+
+    t = time_us_64();
+    for (int l = 0; l < BENCH_LINES; l++)
+        bench_hw_640_pal8((const uint8_t *)g_bench_pix8, pal16, g_bench_sym, 320);
+    bench_add("hw_640_pal8", (uint32_t)(time_us_64() - t));
+
     restore_interrupts(irq);
+    bench_hw_check();
 }
 
 static void video_bench_print(void) {
     Serial.printf("[bench] ns per encoded line (budget 63500 incl. audio):");
     for (int i = 0; i < g_bench_n; i++) Serial.printf(" %s=%lu", g_bench[i].name, (unsigned long)g_bench[i].ns_per_line);
-    Serial.printf("\r\n");
+    Serial.printf(" hw_check_errors=%lu/1920\r\n", (unsigned long)g_bench_hw_errors);
 }
 #endif  // VIDEO_BENCH
 
