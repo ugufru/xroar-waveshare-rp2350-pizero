@@ -249,8 +249,7 @@ the card from any computer works.
 **Press the reset button**, marked RUN on the board (PIZERO-116). It restarts the board, and a restart
 that came from RUN ignores `autorun.txt` entirely: the machine comes up
 exactly as it would with no `autorun.txt` on the card (Disk BASIC, the
-default disk mounted, nothing typed). When there was an `autorun.txt` to
-skip, an "AUTORUN SKIPPED" page shows for a couple of seconds first.
+default disk mounted, nothing typed), with no page in between.
 Switching the power off and on runs AUTORUN again as usual. In the printed
 case, RUN is reached through the vent slots with a thin wire.
 
@@ -318,7 +317,9 @@ Boot
  ├─ Load /coco/settings.txt  (if present)
  │
  ├─ Parse /coco/autorun.txt  (if present)
- │   └─ Restarted by the RUN button → ignore it (show "AUTORUN SKIPPED")
+ │   ├─ autorun = off (switched on) → ignore it
+ │   ├─ Restarted by the RUN button, reset_button = basic → ignore it
+ │   └─ Space or BREAK tapped as the keyboard comes up → ignore it
  │
  ├─ @DIRECT mode? ──► load .bin into RAM, jump, done
  │

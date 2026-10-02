@@ -1680,11 +1680,9 @@ void setup() {
     // PIZERO-116: a RUN press is a cold start straight to the BASIC prompt.
     // Ignore autorun.txt entirely, so boot takes exactly the path a card
     // without one takes: Disk BASIC, the default disk attached, nothing
-    // typed. Say so on screen, but only when there was something to skip.
+    // typed. No page (PIZERO-182, the user's call): straight to BASIC.
     if (g_run_button_reset && have_autorun && g_settings.reset_to_basic) {
         Serial.print("[autorun] skipped: RUN button reset (PIZERO-116)\r\n");
-        boot_page(MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL);
-        boot_wait(2500);          // a key skips it (PIZERO-152)
         have_autorun = false;
     }
 

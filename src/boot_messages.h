@@ -44,13 +44,6 @@
                           "FAIL. COPY IT TO /COCO/ROMS/ TO GET THEM."
 #define MSG_CBONLY_DETAIL "STARTING IN A MOMENT."
 
-// PIZERO-116: not a failure. Shown only when RUN restarted the board AND the
-// card has an autorun.txt, i.e. only when something was actually skipped.
-#define MSG_RUNSKIP_TITLE  "AUTORUN SKIPPED"
-#define MSG_RUNSKIP_BODY   "THE RESET (RUN) BUTTON WAS PRESSED, SO THE MACHINE STARTS " \
-                           "AT THE BASIC PROMPT AND IGNORES /COCO/AUTORUN.TXT."
-#define MSG_RUNSKIP_DETAIL "TO USE AUTORUN, SWITCH THE POWER OFF AND ON AGAIN."
-
 // PIZERO-152: autorun.txt named something that is not on the card. The body
 // is a format: the directive (@DISK, @CART, @DIRECT) and the name as written.
 #define MSG_ARMISS_TITLE  "AUTORUN.TXT: NOT FOUND"

@@ -124,7 +124,7 @@ static void test_wrap_terminates_on_every_message(void) {
     // A wrap bug that returns 0 without advancing would hang the boot path,
     // on a machine whose whole point here is to not look broken.
     const char *msgs[] = { MSG_NOSD_BODY, MSG_NOROM_BODY, MSG_BADROM_BODY,
-                           MSG_INIT_BODY, MSG_CBONLY_BODY, MSG_RUNSKIP_BODY };
+                           MSG_INIT_BODY, MSG_CBONLY_BODY };
     for (unsigned m = 0; m < sizeof msgs / sizeof msgs[0]; m++) {
         const char *s = msgs[m];
         int guard = 0;
@@ -162,7 +162,6 @@ static void test_every_body_fits_its_seven_rows(void) {
     TEST_ASSERT_TRUE(layout_rows(MSG_BADROM_BODY, 28) <= 7);
     TEST_ASSERT_TRUE(layout_rows(MSG_INIT_BODY, 28) <= 7);
     TEST_ASSERT_TRUE(layout_rows(MSG_CBONLY_BODY, 28) <= 7);
-    TEST_ASSERT_TRUE(layout_rows(MSG_RUNSKIP_BODY, 28) <= 7);
 }
 
 static void test_every_detail_fits_its_three_rows(void) {
@@ -170,12 +169,11 @@ static void test_every_detail_fits_its_three_rows(void) {
     TEST_ASSERT_TRUE(layout_rows(MSG_NOROM_DETAIL, 28) <= 3);
     TEST_ASSERT_TRUE(layout_rows(MSG_INIT_DETAIL, 28) <= 3);
     TEST_ASSERT_TRUE(layout_rows(MSG_CBONLY_DETAIL, 28) <= 3);
-    TEST_ASSERT_TRUE(layout_rows(MSG_RUNSKIP_DETAIL, 28) <= 3);
 }
 
 static void test_titles_fit_centred_on_one_row(void) {
     const char *titles[] = { MSG_NOSD_TITLE, MSG_NOROM_TITLE, MSG_BADROM_TITLE,
-                             MSG_INIT_TITLE, MSG_CBONLY_TITLE, MSG_RUNSKIP_TITLE };
+                             MSG_INIT_TITLE, MSG_CBONLY_TITLE };
     for (unsigned i = 0; i < sizeof titles / sizeof titles[0]; i++) {
         TEST_ASSERT_TRUE_MESSAGE(strlen(titles[i]) <= CARD_COLS, titles[i]);
         TEST_ASSERT_TRUE(card_center_col((int)strlen(titles[i])) >= 0);
@@ -202,8 +200,7 @@ static void test_every_message_is_printable_on_the_card(void) {
                           MSG_NOROM_TITLE, MSG_NOROM_BODY, MSG_NOROM_DETAIL,
                           MSG_BADROM_TITLE, MSG_BADROM_BODY,
                           MSG_INIT_TITLE, MSG_INIT_BODY, MSG_INIT_DETAIL,
-                          MSG_CBONLY_TITLE, MSG_CBONLY_BODY, MSG_CBONLY_DETAIL,
-                          MSG_RUNSKIP_TITLE, MSG_RUNSKIP_BODY, MSG_RUNSKIP_DETAIL };
+                          MSG_CBONLY_TITLE, MSG_CBONLY_BODY, MSG_CBONLY_DETAIL };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++)
         for (const char *p = all[i]; *p; p++)
             TEST_ASSERT_TRUE_MESSAGE(card_printable(*p), all[i]);
