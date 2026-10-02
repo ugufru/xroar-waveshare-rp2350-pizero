@@ -16,8 +16,13 @@ is no file yet, it opens a template listing every setting at its default.
 - **ESC** leaves. With unsaved changes, the first ESC warns and a second one
   discards them.
 
-The editor shows text as typed, lower case included (settings are not
-case-sensitive either way). The save writes a new copy and
+Letters type the way they do at the BASIC prompt: upper case to start, Caps
+Lock for lower case, and Shift for the other case of one letter. Settings are
+not case-sensitive either way, and the editor shows text as typed.
+
+The file always opens tidied: comment lines (`#`) first, then the settings in
+alphabetical order, with blank lines dropped. A game's own settings file opens
+the same way. Nothing changes on the card unless you save. The save writes a new copy and
 then swaps it in, so pulling the power mid-save cannot leave a broken file.
 You can also edit the file on a computer.
 

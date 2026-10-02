@@ -3,7 +3,9 @@
 // (modifier byte and six key codes), it edits a struct text_edit and says
 // what the caller should do.
 //
-// Keys: printable keys insert (US layout, Shift for upper case and symbols);
+// Keys: printable keys insert (US layout). Letters type as at the BASIC
+// prompt (PIZERO-180): upper case to start, Caps Lock toggles lower case,
+// and Shift gives the other case for one key. Shift gives symbols too.
 // Enter splits the line; Backspace and Delete delete; the arrows, Home/End
 // and PgUp/PgDn move. Held keys repeat. Ctrl-S saves. ESC cancels, except
 // that with unsaved changes the first ESC only warns and a second one
@@ -50,9 +52,11 @@ struct tek_state {
     uint8_t  held_mods;
     uint32_t next_repeat;
     bool     esc_armed;        // the last key was an ESC that warned
+    bool     caps;             // letters type upper case (Caps Lock toggles)
 };
 
-static inline void tek_init(struct tek_state *k) { memset(k, 0, sizeof *k); }
+// Every open starts in upper case, like the BASIC prompt.
+static inline void tek_init(struct tek_state *k) { memset(k, 0, sizeof *k); k->caps = true; }
 
 // US-layout character for a HID key code, or 0 if it is not printable.
 static inline char tek_ascii(uint8_t code, bool shift) {
@@ -82,6 +86,7 @@ static inline char tek_ascii(uint8_t code, bool shift) {
 static inline uint8_t tek_apply(struct tek_state *k, struct text_edit *t,
                                 uint8_t code, uint8_t mods) {
     bool shift = (mods & 0x22) != 0, ctrl = (mods & 0x11) != 0;
+    if (code == 0x39) { k->caps = !k->caps; return TEK_NONE; }   // Caps Lock
     if (code == 0x29) {                                  // ESC
         if (!t->dirty || k->esc_armed) return TEK_CANCEL;
         k->esc_armed = true;
@@ -102,7 +107,8 @@ static inline uint8_t tek_apply(struct tek_state *k, struct text_edit *t,
     case 0x4A: ted_home(t);      break;
     case 0x4D: ted_end(t);       break;
     default: {
-        char c = tek_ascii(code, shift);
+        bool letter = code >= 0x04 && code <= 0x1D;
+        char c = tek_ascii(code, letter ? shift != k->caps : shift);
         if (!c) return TEK_NONE;
         ted_insert(t, c);
     }
@@ -125,7 +131,7 @@ static inline uint8_t tek_report(struct tek_state *k, struct text_edit *t,
         uint8_t c = codes[i];
         if (!c || tek_has(k->prev, c)) continue;
         action = tek_apply(k, t, c, mods);
-        k->held = (c == 0x29) ? 0 : c;                   // ESC never repeats
+        k->held = (c == 0x29 || c == 0x39) ? 0 : c;      // ESC and Caps Lock never repeat
         k->held_mods = mods;
         k->next_repeat = frame + TEK_REPEAT_DELAY;
         if (action == TEK_SAVE || action == TEK_CANCEL) k->held = 0;

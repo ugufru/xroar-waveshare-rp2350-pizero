@@ -125,6 +125,59 @@ static void test_rgb565_rounding(void) {
     TEST_ASSERT_EQUAL_HEX16(0x001F, settings_rgb565(0x0000FF));
 }
 
+// PIZERO-181: the editor shows a settings file comments first, then sorted.
+static void tidy_is(const char *in, const char *want) {
+    char out[512];
+    int n = settings_tidy(in, (int)strlen(in), out, sizeof out);
+    out[n] = 0;
+    TEST_ASSERT_EQUAL_STRING(want, out);
+}
+
+static void test_tidy_puts_comments_first_and_sorts_settings(void) {
+    tidy_is("volume = 8\r\n# mine\n\n  font = classic   # old look\nartifact_colors = off\n# end\n",
+            "# mine\n# end\n\nartifact_colors = off\nfont = classic   # old look\nvolume = 8\n");
+}
+
+static void test_tidy_keeps_repeated_names_in_order(void) {
+    // The last of the same name wins when parsed, so it must stay last.
+    tidy_is("volume = 8\nFONT = classic\nvolume = 3\n", "FONT = classic\nvolume = 8\nvolume = 3\n");
+}
+
+static void test_tidy_sorts_by_name_not_by_line(void) {
+    // key_repeat before key_repeat_delay, though '_' sorts after ' ' and '='.
+    tidy_is("key_repeat_delay = 500\nkey_repeat = on\n", "key_repeat = on\nkey_repeat_delay = 500\n");
+}
+
+static void test_tidy_edge_cases(void) {
+    tidy_is("", "");
+    tidy_is("\n\n  \n", "");
+    tidy_is("# only a comment", "# only a comment\n");
+    tidy_is("volume = 8", "volume = 8\n");
+    tidy_is("oops no equals\nvolume = 8\n", "oops no equals\nvolume = 8\n");
+}
+
+static void test_tidy_is_stable_and_keeps_the_meaning(void) {
+    // Tidying twice changes nothing, and the tidied template parses back to
+    // the same settings as the template itself.
+    char tmpl[1024], once[1024], twice[1024];
+    int n = settings_template(tmpl, sizeof tmpl);
+    int n1 = settings_tidy(tmpl, n, once, sizeof once);
+    int n2 = settings_tidy(once, n1, twice, sizeof twice);
+    TEST_ASSERT_EQUAL_INT(n1, n2);
+    TEST_ASSERT_EQUAL_MEMORY(once, twice, n1);
+    TEST_ASSERT_EQUAL_INT(n, n1 - 1);                    // only the blank line added
+    once[n1] = 0;
+    settings_defaults(&s);
+    s.volume = 3;                                        // so the tidied text must reset it
+    for (char *line = once, *nl; *line; line = nl + 1) {
+        nl = strchr(line, '\n');
+        *nl = 0;
+        TEST_ASSERT_EQUAL_INT_MESSAGE(SET_OK, settings_parse_line(&s, line, NULL, 0), line);
+    }
+    struct coco_settings d; settings_defaults(&d);
+    TEST_ASSERT_EQUAL_MEMORY(&d, &s, sizeof s);
+}
+
 static void test_the_template_parses_back_to_the_defaults(void) {
     // The editor offers this when there is no file; saving it unchanged
     // must leave every setting exactly at its default, with no errors.
@@ -169,6 +222,11 @@ int main(void) {
     RUN_TEST(test_bad_lines_are_reported_and_change_nothing);
     RUN_TEST(test_rgb565_rounding);
     RUN_TEST(test_the_template_parses_back_to_the_defaults);
+    RUN_TEST(test_tidy_puts_comments_first_and_sorts_settings);
+    RUN_TEST(test_tidy_keeps_repeated_names_in_order);
+    RUN_TEST(test_tidy_sorts_by_name_not_by_line);
+    RUN_TEST(test_tidy_edge_cases);
+    RUN_TEST(test_tidy_is_stable_and_keeps_the_meaning);
     RUN_TEST(test_game_settings_path);
     return UNITY_END();
 }

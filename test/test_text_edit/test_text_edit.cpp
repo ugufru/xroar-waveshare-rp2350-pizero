@@ -39,8 +39,9 @@ static uint8_t key(uint8_t code, uint8_t mods = 0) {
 static void type(const char *s) {
     for (; *s; s++) {
         char ch = *s;
-        if (ch >= 'a' && ch <= 'z') key((uint8_t)(0x04 + ch - 'a'));
-        else if (ch >= 'A' && ch <= 'Z') key((uint8_t)(0x04 + ch - 'A'), 0x02);
+        // Letters: Shift only when the case differs from Caps Lock's (PIZERO-180).
+        if (ch >= 'a' && ch <= 'z') key((uint8_t)(0x04 + ch - 'a'), k.caps ? 0x02 : 0);
+        else if (ch >= 'A' && ch <= 'Z') key((uint8_t)(0x04 + ch - 'A'), k.caps ? 0 : 0x02);
         else if (ch == ' ') key(0x2C);
         else if (ch == '=') key(0x2E);
         else if (ch == '_') key(0x2D, 0x02);
@@ -162,14 +163,14 @@ static void test_a_held_key_repeats_and_stops(void) {
     uint8_t c[6] = { 0x04, 0, 0, 0, 0, 0 }, none[6] = { 0 };
     tek_report(&k, &t, 0, c, frame);                     // 'a' goes down
     for (int i = 1; i < TEK_REPEAT_DELAY; i++) tek_tick(&k, &t, frame + i);
-    text_is("a");                                        // no repeat yet
+    text_is("A");                                        // no repeat yet
     tek_tick(&k, &t, frame + TEK_REPEAT_DELAY);
-    text_is("aa");
+    text_is("AA");
     tek_tick(&k, &t, frame + TEK_REPEAT_DELAY + TEK_REPEAT_RATE);
-    text_is("aaa");
+    text_is("AAA");
     tek_report(&k, &t, 0, none, frame + 50);             // released
     for (int i = 0; i < 100; i++) tek_tick(&k, &t, frame + 60 + i);
-    text_is("aaa");
+    text_is("AAA");
 }
 
 static void test_held_key_is_not_retyped_by_the_next_report(void) {
@@ -178,7 +179,29 @@ static void test_held_key_is_not_retyped_by_the_next_report(void) {
     uint8_t a[6] = { 0x04, 0, 0, 0, 0, 0 }, ab[6] = { 0x04, 0x05, 0, 0, 0, 0 };
     tek_report(&k, &t, 0, a, frame);
     tek_report(&k, &t, 0, ab, frame + 1);
-    text_is("ab");
+    text_is("AB");
+}
+
+// PIZERO-180: letters type as at the BASIC prompt.
+static void test_letters_start_upper_case_and_caps_lock_toggles(void) {
+    load("");
+    key(0x04);                                           // a
+    key(0x04, 0x02);                                     // Shift-a
+    key(0x39);                                           // Caps Lock: lower case
+    key(0x04);
+    key(0x04, 0x20);                                     // right Shift-a
+    key(0x1E);                                           // 1: Caps Lock leaves digits
+    key(0x39);                                           // back to upper case
+    key(0x04);
+    text_is("AaaA1A");
+}
+
+static void test_caps_lock_held_does_not_repeat(void) {
+    load("");
+    uint8_t c[6] = { 0x39, 0, 0, 0, 0, 0 };
+    tek_report(&k, &t, 0, c, frame);
+    for (int i = 1; i < 200; i++) tek_tick(&k, &t, frame + i);
+    TEST_ASSERT_FALSE(k.caps);                           // toggled once, not 1 + repeats
 }
 
 static void test_editor_words_fit_and_print(void) {
@@ -229,6 +252,8 @@ int main(void) {
     RUN_TEST(test_esc_protects_unsaved_changes);
     RUN_TEST(test_a_held_key_repeats_and_stops);
     RUN_TEST(test_held_key_is_not_retyped_by_the_next_report);
+    RUN_TEST(test_letters_start_upper_case_and_caps_lock_toggles);
+    RUN_TEST(test_caps_lock_held_does_not_repeat);
     RUN_TEST(test_editor_words_fit_and_print);
     RUN_TEST(test_autorun_template_is_all_comments_that_fit);
     RUN_TEST(test_game_template_is_all_comments_that_fit);

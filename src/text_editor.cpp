@@ -18,6 +18,7 @@
 #include "text_edit_keys.h"
 #include "text_card.h"
 #include "coco_boot.h"
+#include "settings.h"
 
 static struct text_edit *g_t;            // on the heap only while editing
 static struct tek_state g_k;
@@ -64,7 +65,7 @@ bool text_editor_is_open(void) { return g_t != nullptr; }
 
 void text_editor_hold(const uint8_t codes[6]) { memcpy(g_k.prev, codes, 6); }
 
-bool text_editor_open(const char *path, const char *title, const char *template_text) {
+bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy) {
     g_t = (struct text_edit *)malloc(sizeof *g_t);
     if (!g_t) {
         coco_boot_card_clear();
@@ -82,6 +83,15 @@ bool text_editor_open(const char *path, const char *title, const char *template_
         ted_load(g_t, template_text ? template_text : "",
                  template_text ? (int)strlen(template_text) : 0);
         status(TEK_MSG_NEW);
+    }
+    // PIZERO-181: a settings file always opens the same way, comments first
+    // and the settings by name. Not marked changed: nothing is written
+    // unless it is saved.
+    char *tmp = tidy ? (char *)malloc(TED_MAX) : nullptr;
+    if (tmp) {
+        int n2 = settings_tidy(g_t->buf, g_t->len, tmp, TED_MAX);
+        ted_load(g_t, tmp, n2);
+        free(tmp);
     }
     tek_init(&g_k);
     Serial.printf("[editor] open %s (%d bytes)\r\n", g_path, g_t->len);

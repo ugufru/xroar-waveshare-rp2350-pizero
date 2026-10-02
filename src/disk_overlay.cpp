@@ -57,11 +57,12 @@ static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN,
 
 // The files the editor can open. Listed whether or not they exist yet: the
 // editor starts a missing one from a template (NULL: the settings template,
-// generated from the defaults).
-struct ovl_file { const char *name, *path, *tmpl; };
+// generated from the defaults). `tidy`: a settings file, opened comments
+// first and then sorted by name (PIZERO-181).
+struct ovl_file { const char *name, *path, *tmpl; bool tidy; };
 static const struct ovl_file k_files[] = {
-    { "SETTINGS.TXT", "0:/coco/settings.txt", nullptr },
-    { "AUTORUN.TXT",  "0:/coco/autorun.txt",  AUTORUN_TEMPLATE },   // PIZERO-147
+    { "SETTINGS.TXT", "0:/coco/settings.txt", nullptr,          true  },
+    { "AUTORUN.TXT",  "0:/coco/autorun.txt",  AUTORUN_TEMPLATE, false },   // PIZERO-147
 };
 #define OVL_NFILES ((int)(sizeof k_files / sizeof k_files[0]))
 static const char *const k_empty[CAT_KINDS]  = { OVL_EMPTY_DSK,  OVL_EMPTY_BIN,  OVL_EMPTY_CART };
@@ -205,7 +206,7 @@ static void edit_file(const uint8_t codes[6]) {
     static char gen[1024];                   // PIZERO-164: the pad lines made it longer
     const char *tmpl = k_files[i].tmpl;
     if (!tmpl) { settings_template(gen, sizeof gen); tmpl = gen; }
-    if (text_editor_open(k_files[i].path, k_files[i].name, tmpl))
+    if (text_editor_open(k_files[i].path, k_files[i].name, tmpl, k_files[i].tidy))
         text_editor_hold(codes);            // the ENTER that opened it is not typed
 }
 
@@ -218,7 +219,7 @@ static void edit_game_settings(const uint8_t codes[6]) {
     if (!dsk_cat_path(cat, g_ovk.sel, game, sizeof game)) return;
     if (!settings_game_path(game, path, sizeof path)) { set_status(OVL_NO_SETTINGS); return; }
     const char *slash = strrchr(path, '/');
-    if (text_editor_open(path, slash ? slash + 1 : path, GAME_TEMPLATE))
+    if (text_editor_open(path, slash ? slash + 1 : path, GAME_TEMPLATE, true))
         text_editor_hold(codes);            // the Tab that opened it is not typed
 }
 

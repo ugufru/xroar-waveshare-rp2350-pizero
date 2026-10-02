@@ -19,8 +19,9 @@ void text_editor_init(text_editor_present_fn present, text_editor_saved_fn saved
 
 // Open `path`, or `template_text` when the file does not exist. The buffer
 // is taken from the heap only while editing. Returns false if there is no
-// memory for it (the message is then on screen).
-bool text_editor_open(const char *path, const char *title, const char *template_text);
+// memory for it (the message is then on screen). `tidy` is for a settings
+// file: it opens comments first, then the settings by name (PIZERO-181).
+bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy);
 
 bool text_editor_is_open(void);
 

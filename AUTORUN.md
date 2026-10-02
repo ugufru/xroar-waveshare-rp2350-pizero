@@ -12,7 +12,8 @@ This is the implemented behavior. The parser lives in `src/coco_boot.cpp`
 
 Press **F11** for the **< FILES >** list and **ENTER** on `AUTORUN.TXT`
 (PIZERO-147). The same editor as `settings.txt`:
-arrows and typing to edit, **Ctrl-S** to save, **ESC** to leave (a second ESC
+arrows and typing to edit (upper case to start, Caps Lock for lower case,
+as at the BASIC prompt), **Ctrl-S** to save, **ESC** to leave (a second ESC
 discards unsaved changes). If there is no file yet it opens a template of
 commented-out examples, so saving it unchanged does nothing. A saved
 `autorun.txt` is used at the **next power-on**; saving does not restart the

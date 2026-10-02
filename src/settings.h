@@ -260,6 +260,67 @@ static inline bool settings_game_path(const char *game, char *out, size_t n) {
     return true;
 }
 
+// PIZERO-181: a settings file as the on-screen editor shows it: every
+// comment line first, in its order, then a blank line, then the settings
+// sorted by name (case ignored; lines with the same name keep their order,
+// so the one that wins still comes last). Blank lines are dropped and '\r'
+// removed; each line is otherwise kept as written. Writes at most cap bytes
+// and returns the length. No index arrays, so it is safe on a small stack:
+// the sort picks the next line by scanning, fine for a 4 KB file.
+static inline int settings_tidy_line(const char *in, int n, int pos, int *start, int *len) {
+    int e = pos;
+    while (e < n && in[e] != '\n') e++;
+    int b = pos, l = e;
+    while (b < l && (in[b] == ' ' || in[b] == '\t')) b++;
+    while (l > b && (in[l - 1] == '\r' || in[l - 1] == ' ' || in[l - 1] == '\t')) l--;
+    *start = b; *len = l - b;
+    return e < n ? e + 1 : n;                       // the next line's start
+}
+
+// Compare two settings lines by name (up to '=' or a space), case ignored.
+static inline int settings_tidy_cmp(const char *a, int al, const char *b, int bl) {
+    for (int i = 0;; i++) {
+        int ca = (i < al && a[i] != '=' && a[i] != ' ' && a[i] != '\t') ? tolower((unsigned char)a[i]) : 0;
+        int cb = (i < bl && b[i] != '=' && b[i] != ' ' && b[i] != '\t') ? tolower((unsigned char)b[i]) : 0;
+        if (ca != cb) return ca - cb;
+        if (!ca) return 0;
+    }
+}
+
+static inline int settings_tidy(const char *in, int n, char *out, int cap) {
+    int k = 0, ncomment = 0, nsetting = 0, b, l;
+#define TIDY_PUT(p, m) do { for (int q = 0; q < (m) && k < cap; q++) out[k++] = (p)[q]; \
+                            if (k < cap) out[k++] = '\n'; } while (0)
+    for (int pos = 0; pos < n;) {
+        pos = settings_tidy_line(in, n, pos, &b, &l);
+        if (l && in[b] == '#') { TIDY_PUT(in + b, l); ncomment++; }
+        else if (l) nsetting++;
+    }
+    if (ncomment && nsetting && k < cap) out[k++] = '\n';
+    // Emit settings in (name, position) order: each time, the smallest line
+    // that sorts after the one emitted last.
+    int last_b = -1, last_l = 0;
+    for (int done = 0; done < nsetting; done++) {
+        int best_b = -1, best_l = 0;
+        for (int pos = 0; pos < n;) {
+            pos = settings_tidy_line(in, n, pos, &b, &l);
+            if (!l || in[b] == '#') continue;
+            if (last_b >= 0) {
+                int c = settings_tidy_cmp(in + b, l, in + last_b, last_l);
+                if (c < 0 || (c == 0 && b <= last_b)) continue;      // already emitted
+            }
+            if (best_b < 0) { best_b = b; best_l = l; continue; }
+            int c = settings_tidy_cmp(in + b, l, in + best_b, best_l);
+            if (c < 0 || (c == 0 && b < best_b)) { best_b = b; best_l = l; }
+        }
+        if (best_b < 0) break;
+        TIDY_PUT(in + best_b, best_l);
+        last_b = best_b; last_l = best_l;
+    }
+#undef TIDY_PUT
+    return k;
+}
+
 // PIZERO-146: the text the on-screen editor starts from when there is no
 // settings.txt: every setting at its default, with the colors commented out,
 // so the file documents itself. Built from settings_defaults, so it cannot
