@@ -8,9 +8,9 @@ GPL-3.0-or-later, so the combined work is distributable under the GPL.
 
 ---
 
-## XRoar — Dragon / Tandy Color Computer emulator
+## XRoar: Dragon / Tandy Color Computer emulator
 
-**Files:** `lib/xroar_core/` (vendored subset — see `lib/xroar_core/PROVENANCE.md`)
+**Files:** `lib/xroar_core/` (vendored subset; see `lib/xroar_core/PROVENANCE.md`)
 
 **License:** GNU General Public License v3.0 or later
 (full text: `lib/xroar_core/COPYING.GPL`)
@@ -39,7 +39,7 @@ convention.
 
 ---
 
-## PicoDVI (libdvi) — PIO DVI/HDMI driver
+## PicoDVI (libdvi): PIO DVI driver
 
 **Files:** `lib/libdvi/` (see `lib/libdvi/PROVENANCE.md`)
 
@@ -49,14 +49,14 @@ convention.
 
 **Upstream:** https://github.com/Wren6991/PicoDVI
 
-`libdvi` bit-bangs DVI/HDMI over PIO + DMA — mandatory on this board because
-the HDMI connector is wired to GPIO 32–39 and HSTX cannot reach it. The
+`libdvi` bit-bangs DVI over PIO + DMA, which is mandatory on this board because
+the mini video port is wired to GPIO 32–39 and HSTX cannot reach it. The
 vendored copy came from Waveshare's official RP2350-PiZero Arduino demo
 (`01-DVI/hello_dvi`), which bundles PicoDVI. It has been extended in this
-project for full HDMI mode and streaming audio (changes documented by
+project for data-island framing and streaming audio (changes documented by
 `PIZERO-NN` references in the source); those changes remain BSD-3-Clause.
 
-### HDMI data-island encoder — pico_lib
+### Data-island encoder: pico_lib
 
 **Files:** `lib/libdvi/dvi_data_island.c`, `lib/libdvi/dvi_data_island.h`
 
@@ -66,7 +66,7 @@ project for full HDMI mode and streaming audio (changes documented by
 
 **Upstream:** https://github.com/shuichitakano/pico_lib (`dvi/data_packet.cpp`)
 
-The HDMI data-island / audio-sample packet encoder is ported from pico_lib,
+The data-island / audio-sample packet encoder is ported from pico_lib,
 the same library lineage as PicoDVI.
 
 ---
@@ -96,18 +96,18 @@ on the bundled libraries (TinyUSB, FatFs, etc.). See the framework's
 ## Waveshare Electronics: hardware docs
 
 **Files:**
-- `docs/RP2350-PiZero-schematic.pdf` — Waveshare's published board schematic,
+- `docs/RP2350-PiZero-schematic.pdf`: Waveshare's published board schematic,
   included for hardware reference and interoperability. (A USB triage demo
   ported from Waveshare's examples was removed in PIZERO-42.)
 
 **Source:** https://www.waveshare.com/wiki/RP2350-PiZero
 
 Waveshare distributes its demo code and schematic freely for use with their
-hardware. The full board wiki is **not** re-hosted here — see the link above.
+hardware. The full board wiki is **not** re-hosted here; see the link above.
 
 ---
 
-## ROMs — NOT included in this repository
+## ROMs: NOT included in this repository
 
 The Color BASIC, Extended Color BASIC, and Disk BASIC ROMs required to
 run this emulator are **© Microsoft / Tandy Corporation** and are **not**
@@ -122,7 +122,7 @@ obtaining ROMs from third-party sources.
 
 ## Bundled demo content
 
-The only demo content shipped in this repository is `sample-sd/coco/autorun.txt`
-— a short BASIC program (semigraphics scatter loop) authored by this project as
+The only demo content shipped in this repository is `sample-sd/coco/autorun.txt`:
+a short BASIC program (semigraphics scatter loop) authored by this project as
 a display test. It contains no third-party code. See `AUTORUN.md` for the
 autorun format.

@@ -119,8 +119,8 @@ halving them to 320 makes 80-column text unreadable.
 
 1. How is CoCo 3 mode chosen: automatically when `coco3.rom` is on the card,
    by an `autorun.txt` directive, or a separate firmware build?
-2. Below real time the machine makes fewer sound samples than HDMI plays, and
-   the audio servo's 0.13% correction cannot cover 20%. Lower pitch, or
+2. Below real time the machine makes fewer sound samples than the video link
+   plays, and the audio servo's 0.13% correction cannot cover 20%. Lower pitch, or
    normal pitch with gaps?
 
 ## Verification

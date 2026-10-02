@@ -67,7 +67,7 @@ would be **non-issues**:
 - **Audio pitch.** Samples are generated event-tick-keyed (`EVENT_TICK_HZ = 14318180`
   in `coco_machine.cpp`), and ticks-per-frame is constant → still **exactly 800
   samples/frame** in fast mode → no pitch shift and no resampler distortion. (The
-  "fast-forward distortion" noted in [`hdmi-audio-notes.md`](hdmi-audio-notes.md) was a
+  "fast-forward distortion" noted in [`video-audio-notes.md`](video-audio-notes.md) was a
   *separate* startup bug, a producer burst overflowing a too-small ring, fixed by the
   8192-deep primed ring. It was **not** the SAM speed.)
 - **Video.** Core 1's `libdvi` worker is fully decoupled and keeps emitting 60 Hz of
@@ -122,6 +122,6 @@ bit** while still honoring the address-dependent mode.
 ## See also
 
 - [`pipeline.md`](pipeline.md): the decoupled two-core pipeline this relies on
-- [`hdmi-audio-notes.md`](hdmi-audio-notes.md): audio ring, metering, the (unrelated)
+- [`video-audio-notes.md`](video-audio-notes.md): audio ring, metering, the (unrelated)
   startup fast-forward bug
 - [`../README.md`](../README.md): Performance section

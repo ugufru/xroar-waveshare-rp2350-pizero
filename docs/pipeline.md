@@ -1,17 +1,17 @@
-# Signal pipeline: emulated CoCo → HDMI
+# Signal pipeline: emulated CoCo → DVI
 
-How the emulated Tandy CoCo's screen and sound become an HDMI signal on the
+How the emulated Tandy CoCo's screen and sound become a DVI signal on the
 Waveshare RP2350-PiZero, end to end. This is the **map** of the whole path; the
 deep dives live elsewhere and are linked inline:
 
-- Audio internals & hard-won gotchas → [`hdmi-audio-notes.md`](hdmi-audio-notes.md)
+- Audio internals & hard-won gotchas → [`video-audio-notes.md`](video-audio-notes.md)
 - Original audio scoping/decision record → [`audio-decision.md`](audio-decision.md)
 - Build envs & flags (authoritative) → [`BUILD.md`](BUILD.md)
 - Hardware, pinout, clock rationale → [`../README.md`](../README.md)
 
-There is no HDMI transmitter chip and no usable HSTX path on this board (HSTX is
-GPIO 12–19; the HDMI connector is on GPIO 32–39), so **everything below is software
-TMDS via `libdvi` (PIO + DMA)**. Audio rides inside that same TMDS stream as HDMI
+There is no video transmitter chip and no usable HSTX path on this board (HSTX is
+GPIO 12–19; the mini video port is on GPIO 32–39), so **everything below is software
+TMDS via `libdvi` (PIO + DMA)**. Audio rides inside that same TMDS stream as
 data islands, with no separate audio hardware.
 
 ## Overview: the two-core split
@@ -105,8 +105,8 @@ not duplicated here.
 
 ## Audio path
 
-Audio is carried as **HDMI data islands** in the blanking intervals. This section is a
-summary; see [`hdmi-audio-notes.md`](hdmi-audio-notes.md) for the full architecture,
+Audio is carried as **audio data islands** in the blanking intervals. This section is a
+summary; see [`video-audio-notes.md`](video-audio-notes.md) for the full architecture,
 rationale, and gotchas.
 
 ### 1. Source (core 0)
@@ -126,7 +126,7 @@ Samples go into an 8192-deep **SPSC ring** (`audio_emit`, `AUDIO_RING_SAMPLES`).
 Core 0 owns the write index `g_audio_w` and publishes with a `__dmb()`; the consumer
 owns `g_audio_r`.
 
-### 2. HDMI carriage
+### 2. Data-island carriage
 
 Audio sample packets are TERC4-encoded with BCH parity into data islands
 (`lib/libdvi/dvi_data_island.c`). **ACR** (clock regeneration) and the **AVI / Audio
@@ -169,7 +169,7 @@ Authoritative reference is [`BUILD.md`](BUILD.md); this is the orientation table
 
 | Env                 | Video            | Audio                       | Notes                              |
 |---------------------|------------------|-----------------------------|------------------------------------|
-| `pizero_stream_60`  | true 640×480p60  | streaming HDMI audio        | **product default** (PIZERO-45)    |
+| `pizero_stream_60`  | true 640×480p60  | streaming data-island audio | **product default** (PIZERO-45)    |
 | `pizero_stream`     | 640×480 (~52 Hz) | streaming, off-spec 52 Hz   | fallback                           |
 
 The silent `pizero` and `pizero_60hz` envs were retired in PIZERO-150. The remaining
@@ -199,7 +199,7 @@ Symbols rather than line numbers, since the files move.
 
 ## See also
 
-- [`hdmi-audio-notes.md`](hdmi-audio-notes.md): audio architecture, rationale, gotchas
+- [`video-audio-notes.md`](video-audio-notes.md): audio architecture, rationale, gotchas
 - [`cpu-speed.md`](cpu-speed.md): emulation pacing & CoCo high-speed (double-speed) behavior
 - [`audio-decision.md`](audio-decision.md): original scoping/decision record
 - [`BUILD.md`](BUILD.md): build envs and the full flag matrix

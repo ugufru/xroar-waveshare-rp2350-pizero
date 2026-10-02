@@ -15,7 +15,7 @@ The end-to-end product path is up and hardware-validated:
   (`PIZERO-45`); CoCo VDG render + blit, NTSC artifact color (`PIZERO-43`).
   Screen fonts: the classic set, the 6847T1, and our 6847T2 by default
   (`PIZERO-166`).
-- **Audio**: streaming HDMI data-island audio, no warble (`PIZERO-35`/`38`/`39`),
+- **Audio**: streaming data-island audio, no warble (`PIZERO-35`/`38`/`39`),
   pitch-matched at the in-spec 60 Hz clock, and the default since `PIZERO-45`.
   SN76489 sound chip (`PIZERO-143`).
 - **CoCo 3 extras**: the GIME palette at `$FFB0-$FFBF` (`PIZERO-85`, `55`) and
@@ -37,7 +37,7 @@ The end-to-end product path is up and hardware-validated:
 - **Compatibility**: default env `pizero_stream_60` confirmed stable across
   multiple third-party games on hardware (user, 2026-07-19). No per-title
   record exists yet; that is `PIZERO-52` (open).
-- **Docs**: README, SETTINGS, AUTORUN, BUILD, pipeline, hdmi-audio-notes,
+- **Docs**: README, SETTINGS, AUTORUN, BUILD, pipeline, video-audio-notes,
   cpu-speed, kit, usb-retrospective.
 
 ## Now: Input / USB workstream (active focus)
@@ -96,34 +96,34 @@ filesystem, and **floppy emulation is demoted to peripheral support**
 (`PIZERO-79`). Compatibility with 40-year-old software is explicitly not the
 priority; creating and editing new software on the CoCo is.
 
-The stack, bottom to top — the design rule is **keep the 6809 side thin**: all
+The stack, bottom to top. The design rule is **keep the 6809 side thin**: all
 filesystem logic stays in C on the RP2350, so backends can change without
 touching guest code.
 
-- **`PIZERO-70` — Storage backend abstraction.** One device interface; SD/FatFs
+- **`PIZERO-70`: Storage backend abstraction.** One device interface; SD/FatFs
   is backend #1. Capabilities are queryable, not assumed.
-- **`PIZERO-71` — VFS core.** Hierarchy, long names, and above all **write**:
+- **`PIZERO-71`: VFS core.** Hierarchy, long names, and above all **write**:
   create, extend, edit, delete, rename. This is the point of the exercise.
-- **`PIZERO-72` — Guest hypercall ABI.** *The contract, and the crux.* Versioned
+- **`PIZERO-72`: Guest hypercall ABI.** *The contract, and the crux.* Versioned
   from day one; BASIC, Bare Naked Forth and everything later bind to this rather
-  than to each other. The sync-vs-async decision must be made here — retrofitting
+  than to each other. The sync-vs-async decision must be made here; retrofitting
   async into a blocking ABI breaks every client.
-- **`PIZERO-73` — Replacement cart ROM.** A thin 6809 shim over the hypercall,
+- **`PIZERO-73`: Replacement cart ROM.** A thin 6809 shim over the hypercall,
   not a DOS in assembly. Adds a 6809 assembler to the build.
-- **`PIZERO-74` — New guest command surface.** Deliberately *not* DECB-compatible.
-- **Backends**: `PIZERO-75` RAM disk (no hardware, no latency — the practical
+- **`PIZERO-74`: New guest command surface.** Deliberately *not* DECB-compatible.
+- **Backends**: `PIZERO-75` RAM disk (no hardware, no latency: the practical
   test target), `PIZERO-76` DriveWire/serial, `PIZERO-77` FujiNet-class networked
   storage (major focus; needs a hardware decision first), `PIZERO-78` USB MSC.
 
 `PIZERO-64` (write foundation) and `PIZERO-65` (write-back latency) below are
-unchanged and still gate all of it — the latency problem is identical whether the
+unchanged and still gate all of it. The latency problem is identical whether the
 bytes come from DECB or from our own VFS.
 
 **No library removes `PIZERO-65`.** Verified in the installed deps: FatFs is
 synchronous at every entry point, SdFat likewise, and carlk3's driver uses DMA
 but spin-waits on it (`my_spi.c:198`). The one non-blocking API in the stack is
 the SDIO backend's `tx_start`/`tx_poll` pair (`rp2040_sdio.h:101-111`), which we
-don't currently use — `hw_config.c` is 1-bit SPI at 12.5 MHz. Tracked as
+don't currently use (`hw_config.c` is 1-bit SPI at 12.5 MHz). Tracked as
 **`PIZERO-80`** (deferred; hardware feasibility first). Note even SDIO wouldn't
 fix write stalls: the dominant cost is the card's internal program/erase, which
 no transport speeds up.
@@ -139,16 +139,16 @@ must stay off the emulation hot path. These tickets underpin the filesystem
 layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
 (`PIZERO-79`).
 
-- **`PIZERO-64` — SD write foundation.** Writable-file helper layer, atomic
+- **`PIZERO-64`: SD write foundation.** Writable-file helper layer, atomic
   replace, an explicit flush/sync policy, and **measurement of real write
   latency** against the frame budget. Blocks everything else here; its numbers
   are the design input to `PIZERO-65`.
-- **`PIZERO-65` — Deferred sector write-back.** The genuinely hard part, kept as
+- **`PIZERO-65`: Deferred sector write-back.** The genuinely hard part, kept as
   its own ticket so the timing risk isn't buried in the feature. Core 0 uses
   ~76% of the frame at 1× (the measured frame budget noted in `platformio.ini`)
   and SD block-erase stalls run tens-to-hundreds of ms, so a synchronous write on the emulation thread would starve the audio
   ring and drop frames. Queue + drainer, off the hot path.
-- **`PIZERO-66` (low, legacy) — FDC Write Sector → `SAVE`/`SAVEM` to `.DSK`.**
+- **`PIZERO-66` (low, legacy): FDC Write Sector → `SAVE`/`SAVEM` to `.DSK`.**
   Peripheral polish for old images; replaces the FDC write-protect stub in
   `coco_machine.cpp`. **Not** the route to writable storage; that's
   `PIZERO-71`.
@@ -159,29 +159,29 @@ layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
   are already written by the editor (`PIZERO-146`, `154`); what is left is any
   further firmware state (e.g. `.fnt` choices for `PIZERO-57`). Saves happen
   with the overlay up, so a synchronous write is fine.
-- **`PIZERO-69` — Emulator save-states.** Freeze/restore the whole machine.
+- **`PIZERO-69`: Emulator save-states.** Freeze/restore the whole machine.
   XRoar's `serialise.c` (846 lines) is already vendored and compiled in; only the
   `fs_*` primitives are no-oped (`xroar_stubs.c:21-45`), so this is ~18 one-line
   functions plus a `FILE*`→`FIL` bridge.
 
-Cassette (`CSAVE`/`CLOAD`, `.CAS`/`.WAV`) is **not** covered by any of these —
+Cassette (`CSAVE`/`CLOAD`, `.CAS`/`.WAV`) is **not** covered by any of these:
 there is no tape emulation in the port at all. Unticketed, and under the new
 direction it would be peripheral support if ever wanted.
 
 ## Audio fidelity & polish
 
-- **`PIZERO-41` — Source-side audio fidelity** (high): live CoCo SOUND is ~1
-  semitone sharp + buzzier than desktop xroar; proven NOT HDMI-delivery →
+- **`PIZERO-41`: Source-side audio fidelity** (high): live CoCo SOUND is ~1
+  semitone sharp + buzzier than desktop xroar; proven NOT data-island delivery →
   resampler/cycle-timing. Measure via `pizero_wavmeas`, compare rate constants.
 - **`PIZERO-40`: Sweep POOL depth and validate budgets.** Streaming audio is
   already the default (`PIZERO-45`); what is left is the sweep and retiring
   the off-spec 52 Hz fallback.
-- **`PIZERO-32` — ACR CTS monitor compatibility** (multi-monitor; inert on the
+- **`PIZERO-32`: ACR CTS monitor compatibility** (multi-monitor; inert on the
   dev sink but matters for sinks that honor ACR).
 
 ## Release-readiness
 
-- **`PIZERO-42` — Clean up diagnostic build cruft.** Now also covers the
+- **`PIZERO-42`: Clean up diagnostic build cruft.** Now also covers the
   `PIZERO-11b` USB instrumentation (`src/usb_hotplug_diag.c`, the `[run]`/
   `[usb-evt]` counters, the `build_src_filter` entry): flag-gate or remove once
   `PIZERO-51` lands.
@@ -192,44 +192,44 @@ direction it would be peripheral support if ever wanted.
 
 Faithful-extension and "what-if" tracks, explicitly deferred:
 
-- **`PIZERO-56` — Higher-fidelity NTSC artifacts.** The current path is a
+- **`PIZERO-56`: Higher-fidelity NTSC artifacts.** The current path is a
   deliberate 2-bits→4-colors LUT shortcut (canonical PMODE 4 look), *not*
-  composite decoding — so extra CRT hues, fringing, context-dependence, and
+  composite decoding, so extra CRT hues, fringing, context-dependence, and
   artifacting outside RG6 are absent by design. Options ladder from a wider
   context-keyed pattern LUT to a full composite decode; pairs with `PIZERO-55`.
-- **`PIZERO-16` — Alternate video device** (TMS9918A-class sprites) — heavier
+- **`PIZERO-16`: Alternate video device** (TMS9918A-class sprites), a heavier
   track behind the palette work.
-- **`PIZERO-17` — Custom wavetable/sampled-voice synth device** (Blofeld-style,
-  *not* classic-chip emulation). The 48 kHz HDMI audio ring already exists
+- **`PIZERO-17`: Custom wavetable/sampled-voice synth device** (Blofeld-style,
+  *not* classic-chip emulation). The 48 kHz data-island audio ring already exists
   (PIZERO-35/45), so this is now compute + a control surface: runs on core 0
   (~3–4 ms of the ~5.3 ms/frame headroom → ~4–8 rich voices), wavetables/samples
   in 16 MB flash with an SRAM active-frame cache (PSRAM is unpopulated; SRAM is
   **~75% full on the default `pizero_stream_60`**, measured 2026-09-27), guest
   control via bus-write interception (same trick as the `PIZERO-55` palette
   registers). Gated on **`PIZERO-58`**.
-- **`PIZERO-58` — Synth voice-budget bench** (pre-work for `PIZERO-17`): a
+- **`PIZERO-58`: Synth voice-budget bench** (pre-work for `PIZERO-17`): a
   flag-gated build that runs N dummy voices and watches the `[run]` telemetry to
   measure real cyc/sample per complexity tier, float-vs-Q15, and flash-vs-SRAM
-  wavetable access — turning the ~4–8-voice estimate into a measured cap.
+  wavetable access, turning the ~4–8-voice estimate into a measured cap.
 
 ### MIDI subsystem (drives the synth + external integration)
 
 Connects the synth to the guest and the outside world; all build-flag gated so a
 plain CoCo2 boot is untouched.
 
-- **`PIZERO-59` — Internal MIDI bus/router + bit-banger serial transport.** Apps
+- **`PIZERO-59`: Internal MIDI bus/router + bit-banger serial transport.** Apps
   like Lyra use the CoCo's **bit-banger serial port** (not a cartridge ACIA) into
-  an external UART box; the firmware simply *becomes* that box — tap the emulated
+  an external UART box; the firmware simply *becomes* that box: tap the emulated
   serial line and decode it as MIDI, reusing the cycle-accurate PIA-tap technique
   from the audio work. A software router wires any source → any sink (synth,
   external, back to the guest). Gated on `PIZERO-61`; synth sink is `PIZERO-17`.
-- **`PIZERO-60` — External MIDI endpoints.** USB-MIDI **device** over the native
-  USB (composite with the existing CDC — appears to a DAW, *no extra hardware*),
+- **`PIZERO-60`: External MIDI endpoints.** USB-MIDI **device** over the native
+  USB (composite with the existing CDC; appears to a DAW, *no extra hardware*),
   USB-MIDI **host** over PIO-USB (via the `PIZERO-54` hub), and an optional DIN-5
   path (the only one needing hardware). Plugs into the `PIZERO-59` router.
-- **`PIZERO-61` — Pre-work: reverse-engineer Lyra's serial MIDI driver.** Nail
+- **`PIZERO-61`: Pre-work: reverse-engineer Lyra's serial MIDI driver.** Nail
   the PIA lines, baud, framing, and whether Lyra bit-bangs 31250 directly or the
-  box reclocks — via `analyze-rom`/`trace-calls`. Sets `PIZERO-59`'s decoder.
+  box reclocks, via `analyze-rom`/`trace-calls`. Sets `PIZERO-59`'s decoder.
 - **`PIZERO-62`** (done): the GIME-compatible timer at `$FF90-$FF95`, a
   programmable tick for MIDI clock and sequencing. Which GIME revision's reload
   quirk to emulate is `PIZERO-170`.
@@ -246,7 +246,7 @@ plain CoCo2 boot is untouched.
   `PIZERO-71` (VFS) → `PIZERO-72` (hypercall ABI) → `PIZERO-73` (cart ROM) →
   `PIZERO-74` (commands). `PIZERO-79` (floppy → peripheral) needs `PIZERO-73` for
   the default cart. Backends `PIZERO-75`/`76`/`77`/`78` need only `PIZERO-70`, and
-  **`PIZERO-75` (RAM disk) is the one to build early** — it exercises the VFS,
+  **`PIZERO-75` (RAM disk) is the one to build early**: it exercises the VFS,
   ABI and command surface with no card and no write latency confounding results.
 - **`PIZERO-72` is the ABI freeze point.** It is the contract Bare Naked Forth and
   every later guest program bind to, so settle versioning and sync-vs-async there

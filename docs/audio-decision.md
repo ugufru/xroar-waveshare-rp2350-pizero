@@ -1,24 +1,24 @@
-# Audio path — decision & feasibility (PIZERO-18)
+# Audio path: decision & feasibility (PIZERO-18)
 
 > **This is the original scoping/decision record (June 2026), now historical.**
-> HDMI audio shipped and the frame-rate warble was fixed via a streaming
+> Audio over the video link shipped and the frame-rate warble was fixed via a streaming
 > re-architecture. For the as-built design, the wins, and the hard-won gotchas,
-> see **[`hdmi-audio-notes.md`](hdmi-audio-notes.md)** — that is the live audio
+> see **[`video-audio-notes.md`](video-audio-notes.md)**; that is the live audio
 > reference. This file is kept for the decision history.
 
 **Status (historical):** source implemented (PIZERO-18, 2026-06-02), sink not yet. The board is
 currently **silent**. NOTE (corrects an earlier premise): this stripped port vendors
-**no XRoar sound module** — desktop XRoar synthesizes the audio stream, but that code
+**no XRoar sound module**. Desktop XRoar synthesizes the audio stream, but that code
 was not vendored here, so the CoCo's 6-bit DAC + single-bit sound existed only as
 PIA1 register state and were discarded. We now **synthesize the stream ourselves** in
 `coco_machine` (tap the 6-bit DAC on PIA1 port A bits 2–7 + single-bit sound on PB1,
-resample to 32 kHz mono into a ring). What remains is the **sink** — nothing yet
+resample to 32 kHz mono into a ring). What remains is the **sink**: nothing yet
 drives those samples to an output.
 
-**Decision (direction):** primary target is **HDMI audio over the existing cable**,
+**Decision (direction):** primary target is **audio over the existing video cable**,
 carried in `libdvi` data-island packets. Fallback is **PWM out of one GPIO** into a
-small RC filter / Class-D amp. HDMI is preferred because it needs no extra hardware
-and the board's mini-HDMI is the only output it ships with.
+small RC filter / Class-D amp. The video link is preferred because it needs no extra hardware
+and the board's mini video port is the only output it ships with.
 
 This file records the feasibility scoping (2026-05-31, from the 43b reconciliation)
 so the decision survives the project being parked. The implementation gate in
@@ -26,22 +26,22 @@ PIZERO-18 is: **decide & prove the output path before writing emulator-side code
 
 ## Why this is feasible
 
-The board wires HDMI to GPIO 32-39, so HSTX (GPIO 12-19) is unavailable and we use
+The board wires the video connector to GPIO 32-39, so HSTX (GPIO 12-19) is unavailable and we use
 the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
 
 - **The PIO serializer is content-agnostic.** It just shifts out 10-bit symbols
   (`dvi_serialiser.pio.h`: `out pins, 1` ×10, `out_shift … 10 * DVI_SYMBOLS_PER_WORD`).
   TMDS video, the 4 DVI control symbols, TERC4 data-island symbols, and guard bands
-  are *all* 10-bit. **No PIO program change is needed** — HDMI audio is purely a
+  are *all* 10-bit. **No PIO program change is needed**: data-island audio is purely a
   matter of *which symbols we feed* and *how the per-scanline DMA list is built*.
 
 - **Prior art uses the exact library we vendored.** `shuichitakano`'s *PicoDVI-audio*
-  fork adds HDMI data islands + audio on top of Wren6991's TMDS core; a C fork added
+  fork adds data islands + audio on top of Wren6991's TMDS core; a C fork added
   a *data-island queue* (audio subsystem pushes TERC4 packets, the library injects
-  them during horizontal blanking); and "FRANK HDMI Sound" (Adafruit, 2026-05-26)
+  them during horizontal blanking); and the "FRANK" sound driver (Adafruit, 2026-05-26)
   packages 32 kHz stereo PCM into the data-island stream on the same core. So the
   work is **porting an existing extension**, not inventing one.
-  - NOT applicable: `fliperama86/pico_hdmi` and "PicoHDMI" are **HSTX**-based — we can
+  - NOT applicable: `fliperama86/pico_hdmi` and "PicoHDMI" are **HSTX**-based; we can
     borrow their packet/TERC4 logic but not their output path.
 
 - **Our off-spec clock is a lucky break for audio clock regeneration.** ACR requires
@@ -49,7 +49,7 @@ the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
   choice), which yields clean integers: 32 kHz → N=4096, **CTS=24000**; 48 kHz →
   N=6144, **CTS=24000**. A standard 25.175 MHz clock would be messier.
 
-## What has to change (HDMI path)
+## What has to change (data-island path)
 
 1. **Per-scanline DMA list grows.** Today `dvi_scanline_dma_list` is fixed-size
    (`dvi_timing.h:51-57`: `l0[DVI_STATE_COUNT]`, `l1[2]`, `l2[2]`). A data island
@@ -58,18 +58,18 @@ the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
    must be reworked.
 2. **The documented IRQ hazard is the core risk.** `dvi_timing.cpp:189-191` warns the
    per-scanline IRQ model "breaks down when you have very short scanline sections like
-   guard bands." That is exactly what data islands add — and exactly what the audio
+   guard bands." That is exactly what data islands add, and exactly what the audio
    fork already redesigns. Port that, don't re-solve it.
 3. **New encode + packet logic:** a 16-entry TERC4 LUT, BCH header/ECC per packet, and
-   the mandatory HDMI packets — **AVI InfoFrame**, **Audio InfoFrame**, **Audio Clock
+   the mandatory packets: **AVI InfoFrame**, **Audio InfoFrame**, **Audio Clock
    Regeneration (ACR)**, **Audio Sample Packets**. InfoFrames are static (encode once);
    only audio sample packets re-encode per frame.
-4. **Audio source tap:** DONE (PIZERO-18) — `coco_machine` taps the 6-bit DAC (PIA1
+4. **Audio source tap:** DONE (PIZERO-18). `coco_machine` taps the 6-bit DAC (PIA1
    port A bits 2–7) + single-bit sound (PB1) and resamples to 32 kHz mono via
    `coco_machine_audio_read()`. (There is no XRoar `sound_module` in this port to tap;
    we build the stream directly.) The sink just needs to drain that ring, duplicate
    mono→stereo, and feed the data-island queue. Do the TERC4 encoding on **core 1**
-   (where libdvi scanout lives), with a clean producer/consumer handoff from core 0 —
+   (where libdvi scanout lives), with a clean producer/consumer handoff from core 0,
    not on core 0's ~5 ms frame slack.
 
 ## Risks (in order of likelihood to bite)
@@ -78,7 +78,7 @@ the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
   DMA-list templates (×3), packet buffers, and an audio sample ring need a few KB we
   may not have spare. Most likely thing to force a trade-off (e.g. give back a buffer).
 - **Monitor acceptance.** We already rely on EDID tolerance for the ~57 Hz timing.
-  Switching the sink from DVI to HDMI signaling on an off-spec timing may make some
+  Switching the sink from plain DVI to data-island signaling on an off-spec timing may make some
   displays pickier. Verify on the real monitor *first*.
 - **Merge friction.** Our libdvi is locally patched (the `tmds_encode.S` /
   `dvi_config_defs.h` assembler guards from PIZERO-04). Porting the fork is a careful
@@ -87,35 +87,35 @@ the PIO-based `lib/libdvi` (Wren6991/PicoDVI). The key enabler:
 ## De-risking order (before committing to the full port)
 
 1. **Bench the reference unmodified.** Flash shuichitakano's PicoDVI-audio (or FRANK)
-   demo on the PiZero to confirm *our specific monitor accepts HDMI audio at all* over
+   demo on the PiZero to confirm *our specific monitor accepts data-island audio at all* over
    this board's wiring. Cheapest kill-switch.
 2. **Cost the RAM** of the grown DMA lists + buffers against our ~11% free.
 3. Port the data-island path into `lib/libdvi`, then tap XRoar audio at 32 kHz.
 
 If (1) or (2) fails, fall back to **PWM**: one free GPIO → 1st-order RC (~22 kHz
 corner) → small Class-D amp (e.g. PAM8302). Simpler, but needs a wire/part and is not
-"over the existing cable." (This mirrors the 43b board's decision, which had no HDMI
-option — see that project's `docs/audio-decision.md`.)
+"over the existing cable." (This mirrors the 43b board's decision, which had no
+video-link audio option; see that project's `docs/audio-decision.md`.)
 
 ## Why 32 kHz / stereo is enough
 
-The CoCo audio source is a 6-bit DAC summed with a 1-bit cassette/speaker tap — well
+The CoCo audio source is a 6-bit DAC summed with a 1-bit cassette/speaker tap, well
 under 32 kHz effective bandwidth. 32 kHz stereo matches the FRANK reference and is
 plenty; 48 kHz is available with the same clean CTS if a sink prefers it. The signal
 is mono in origin (duplicate to both channels).
 
 ## References
 
-- shuichitakano PicoDVI-audio discussion — https://forums.raspberrypi.com/viewtopic.php?t=348724
-- PicoDVI + audio data-island thread — https://forums.raspberrypi.com/viewtopic.php?t=366899
-- FRANK HDMI Sound for RP2350 (Adafruit) — https://blog.adafruit.com/2026/05/26/a-small-hdmi-video-and-audio-driver-for-the-raspberry-pi-rp2350-raspberry_pi
-- pico_hdmi (HSTX, for contrast / packet logic only) — https://github.com/fliperama86/pico_hdmi
-- 43b's PWM decision — `~/github/xroar-waveshare-rp2350-43b/docs/audio-decision.md`
+- shuichitakano PicoDVI-audio discussion: https://forums.raspberrypi.com/viewtopic.php?t=348724
+- PicoDVI + audio data-island thread: https://forums.raspberrypi.com/viewtopic.php?t=366899
+- FRANK sound driver for RP2350 (Adafruit): https://blog.adafruit.com/2026/05/26/a-small-hdmi-video-and-audio-driver-for-the-raspberry-pi-rp2350-raspberry_pi
+- `pico_hdmi` (HSTX, for contrast / packet logic only): https://github.com/fliperama86/pico_hdmi
+- 43b's PWM decision: `~/github/xroar-waveshare-rp2350-43b/docs/audio-decision.md`
 
 ## Status & how to confirm next session (2026-06-04)
 
-**PROVEN ON HARDWARE:** HDMI video on this board's off-spec ~57 Hz timing, and **HDMI
-audio output** — a static test tone played through the monitor speakers. The full
+**PROVEN ON HARDWARE:** DVI video with data islands on this board's off-spec ~57 Hz timing, and
+**data-island audio output**: a static test tone played through the monitor speakers. The full
 data-island path (TERC4/BCH encoder, AVI + Audio InfoFrame, ACR, audio sample packets)
 is accepted and played by the sink.
 
@@ -124,33 +124,33 @@ is accepted and played by the sink.
 Cleanly isolated (static islands = video+audio fine; live per-line IRQ encode = black).
 
 ### Build flags
-- *(none)* → plain DVI video, no HDMI audio — product baseline / known-good.
-- `-DHDMI_DATA_ISLAND` → HDMI mode + audio islands.
-  - on `main`: **STATIC test tone** (audio plays, buzzy) + video — the proven build.
-  - on branch `pizero30-live-audio-wip`: the **LIVE engine — BREAKS VIDEO** (Option A).
-- `-DHDMI_DATA_ISLAND -DHDMI_AUDIO_SELFTEST` → skip autorun, boot clean BASIC, autotype an
+- *(none)* → plain DVI video, no data-island audio: product baseline / known-good.
+- `-DAV_DATA_ISLAND` → data-island framing + audio islands.
+  - on `main`: **STATIC test tone** (audio plays, buzzy) + video: the proven build.
+  - on branch `pizero30-live-audio-wip`: the **LIVE engine, which BREAKS VIDEO** (Option A).
+- `-DAV_DATA_ISLAND -DAV_AUDIO_SELFTEST` → skip autorun, boot clean BASIC, autotype an
   ascending-tone `SOUND` program (deterministic audio test, no keyboard needed).
 - `-DAUDIO_WAV_DUMP` → stream emulator audio out USB-CDC as base64 WAV (source check).
 
 ### To confirm next session
-1. **The SD MUST have ROMs in `/coco`** — otherwise the firmware bails at ROM load and the
+1. **The SD MUST have ROMs in `/coco`**. Otherwise the firmware bails at ROM load and the
    screen is black. (This red herring confounded a whole debugging session.)
-2. Flash `main` with `-DHDMI_DATA_ISLAND -DHDMI_AUDIO_SELFTEST` → expect video + a buzzy
-   looping ascending-tone on the monitor speakers = HDMI audio re-confirmed.
-3. *(optional)* Flash branch `pizero30-live-audio-wip` with `-DHDMI_DATA_ISLAND` → expect
+2. Flash `main` with `-DAV_DATA_ISLAND -DAV_AUDIO_SELFTEST` → expect video + a buzzy
+   looping ascending-tone on the monitor speakers = data-island audio re-confirmed.
+3. *(optional)* Flash branch `pizero30-live-audio-wip` with `-DAV_DATA_ISLAND` → expect
    black = re-confirms Option A breaks video.
 
 ### Reliable flash recipe (the 1200-baud auto-reset is flaky)
 - Only the PiZero connected (multiple RP boards break auto-discovery / picotool).
 - Enter BOOTSEL: 1200-baud touch on the CDC port, or manual (hold BOOTSEL + replug power)
   until the `RP2350` drive mounts.
-- `picotool load -x firmware.uf2` — NOT `cp` to `/Volumes/RP2350` (that was unreliable).
+- `picotool load -x firmware.uf2`, NOT `cp` to `/Volumes/RP2350` (that was unreliable).
 - A warm flash leaves the USB keyboard un-enumerated (PIZERO-11b); cold power-cycle to fix.
 
 ### Next: Option B (clean live audio)
 Single-buffer the framebuffer (frees ~153 KB, costs tear-free video), pre-encode audio on
 **core 0**, and have the IRQ do **only a `read_addr` swap**. FIRST do a swap-only IRQ
-viability check — if even the pointer swap disturbs scanout, fall back to pre-built
+viability check. If even the pointer swap disturbs scanout, fall back to pre-built
 per-line `dma_list`s (zero IRQ work). The step-2b engine (ring SPSC, ping-pong buffers,
 RAM-resident encoders, `dvi_write_audio_island`, `audio_vblank_cb`) lives on the
 `pizero30-live-audio-wip` branch as the foundation.
