@@ -934,7 +934,7 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
 // chunks (below), which yields correct PITCH because emulation time advances
 // by exactly the right number of cycles between samples. Output lands in a
 // small overwrite ring drained by whatever sink is active (WAV-over-CDC today;
-// HDMI data islands later). CPU clock = EVENT_TICK_RATE/16 = 14318180/16 =
+// DVI data islands later). CPU clock = EVENT_TICK_RATE/16 = 14318180/16 =
 // 894886.25 Hz; the Bresenham uses the rates x4 so the divisor is exact and
 // pitch does not drift.
 #define COCO_AUDIO_RATE      48000u   // PIZERO-30: 48 kHz native (ACR CTS now correct)

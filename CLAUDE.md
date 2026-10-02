@@ -1,12 +1,12 @@
 # CLAUDE.md — agent working notes
 
-XRoar (Tandy CoCo) on the **Waveshare RP2350-PiZero** (mini-HDMI + USB host).
+XRoar (Tandy CoCo) on the **Waveshare RP2350-PiZero** (mini video port + USB host).
 
 **All project documentation lives in `README.md` and `docs/`** — hardware specs, the confirmed pinout,
 the `libdvi`/HSTX rationale, the display geometry, and the clock-conflict risk are written up there, not
 here. Don't duplicate them. This file is just pointers and conventions for working in the repo.
-The end-to-end video+audio signal path (CoCo → HDMI) is mapped in `docs/pipeline.md`, which links the
-deeper `docs/hdmi-audio-notes.md` and `docs/BUILD.md`.
+The end-to-end video+audio signal path (CoCo → video out) is mapped in `docs/pipeline.md`, which links the
+deeper `docs/video-audio-notes.md` and `docs/BUILD.md`.
 `docs/ROADMAP.md` sequences the open work (a navigation map over `issues.jsonl` — what's shipped,
 what's next, and dependencies); it points to tickets, it doesn't restate them.
 
@@ -31,12 +31,12 @@ what's next, and dependencies); it points to tickets, it doesn't restate them.
 ## Building
 
 **`docs/BUILD.md` is the source of truth for how to build/flash this firmware** —
-the PlatformIO envs, the full HDMI/audio build-flag matrix, serial monitoring, and
+the PlatformIO envs, the full video/audio build-flag matrix, serial monitoring, and
 the toolchain gotchas. Read it before building; keep it in sync when you add/change
 a build flag.
 
 - **You build it (the agent), not the user.** The product firmware is the default env
-  `pizero_stream_60` (PIZERO-45: true 640×480p60 + streaming HDMI audio + USB), so a
+  `pizero_stream_60` (PIZERO-45: true 640×480p60 + streaming data-island audio + USB), so a
   bare `pio run` builds it. `pizero_stream` (off-spec 52 Hz audio) is kept as the
   fallback; the rest are diagnostics tied to open issues. Before committing a
   change that adds RAM, also build `pizero_stream` and the double-buffered
@@ -49,7 +49,7 @@ a build flag.
 - `#include <Arduino.h>` **before** XRoar headers (avoids `_Bool` type conflict).
 - Keep `-O2`, `build_unflags = -Os`, deep LDF.
 - DVI uses `pio_set_gpio_base(pio, 16)` because TMDS pins are GPIO 32–39 (> 31).
-- HSTX is GPIO 12–19 only and is NOT wired to the HDMI connector here → `libdvi` is mandatory.
+- HSTX is GPIO 12–19 only and is NOT wired to the video connector here → `libdvi` is mandatory.
 - `compile_commands.json` is gitignored. Regenerate with `pio run -t compiledb` after adding or
   swapping libraries so clangd can resolve `Arduino.h`, libdvi, Pico-PIO-USB, etc. Otherwise the
   IDE buries real diagnostics under "header not found" noise.

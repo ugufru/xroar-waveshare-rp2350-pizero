@@ -1,4 +1,4 @@
-// xroar-waveshare-rp2350-pizero — XRoar (Tandy CoCo) on mini-HDMI (PIZERO-09).
+// xroar-waveshare-rp2350-pizero — XRoar (Tandy CoCo) on a mini video port, DVI (PIZERO-09).
 //
 // Core 0: CoCo emulation (6809 + SAM + PIA + VDG) + serial/autotype keyboard +
 //         FDC sector reads from SD. Blits the VDG output into a 320x240 RGB565
@@ -153,7 +153,7 @@ static void loadm_write_cb(uint16_t addr, const uint8_t *data, uint16_t len, voi
 // (which asserts CPU == 120 or 240 MHz) can coexist with DVI. Same 640x480
 // H/V layout as libdvi's 60 Hz preset, but bit_clk_khz = 240000 -> 24 MHz
 // pixel clock -> ~57.14 Hz refresh. Off-spec vs CEA 640x480p60 (25.175 MHz)
-// but well within typical HDMI monitor EDID tolerance.
+// but well within typical monitor EDID tolerance.
 static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
     .h_sync_polarity = false,
     // PIZERO-30: h_fp=14, h_bp=130 -> h_total = 880, refresh = 24e6/(880*525) =
@@ -191,7 +191,7 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
 };
 #define DVI_TIMING   dvi_timing_640x480p_57hz_240mhz
 
-// PIZERO-32: HDMI Audio Clock Regeneration CTS. The value that nulls audio pitch
+// PIZERO-32: Audio Clock Regeneration (ACR) CTS. The value that nulls audio pitch
 // is MONITOR-DEPENDENT -- the sink derives the audio rate fs = pixel_clk*N/(128*CTS)
 // from ITS assumed pixel clock, which may differ from our off-spec 24 MHz. Higher
 // CTS -> lower pitch. 25176 suits the dev monitor (assumes the 25.175 MHz CEA
@@ -204,7 +204,7 @@ static const struct dvi_timing dvi_timing_640x480p_57hz_240mhz = {
 // PIZERO-14: double-buffered. Core 0 renders into the back buffer, then swaps
 // g_front at a frame boundary; core 1 samples g_front once per frame -> no tearing.
 #ifdef AV_DATA_ISLAND
-// PIZERO-30 (M1): HDMI-audio builds SINGLE-buffer the framebuffer. The ~150 KB
+// PIZERO-30 (M1): Data-island audio builds SINGLE-buffer the framebuffer. The ~150 KB
 // freed is needed for the 43 per-vblank-line audio-island buffers (M2). Cost is
 // tearing (core 1 may scan g_fb mid-blit); acceptable per docs/audio-decision.md.
 static uint16_t g_fb[FRAME_WIDTH * FRAME_HEIGHT] __attribute__((aligned(4)));
@@ -427,7 +427,7 @@ static bool mount_sd() {
 #define CYCLES_PER_FRAME 14915
 #define FRAME_PERIOD_US  16667
 #else
-// PIZERO-30: pace emulation to the TRUE HDMI refresh. Pixel clock 24 MHz, frame
+// PIZERO-30: pace emulation to the TRUE video refresh. Pixel clock 24 MHz, frame
 // is h_total(880) x v_total(525) = 462000 px, so refresh = 24e6/462000 =
 // 51.9481 Hz, period = 19250 us. Matching the loop keeps the audio producer, the
 // per-frame encoder, and the sink's consumption on one cadence. CYCLES_PER_FRAME
@@ -538,7 +538,7 @@ static void __not_in_flash_func(swaptest_vblank_cb)(void) {
 #endif // AV_DATA_ISLAND && AV_AUDIO_SWAPTEST
 
 #if defined(AV_DATA_ISLAND) && !defined(AV_AUDIO_SWAPTEST) && !defined(AV_AUDIO_STATIC)
-// PIZERO-30 (M2, Option B final): clean LIVE HDMI audio, distributed across the
+// PIZERO-30 (M2, Option B final): clean LIVE data-island audio, distributed across the
 // ACTIVE lines so the sink's audio FIFO never starves. Each of N_ALINES active
 // scanlines (spread evenly over the 480) carries an audio data island in its
 // (widened) back porch; ~154 packets/frame = ~616 samples @ ~51.8 Hz ~= 32 kHz.
@@ -732,7 +732,7 @@ static void __not_in_flash_func(audio_vblank_info_cb)(void) {
 // stream_audio_cb; the bank refill + its synth_fill helper are bank-path only.)
 #if defined(AV_AUDIO_SYNTH) && !defined(AV_STREAM_AUDIO)
 // CONTROL EXPERIMENT (PIZERO-30): bypass the emulator entirely and feed a
-// mathematically clean 440 Hz sine straight into the HDMI audio islands. Same
+// mathematically clean 440 Hz sine straight into the audio data islands. Same
 // encoder + DMA + transport as live audio. A pure sine has ~no harmonics, so any
 // roughness heard is the TRANSPORT, not the CoCo waveform / resampling.
 #include <math.h>
