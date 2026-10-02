@@ -203,11 +203,9 @@ holds.
 **BOOT and RUN are reachable** through the vent slots on the top, with a thin
 wire such as a Christmas ornament hook, or a very thin screwdriver (confirmed on
 hardware, PIZERO-104 and PIZERO-126). No disassembly, which matters because BOOT
-is the recovery path when a flash goes wrong (§3). RUN is the reset button: it restarts the machine
-straight to the BASIC prompt, skipping any AUTORUN title on the card
-(PIZERO-116), which is the way out of a title that misbehaves; power off and
-on to autorun again. (With `reset_button = autorun` in `settings.txt`, RUN
-behaves like power-on instead.) From TOP v13 a hidden funnel
+is the recovery path when a flash goes wrong (§3). RUN is the reset button: it
+restarts the machine to the BASIC prompt, skipping autorun, which is the way
+out of a program that hangs (see `AUTORUN.md`). From TOP v13 a hidden funnel
 under each of those two slots steers the tool onto the button: slide it along
 the slot until it drops in, then push. Try it once before packing a unit so you
 know the feel of it.

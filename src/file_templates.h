@@ -9,7 +9,7 @@
 // what can go in the file. Lines fit the 32-column screen.
 #define AUTORUN_TEMPLATE \
     "# AUTORUN.TXT: WHAT RUNS AT\n" \
-    "# POWER-ON. SEE AUTORUN.MD.\n" \
+    "# BOOT. SEE AUTORUN.MD.\n" \
     "# LINES STARTING WITH @ SET UP\n" \
     "# THE MACHINE; OTHER LINES ARE\n" \
     "# TYPED AT THE BASIC PROMPT.\n" \

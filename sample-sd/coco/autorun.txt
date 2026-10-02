@@ -1,11 +1,10 @@
-# Sample autorun.txt — copy this file to /coco/autorun.txt on the microSD.
-# See AUTORUN.md for the full format. Lines starting with '@' are directives;
-# '#' lines are comments; everything else is "autotyped" into Disk BASIC after
-# a warmup delay, exactly as if typed on the keyboard (each line + ENTER).
+# Sample autorun.txt: copy this file to /coco/autorun.txt on the microSD.
+# See AUTORUN.md. Lines starting with '#' are comments; the other lines are
+# typed into BASIC when it is ready, as if typed on the keyboard.
 #
-# This is a self-running graphics demo: it clears to a random colour, scatters
-# random semigraphics blocks, and loops forever — a good moving-image test for
-# the HDMI output (and for confirming the display is tear-free).
+# This is a self-running graphics demo: it clears to a random color, scatters
+# random semigraphics blocks, and loops forever. A good moving-image test for
+# the video output.
 
 10 CLS RND(8)
 20 FOR I=1 TO 60

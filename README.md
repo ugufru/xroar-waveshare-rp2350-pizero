@@ -79,7 +79,7 @@ size of a Raspberry Pi Zero.
 4. **Play a game.** Press **F12** for disks, **F9** for programs, or **F10** for cartridges. On a
    gamepad, press **Home**. Highlight a game, then press **ENTER** (or **A** on the gamepad).
 
-To start a game automatically at power-on, see [`AUTORUN.md`](AUTORUN.md). Every setting is
+To start a game automatically when the board boots, see [`AUTORUN.md`](AUTORUN.md). Every setting is
 explained in [`SETTINGS.md`](SETTINGS.md).
 
 ## Controls
@@ -103,7 +103,7 @@ software reads, and the right stick is the left joystick. A, B and R1 fire the r
 and L1 fire the left one. Start is ENTER and the top button is SPACE. Every button can be remapped,
 per game too (`pad_start = s`, `dpad = arrows`).
 
-**On the board:** RUN restarts to the BASIC prompt, skipping autorun. BOOT is only for flashing.
+**On the board:** RUN restarts to the BASIC prompt, skipping autorun (see `reset_button`). BOOT is only for flashing.
 
 **F1** shows the firmware version, the chip, the board's serial number, the clock, uptime, free
 memory and USB devices.
