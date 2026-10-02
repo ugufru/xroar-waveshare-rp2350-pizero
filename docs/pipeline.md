@@ -89,8 +89,12 @@ the diagnostic `pizero_wavmeas`. There core 0 blits into the back buffer, then
 
 `dvi_static_framebuf_main_16bpp()` (`lib/libdvi/dvi.cpp`) reads the 320×240 buffer
 with `stride = h_active/DVI_SYMBOLS_PER_WORD = 320`. Each line is TMDS-encoded into the
-three data channels by `_dvi_prepare_scanline_16bpp()` (`lib/libdvi/dvi.cpp`) via
-`tmds_encode_data_channel_16bpp` ×3 (B/G/R). With `DVI_VERTICAL_REPEAT = 2`, each of the
+three data channels by `_dvi_prepare_scanline_16bpp()` (`lib/libdvi/dvi.cpp`). By
+default that is `tmds_encode_16bpp_sio_doubled` (`lib/libdvi/tmds_encode.cpp`), which
+uses the RP2350's hardware TMDS encoder in the SIO block: one pass for all three
+lanes, about 12.6 µs a line. `video_encoder = software` in `settings.txt` switches back
+to libdvi's table encoder, `tmds_encode_data_channel_16bpp` ×3 (B/G/R), about 25.2 µs
+(PIZERO-175). With `DVI_VERTICAL_REPEAT = 2`, each of the
 240 logical lines is output twice → 480 physical lines; combined with pixel doubling
 this scales **320×240 → 640×480**.
 

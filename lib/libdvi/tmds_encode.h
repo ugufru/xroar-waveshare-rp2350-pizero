@@ -12,6 +12,13 @@ void tmds_setup_palette_symbols(const uint16_t *palette, uint32_t *symbuf, size_
 void tmds_setup_palette24_symbols(const uint32_t *palette, uint32_t *symbuf, size_t n_palette);
 void tmds_encode_palette_data(const uint32_t *pixbuf, const uint32_t *tmds_palette, uint32_t *symbuf, size_t n_pix, uint32_t palette_bits);
 
+#if !PICO_RP2040
+// PIZERO-175: the same 16bpp doubled encode as tmds_encode_data_channel_16bpp,
+// all three lanes in one pass, on the RP2350's SIO hardware TMDS encoder.
+// n_pix source pixels; lane i's symbols start at symbuf + i * lane_words.
+void tmds_encode_16bpp_sio_doubled(const uint32_t *pixbuf, uint32_t *symbuf, size_t n_pix, size_t lane_words);
+#endif
+
 // Functions from tmds_encode.S. Assembly symbols are unmangled, so they need C
 // linkage now that this file is compiled as C++ (PIZERO-175: only the two
 // loops in use had it, so the fullres, palette and 1/2 bpp encoders could

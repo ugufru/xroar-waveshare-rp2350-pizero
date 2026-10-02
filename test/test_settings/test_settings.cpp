@@ -32,6 +32,7 @@ static void test_defaults_match_todays_behaviour(void) {
     TEST_ASSERT_TRUE(s.key_repeat);                 // PIZERO-167
     TEST_ASSERT_EQUAL_UINT16(500, s.key_repeat_delay);
     TEST_ASSERT_EQUAL_UINT8(10, s.key_repeat_rate);
+    TEST_ASSERT_TRUE(s.video_hw_encode);            // PIZERO-175: the RP2350's encoder
     TEST_ASSERT_EQUAL_UINT16(0, s.color_set);                        // default palette
 }
 
@@ -57,6 +58,9 @@ static void test_every_setting(void) {
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("key_repeat_delay = 50"));
     TEST_ASSERT_EQUAL_INT(SET_OK, line("key_repeat_rate = 5")); TEST_ASSERT_EQUAL_UINT8(5, s.key_repeat_rate);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("key_repeat_rate = 0"));
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("video_encoder = software")); TEST_ASSERT_FALSE(s.video_hw_encode);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("video_encoder = Hardware")); TEST_ASSERT_TRUE(s.video_hw_encode);
+    TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("video_encoder = on"));
     // PIZERO-164: pad buttons and the D-pad.
     TEST_ASSERT_EQUAL_UINT8(K_ENTER, s.pad.act[PAD_B_START]);          // default
     TEST_ASSERT_EQUAL_INT(SET_OK, line("pad_start = S"));      TEST_ASSERT_EQUAL_UINT8(K_S, s.pad.act[PAD_B_START]);

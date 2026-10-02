@@ -27,6 +27,7 @@
 //                                select start l3 r3 (Home opens the overlay)
 //                       keys: a-z 0-9 @ : ; , - . / space enter clear
 //                             break shift up down left right
+//   video_encoder     = hardware | software   RP2350 TMDS encoder, or libdvi's tables
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -71,6 +72,7 @@ struct coco_settings {
     uint16_t key_repeat_delay;        // ms
     uint8_t key_repeat_rate;          // per second
     struct pad_map pad;               // PIZERO-164: what each pad button does
+    bool    video_hw_encode;          // PIZERO-175: video_encoder = hardware
     uint16_t color[16];               // RGB565 overrides, by palette index
     uint16_t color_set;               // bit i: color[i] overrides the default
 };
@@ -96,6 +98,7 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->key_repeat_delay = 500;
     s->key_repeat_rate = 10;
     pad_map_defaults(&s->pad);
+    s->video_hw_encode = true;
 }
 
 // Parse results. SET_OK covers blank and comment lines too.
@@ -217,6 +220,10 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
         else if (!strcmp(v, "none"))       a = PAD_ACT_NONE;
         else if ((a = kt_key_by_name(v)) == K_INVALID) return SET_BAD_VALUE;
         s->pad.act[bi] = a;
+    } else if (!strcmp(name, "video_encoder")) {
+        if (!strcmp(v, "hardware"))      s->video_hw_encode = true;
+        else if (!strcmp(v, "software")) s->video_hw_encode = false;
+        else return SET_BAD_VALUE;
     } else if (!strcmp(name, "artifact_colors")) {
         if (!strcmp(v, "on"))           s->artifact = ART_ON;
         else if (!strcmp(v, "off"))     s->artifact = ART_OFF;
@@ -275,6 +282,7 @@ static inline int settings_template(char *out, size_t n) {
         "key_repeat = %s\n"
         "key_repeat_delay = %u\n"
         "key_repeat_rate = %u\n"
+        "video_encoder = %s\n"
         "# color_green = #00FF00\n"
         "# color_dark_green = #006500\n",
         d.sn76489 ? "on" : "off", d.volume,
@@ -284,7 +292,8 @@ static inline int settings_template(char *out, size_t n) {
         d.joystick_swap ? "on" : "off",
         d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
         d.lowercase ? "on" : "off", d.key_repeat ? "on" : "off",
-        (unsigned)d.key_repeat_delay, (unsigned)d.key_repeat_rate);
+        (unsigned)d.key_repeat_delay, (unsigned)d.key_repeat_rate,
+        d.video_hw_encode ? "hardware" : "software");
     if (k < 0 || k >= (int)n) return (k < 0) ? 0 : (int)n - 1;
     // PIZERO-164: the pad, every button at its default.
     k += snprintf(out + k, n - (size_t)k, "dpad = %s\n", d.pad.dpad_arrows ? "arrows" : "joystick");

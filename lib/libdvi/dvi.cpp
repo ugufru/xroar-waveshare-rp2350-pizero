@@ -12,6 +12,11 @@
 #define __dvi_func(f) __not_in_flash_func(f)
 #define __dvi_func_x(f) __scratch_x(__STRING(f)) f
 
+// PIZERO-175: encode 16bpp scanlines on the RP2350's SIO hardware TMDS
+// encoder instead of the software tables. Read once per scanline, so it can
+// change while the display runs; the next line uses the new encoder.
+volatile bool dvi_sio_tmds_encode = false;
+
 // We require exclusive use of a DMA IRQ line. (you wouldn't want to share
 // anyway). It's possible in theory to hook both IRQs and have two DVI outs.
 static struct dvi_inst *dma_irq_privdata[2];
@@ -131,9 +136,16 @@ static inline void __dvi_func_x(_dvi_prepare_scanline_16bpp)(struct dvi_inst *in
 	queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
 	uint pixwidth = inst->timing->h_active_pixels;
 	uint words_per_channel = pixwidth / DVI_SYMBOLS_PER_WORD;
+#if !PICO_RP2040
+	if (dvi_sio_tmds_encode)
+		tmds_encode_16bpp_sio_doubled(scanbuf, tmdsbuf, pixwidth / 2, words_per_channel);
+	else
+#endif
+	{
 	tmds_encode_data_channel_16bpp(scanbuf, tmdsbuf + 0 * words_per_channel, pixwidth / 2, DVI_16BPP_BLUE_MSB,  DVI_16BPP_BLUE_LSB );
 	tmds_encode_data_channel_16bpp(scanbuf, tmdsbuf + 1 * words_per_channel, pixwidth / 2, DVI_16BPP_GREEN_MSB, DVI_16BPP_GREEN_LSB);
 	tmds_encode_data_channel_16bpp(scanbuf, tmdsbuf + 2 * words_per_channel, pixwidth / 2, DVI_16BPP_RED_MSB,   DVI_16BPP_RED_LSB  );
+	}
 	queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);
 }
 

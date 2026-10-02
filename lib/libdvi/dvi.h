@@ -91,6 +91,9 @@ void dvi_framebuf_main_16bpp(struct dvi_inst *inst);
 // framebuffer asynchronously; this never starves (tearing instead of dropouts).
 void dvi_static_framebuf_main_16bpp(struct dvi_inst *inst, const uint16_t * volatile *framebuf_ptr);
 
+// PIZERO-175: true encodes 16bpp scanlines on the RP2350's SIO TMDS encoder.
+extern volatile bool dvi_sio_tmds_encode;
+
 #ifdef __cplusplus
 }
 #endif

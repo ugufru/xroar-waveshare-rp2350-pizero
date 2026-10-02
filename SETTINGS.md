@@ -63,6 +63,7 @@ lowercase         = on
 key_repeat        = on
 key_repeat_delay  = 500
 key_repeat_rate   = 10
+video_encoder     = hardware
 dpad              = joystick
 pad_bottom        = fire
 pad_right         = fire
@@ -99,6 +100,7 @@ delete the rest.
 | `key_repeat` | `on` / `off` | `on` | Auto-repeat for a key held on the USB-C keyboard, which Color BASIC does not do itself. The newest key held repeats; BREAK never does. Games that read held keys directly may see a key flicker; put `key_repeat = off` in such a game's own settings file. |
 | `key_repeat_delay` | `100`-`2000` | `500` | Milliseconds a key is held before it starts repeating. |
 | `key_repeat_rate` | `1`-`30` | `10` | Repeats a second. Above 12 it is held to 12, so BASIC sees every press. |
+| `video_encoder` | `hardware` / `software` | `hardware` | How the picture is encoded for the display. `hardware` uses the encoder built into the RP2350 chip, which takes half the time. `software` is the older method, kept in case a display shows a problem with `hardware`. The picture should look the same either way. F1 INFO shows which one is in use. |
 | `dpad`, `pad_...` | see below | | What the gamepad's D-pad and each button do. See [Gamepad buttons](#gamepad-buttons). |
 | `color_NAME` | `#RRGGBB` | the 6847's | Overrides one palette color. See below. |
 

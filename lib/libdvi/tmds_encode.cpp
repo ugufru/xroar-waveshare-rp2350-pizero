@@ -2,6 +2,9 @@
 #include "tmds_encode.h"
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
+#if !PICO_RP2040
+#include "hardware/structs/sio.h"
+#endif
 
 static const uint32_t __scratch_x("tmds_table") tmds_table[] = {
 #include "tmds_table.h"
@@ -83,6 +86,42 @@ void __not_in_flash_func(tmds_encode_data_channel_16bpp)(const uint32_t *pixbuf,
 		tmds_encode_loop_16bpp(pixbuf, symbuf, n_pix);
 	interp_restore(interp0_hw, &interp0_save);
 }
+
+#if !PICO_RP2040
+// PIZERO-175: the RP2350's SIO block has a hardware TMDS encoder per core,
+// which this library predates. Write two RGB565 pixels to WDATA; each read of
+// a lane's PEEK/POP_DOUBLE register returns that lane's next two symbols,
+// DC-balanced by the hardware, in the two-symbols-per-word format the
+// serialiser sends. PIX2_NOSHIFT makes both symbols the same pixel (the
+// horizontal doubling), and each POP moves on to the word's second pixel.
+// Measured at half the cost of the three software passes (12.6 against
+// 25.2 us a line, PIZERO-175), with the same color levels: a 5-bit channel
+// value v encodes as v << 3, a 6-bit one as v << 2, like tmds_table.
+#if DVI_16BPP_RED_MSB != 15 || DVI_16BPP_RED_LSB != 11 || DVI_16BPP_GREEN_MSB != 10 || \
+    DVI_16BPP_GREEN_LSB != 5 || DVI_16BPP_BLUE_MSB != 4 || DVI_16BPP_BLUE_LSB != 0
+#error "tmds_encode_16bpp_sio_doubled assumes RGB565"
+#endif
+#define TMDS_SIO_RGB565 ( \
+	(13u << SIO_TMDS_CTRL_L0_ROT_LSB) | (4u << SIO_TMDS_CTRL_L0_NBITS_LSB) |  /* blue 4:0 */  \
+	( 3u << SIO_TMDS_CTRL_L1_ROT_LSB) | (5u << SIO_TMDS_CTRL_L1_NBITS_LSB) |  /* green 10:5 */ \
+	( 8u << SIO_TMDS_CTRL_L2_ROT_LSB) | (4u << SIO_TMDS_CTRL_L2_NBITS_LSB) |  /* red 15:11 */  \
+	( 5u << SIO_TMDS_CTRL_PIX_SHIFT_LSB) | SIO_TMDS_CTRL_PIX2_NOSHIFT_BITS)   /* POP: next pixel */
+
+void __scratch_x("tmds_sio") tmds_encode_16bpp_sio_doubled(const uint32_t *pixbuf, uint32_t *symbuf, size_t n_pix, size_t lane_words) {
+	sio_hw->tmds_ctrl = TMDS_SIO_RGB565 | SIO_TMDS_CTRL_CLEAR_BALANCE_BITS;
+	uint32_t *l0 = symbuf, *l1 = symbuf + lane_words, *l2 = symbuf + 2 * lane_words;
+	for (size_t i = 0; i < n_pix / 2; ++i) {
+		sio_hw->tmds_wdata = pixbuf[i];
+		l0[0] = sio_hw->tmds_peek_double_l0;
+		l1[0] = sio_hw->tmds_peek_double_l1;
+		l2[0] = sio_hw->tmds_pop_double_l2;
+		l0[1] = sio_hw->tmds_peek_double_l0;
+		l1[1] = sio_hw->tmds_peek_double_l1;
+		l2[1] = sio_hw->tmds_peek_double_l2;
+		l0 += 2; l1 += 2; l2 += 2;
+	}
+}
+#endif
 
 // As above, but 8 bits per pixel, multiple of 4 pixels, and still word-aligned.
 void __not_in_flash_func(tmds_encode_data_channel_8bpp)(const uint32_t *pixbuf, uint32_t *symbuf, size_t n_pix, uint channel_msb, uint channel_lsb) {

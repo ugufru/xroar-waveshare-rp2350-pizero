@@ -1052,8 +1052,9 @@ static void settings_apply(void) {
     coco_machine_set_font(st->font);          // PIZERO-166
     coco_machine_set_lowercase(st->lowercase);
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
+    dvi_sio_tmds_encode = st->video_hw_encode;   // PIZERO-175: from the next scanline
     Serial.printf("[settings] sn76489=%s volume=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
-                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u colors_overridden=%04x\r\n",
+                  "run_skips_autorun=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u video_encoder=%s colors_overridden=%04x\r\n",
                   st->sn76489 ? "on" : "off", st->volume,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
@@ -1063,6 +1064,7 @@ static void settings_apply(void) {
                   st->lowercase ? "on" : "off",
                   st->key_repeat ? "on" : "off", (unsigned)st->key_repeat_delay,
                   (unsigned)st->key_repeat_rate,
+                  st->video_hw_encode ? "hardware" : "software",
                   (unsigned)st->color_set);
 }
 
@@ -1566,6 +1568,7 @@ void setup() {
 #endif
     }
 #endif
+    dvi_sio_tmds_encode = g_settings.video_hw_encode;   // PIZERO-175: the default until settings.txt
     multicore_launch_core1(core1_main);
     Serial.printf("DVI up: %dx%d -> 640x480 ~57Hz, sys=%lu kHz (PIZERO-02b)\r\n",
                   FRAME_WIDTH, FRAME_HEIGHT, (unsigned long)(clock_get_hz(clk_sys) / 1000));
@@ -2229,6 +2232,7 @@ static int info_lines(char lines[][33], int max) {
     pico_get_unique_board_id_string(serial, sizeof serial);
     INFO("SERIAL %s", serial);
     INFO("CLOCK  %lu MHZ", (unsigned long)(clock_get_hz(clk_sys) / 1000000u));
+    INFO("VIDEO  %s ENCODER", dvi_sio_tmds_encode ? "HARDWARE" : "SOFTWARE");   // PIZERO-175
     INFO("%s", "");
     uint32_t up = millis() / 1000u;
     INFO("UP     %lu:%02lu:%02lu", (unsigned long)(up / 3600u),
