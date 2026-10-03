@@ -484,6 +484,8 @@ static void hid_keys_present(uint8_t mods) {
 
 static uint8_t g_hid_mods = 0;               // the last report's modifiers
 static bool g_prtsc_held = false;              // PIZERO-165
+static volatile bool g_art_request = false;    // PIZERO-186: F8 pressed, for loop()
+static bool g_f8_held = false;
 
 // PIZERO-167: once a frame while the machine runs: auto-repeat the newest
 // held USB key (key_translate.h kt_repeat), per the key_repeat settings.
@@ -572,6 +574,13 @@ static void hid_keyboard_apply(const uint8_t *report) {
     for (int i = 0; i < 6; i++) if (codes[i] == 0x46) prtsc = true;
     if (prtsc && !g_prtsc_held) g_shot_request = true;
     g_prtsc_held = prtsc;
+
+    // PIZERO-186: F8 cycles the artifact colors while the machine runs (0x41
+    // presses no CoCo key). The save is loop()'s, not this callback's.
+    bool f8 = false;
+    for (int i = 0; i < 6; i++) if (codes[i] == 0x41) f8 = true;
+    if (f8 && !g_f8_held && g_machine_running && !disk_overlay_is_open()) g_art_request = true;
+    g_f8_held = f8;
 
     // PIZERO-81c: the F12 overlay sees every report first. Open, it takes all
     // of them, so nothing reaches BASIC; closed, it takes only its F keys.
@@ -1049,6 +1058,34 @@ static void settings_for_game(const char *game) {
         }
     }
     settings_apply();
+}
+
+// PIZERO-186: F8. The next artifact color setting (on, swapped, off, on),
+// put into effect and written into the running game's own settings file, or
+// settings.txt when nothing was launched, keeping the rest of the file.
+static void artifact_cycle_and_save(void) {
+    static const char *const names[3] = { "off", "on", "swapped" };   // ART_OFF, ART_ON, ART_SWAPPED
+    uint8_t a = g_settings.artifact;
+    a = (a == ART_ON) ? ART_SWAPPED : (a == ART_SWAPPED) ? ART_OFF : ART_ON;
+    g_settings.artifact = a;
+    coco_machine_set_artifact(a);
+    char gp[96];
+    const char *path = (g_game_path[0] && settings_game_path(g_game_path, gp, sizeof gp))
+                       ? gp : "0:/coco/settings.txt";
+    const int cap = 4096;                       // as the editor's whole-file limit
+    char *buf = (char *)malloc(cap);
+    bool ok = false;
+    if (buf) {
+        uint32_t n = 0;
+        if (!coco_boot_load_text(path, buf, cap, &n)) n = 0;   // a new file
+        int m = settings_set_line(buf, (int)n, cap, "artifact_colors", names[a]);
+        ok = m >= 0 && coco_boot_save_text(path, buf, (uint32_t)m);
+        free(buf);
+    }
+    if (ok && strcmp(path, "0:/coco/settings.txt") && !g_game_settings[0])
+        snprintf(g_game_settings, sizeof g_game_settings, "%s", path);   // the game has a file now
+    Serial.printf("[settings] F8: artifact_colors = %s, %s %s\r\n", names[a],
+                  ok ? "saved to" : "NOT saved to", path);
 }
 
 // PIZERO-146/147/154: after the editor saves a file. settings.txt, or the
@@ -1920,6 +1957,14 @@ void loop() {
         g_shot_request = false;
         g_audio_paused = true;
         coco_boot_screenshot((const uint16_t *)g_front, FRAME_WIDTH, FRAME_HEIGHT, nullptr, 0);
+        g_audio_paused = disk_overlay_is_open();
+        next_us = micros();
+    }
+    if (g_art_request) {
+        // PIZERO-186: as the screenshot, pause while the card is written.
+        g_art_request = false;
+        g_audio_paused = true;
+        artifact_cycle_and_save();
         g_audio_paused = disk_overlay_is_open();
         next_us = micros();
     }

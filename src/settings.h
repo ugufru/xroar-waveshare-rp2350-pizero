@@ -249,6 +249,46 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     return SET_OK;
 }
 
+// PIZERO-186: set one setting in a settings file's text, keeping the rest as
+// written. The last line with that name is the one that counts, so it is the
+// one replaced ("name = value", any comment on it dropped); with none, the
+// line is added at the end. buf holds len bytes and has room for cap.
+// Returns the new length, or -1 if it would not fit.
+static inline int settings_set_line(char *buf, int len, int cap,
+                                    const char *name, const char *value) {
+    char line[128], n[32], v[40];
+    int at = -1, at_end = -1;
+    for (int pos = 0; pos < len;) {
+        int e = pos;
+        while (e < len && buf[e] != '\n') e++;
+        int l = e - pos < (int)sizeof line - 1 ? e - pos : (int)sizeof line - 1;
+        memcpy(line, buf + pos, (size_t)l);
+        line[l] = '\0';
+        bool syntax;
+        if (settings_split(line, n, sizeof n, v, sizeof v, &syntax) && !strcmp(n, name)) {
+            at = pos; at_end = e;
+        }
+        pos = e + 1;
+    }
+    char repl[96];
+    int rl = snprintf(repl, sizeof repl, "%s = %s", name, value);
+    if (rl < 0 || rl >= (int)sizeof repl) return -1;
+    if (at < 0) {                                    // append, on a line of its own
+        int need = len + rl + 1 + ((len > 0 && buf[len - 1] != '\n') ? 1 : 0);
+        if (need > cap) return -1;
+        if (len > 0 && buf[len - 1] != '\n') buf[len++] = '\n';
+        memcpy(buf + len, repl, (size_t)rl);
+        len += rl;
+        buf[len++] = '\n';
+        return len;
+    }
+    int old = at_end - at, nl = len - old + rl;
+    if (nl > cap) return -1;
+    memmove(buf + at + rl, buf + at_end, (size_t)(len - at_end));
+    memcpy(buf + at, repl, (size_t)rl);
+    return nl;
+}
+
 // PIZERO-154: a game's own settings file: the game's path with its extension
 // replaced by .TXT, beside it ('0:/coco/bin/ORBIT.BIN' -> '0:/coco/bin/ORBIT.TXT').
 // Refused (false) for a name that would be the machine's own settings.txt or

@@ -184,6 +184,31 @@ static void test_tidy_is_stable_and_keeps_the_meaning(void) {
     TEST_ASSERT_EQUAL_MEMORY(&d, &s, sizeof s);
 }
 
+// PIZERO-186: F8 writes one setting into a file, keeping the rest.
+static void set_is(const char *in, const char *name, const char *value, const char *want) {
+    char buf[256];
+    int n = (int)strlen(in);
+    memcpy(buf, in, (size_t)n);
+    int m = settings_set_line(buf, n, sizeof buf, name, value);
+    TEST_ASSERT_TRUE(m >= 0);
+    buf[m] = 0;
+    TEST_ASSERT_EQUAL_STRING(want, buf);
+}
+
+static void test_set_line_replaces_adds_and_keeps_the_rest(void) {
+    set_is("# mine\nvolume = 8\nartifact_colors = on   # old\nfont = classic\n", "artifact_colors", "swapped",
+           "# mine\nvolume = 8\nartifact_colors = swapped\nfont = classic\n");
+    set_is("volume = 8\n", "artifact_colors", "off", "volume = 8\nartifact_colors = off\n");
+    set_is("volume = 8", "artifact_colors", "off", "volume = 8\nartifact_colors = off\n");
+    set_is("", "artifact_colors", "on", "artifact_colors = on\n");
+    // The last of two is the one that counts, so it is the one changed;
+    // a commented-out line is not a setting.
+    set_is("ARTIFACT_COLORS = on\n# artifact_colors = off\nartifact_colors = off\n", "artifact_colors", "swapped",
+           "ARTIFACT_COLORS = on\n# artifact_colors = off\nartifact_colors = swapped\n");
+    char tiny[8] = "x = 1\n";
+    TEST_ASSERT_EQUAL_INT(-1, settings_set_line(tiny, 6, 8, "artifact_colors", "on"));
+}
+
 static void test_the_template_parses_back_to_the_defaults(void) {
     // The editor offers this when there is no file; saving it unchanged
     // must leave every setting exactly at its default, with no errors.
@@ -228,6 +253,7 @@ int main(void) {
     RUN_TEST(test_bad_lines_are_reported_and_change_nothing);
     RUN_TEST(test_rgb565_rounding);
     RUN_TEST(test_the_template_parses_back_to_the_defaults);
+    RUN_TEST(test_set_line_replaces_adds_and_keeps_the_rest);
     RUN_TEST(test_tidy_puts_comments_first_and_sorts_settings);
     RUN_TEST(test_tidy_keeps_repeated_names_in_order);
     RUN_TEST(test_tidy_sorts_by_name_not_by_line);

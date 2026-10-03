@@ -93,6 +93,7 @@ explained in [`SETTINGS.md`](SETTINGS.md).
 | Edit that game's settings | **TAB** | **X** |
 | Put a disk in drive 0 to 3 | **0** to **3** | |
 | Save a screenshot | **Print Screen** | **M** (GameSir pads) |
+| Change the artifact colors (on, swapped, off), saved for the running game | **F8** | |
 
 **In BASIC:** Caps Lock switches upper and lower case, Home is CLEAR, Esc is BREAK, and Backspace
 deletes. The CoCo's keyboard has no way to type `{ } | ~` or a backtick, so those keys do
