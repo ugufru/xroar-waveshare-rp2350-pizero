@@ -205,7 +205,9 @@ def main():
 
     while True:
         rows = read_log()
-        unit = len(rows) + 1
+        # Next after the highest, so a row removed from the log never lets
+        # a unit number (or its photo and log file names) be used twice.
+        unit = max([int(r["unit"]) for r in rows if r.get("unit", "").isdigit()] or [0]) + 1
         known = {r["board_serial"]: r["unit"] for r in rows if r.get("board_serial")}
         say("=== Unit %d ===" % unit)
         cmd = ask("Hold BOOT, plug the board's power USB-C port into this Mac, let go of BOOT,\n"

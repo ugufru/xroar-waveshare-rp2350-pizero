@@ -20,3 +20,6 @@ hardware/photos/
 
 # Generated at build time by scripts/fw_version.py (PIZERO-156).
 src/fw_version.h
+
+# PIZERO-189: the QC log, sticker photos and boot logs stay local
+qc/
