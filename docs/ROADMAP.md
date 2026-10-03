@@ -38,7 +38,7 @@ The end-to-end product path is up and hardware-validated:
   multiple third-party games on hardware (user, 2026-07-19). No per-title
   record exists yet; that is `PIZERO-52` (open).
 - **Docs**: README, SETTINGS, AUTORUN, BUILD, pipeline, video-audio-notes,
-  cpu-speed, kit, usb-retrospective.
+  cpu-speed, kit, usb-retrospective, show-prep-retrospective.
 
 ## Now: Input / USB workstream (active focus)
 

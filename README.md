@@ -130,6 +130,7 @@ Freezes: about 0.46 an hour, all in the emulation phase, every one recovered by 
 (`PIZERO-33`). A soak of the current firmware is `PIZERO-168`.
 
 How USB input got here, and the lessons along the way: [`docs/usb-retrospective.md`](docs/usb-retrospective.md).
+The two days before Tandy Assembly, and their lessons: [`docs/show-prep-retrospective.md`](docs/show-prep-retrospective.md).
 Open work is in `issues.jsonl` (use `/issues`), sequenced in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 <details>
