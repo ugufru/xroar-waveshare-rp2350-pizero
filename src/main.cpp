@@ -2041,6 +2041,9 @@ void loop() {
 #ifdef VIDEO_BENCH
         { static uint32_t n = 0; if (n++ % 5 == 0) video_bench_print(); }
 #endif
+#ifdef FDC_TRACE
+        Serial.printf("[fdc] pc=%04x\r\n", (unsigned)coco_machine_cpu_pc());   // PIZERO-190
+#endif
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
                       "| freezes=%lu last=%s\r\n",

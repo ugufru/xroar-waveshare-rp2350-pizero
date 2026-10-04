@@ -61,6 +61,8 @@ void coco_machine_set_font(int font);
 /* PIZERO-166: hold true lower case on with the 6847t2 font. */
 void coco_machine_set_lowercase(_Bool on);
 void coco_machine_pia1b_trace(uint32_t *writes, uint8_t *last, _Bool *ext);
+/* PIZERO-190: the 6809's program counter, for locating a guest hang. */
+uint16_t coco_machine_cpu_pc(void);
 void coco_machine_palette_set_default(const uint16_t *rgb565, uint16_t mask);
 
 /* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,

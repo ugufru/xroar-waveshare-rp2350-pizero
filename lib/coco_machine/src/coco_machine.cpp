@@ -494,18 +494,78 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
     case 0x0: case 0x1: case 0x2: case 0x3:
     case 0x4: case 0x5: case 0x6: case 0x7:
         // $FF40-$FF47: RSDOS latch (drive sel / density / halt enable).
+#ifdef FDC_TRACE
+        if (D != g_m.fdc_latch)
+            Serial.printf("[fdc] latch=%02x pc=%04x\r\n", D, g_m.cpu ? g_m.cpu->reg_pc : 0);
+#endif
         g_m.fdc_latch = D;
-        // Bits 0-3 select drive 0..3 (one-hot).
-        for (unsigned i = 0; i < 4; i++) {
-            if (D & (1u << i)) { g_m.fdc_drive = i; break; }
-        }
+        // PIZERO-190: bits 0-2 select drives 0-2, else bit 6 drive 3, else
+        // drive 0, as upstream rsdos.c does. Bit 3 is MOTOR ON, not a drive.
+        if (D & 0x01)      g_m.fdc_drive = 0;
+        else if (D & 0x02) g_m.fdc_drive = 1;
+        else if (D & 0x04) g_m.fdc_drive = 2;
+        else if (D & 0x40) g_m.fdc_drive = 3;
+        else               g_m.fdc_drive = 0;
         return;
-    case 0x8: fdc_handle_command(D); return;
+    case 0x8:
+        fdc_handle_command(D);
+#ifdef FDC_TRACE
+        Serial.printf("[fdc] cmd=%02x d=%u t=%u s=%u -> st=%02x pc=%04x\r\n",
+                      D, g_m.fdc_drive, g_m.fdc_track, g_m.fdc_sector,
+                      g_m.fdc_status, g_m.cpu ? g_m.cpu->reg_pc : 0);
+#endif
+        return;
     case 0x9: g_m.fdc_track  = D;    return;
     case 0xA: g_m.fdc_sector = D;    return;
     case 0xB: g_m.fdc_data   = D;    return;
     default:  return;
     }
+}
+
+#ifdef FDC_TRACE
+// PIZERO-190: the last jumps taken (from -> to, a repeat counted rather
+// than stored), dumped when NitrOS-9's boot loops: armed once the kernel's
+// cold start ($EE8C) runs, fired when execution re-enters REL's relocated
+// copy at $EE00-$EE7A.
+#define PC_RING 256
+struct pc_jump { uint16_t from, to, s, n; };
+static struct pc_jump g_pc_ring[PC_RING];
+static unsigned g_pc_head = 0;
+static uint16_t g_pc_prev = 0;
+static bool g_pc_armed = false, g_pc_dumped = false;
+static void pc_trace_hook(void *sptr) {
+    struct MC6809 *cpu = (struct MC6809 *)sptr;
+    uint16_t pc = cpu->reg_pc;
+    if ((uint16_t)(pc - g_pc_prev) > 5) {             // not the next instruction
+        struct pc_jump *last = &g_pc_ring[(g_pc_head + PC_RING - 1) % PC_RING];
+        if (last->from == g_pc_prev && last->to == pc) {
+            if (last->n < 0xFFFF) last->n++;
+        } else {
+            g_pc_ring[g_pc_head] = (struct pc_jump){ g_pc_prev, pc, cpu->reg_s, 1 };
+            g_pc_head = (g_pc_head + 1) % PC_RING;
+        }
+    }
+    g_pc_prev = pc;
+    if (pc == 0xEE8C) g_pc_armed = true;
+    if (g_pc_armed && !g_pc_dumped && pc >= 0xEE00 && pc < 0xEE7B) {
+        g_pc_dumped = true;
+        Serial.print("[pctrace] boot re-entered REL; jumps oldest first (from>to s xN):\r\n");
+        for (unsigned i = 0; i < PC_RING; i++) {
+            const struct pc_jump *j = &g_pc_ring[(g_pc_head + i) % PC_RING];
+            if (!j->n) continue;
+            Serial.printf("%04x>%04x s%04x x%u%s", j->from, j->to, j->s, j->n,
+                          (i % 6 == 5) ? "\r\n" : "  ");
+        }
+        Serial.printf("\r\n[pctrace] cc=%02x a=%02x b=%02x x=%04x y=%04x u=%04x dp=%02x\r\n",
+                      cpu->reg_cc, MC6809_REG_A(cpu), MC6809_REG_B(cpu),
+                      cpu->reg_x, cpu->reg_y, cpu->reg_u, cpu->reg_dp);
+    }
+}
+#endif
+
+// PIZERO-190: where the guest is, for locating a hang from the console.
+extern "C" uint16_t coco_machine_cpu_pc(void) {
+    return g_m.cpu ? g_m.cpu->reg_pc : 0;
 }
 
 extern "C" void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn) {
@@ -699,6 +759,14 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     } else {
         // Real CoCo writes route by raw address: S=7 covers SAM regs +
         // any RAM-region write (RAS/nWE handles RAM in parallel).
+#ifdef FDC_TRACE
+        // PIZERO-190: GIME and SAM writes, which a CoCo 3 build makes.
+        { static unsigned n = 0;
+          if (A >= 0xFF90 && A < 0xFFE0 && n < 200) {
+              n++;
+              Serial.printf("[fdc] io %04x=%02x pc=%04x\r\n", A, g_m.cpu->D, g_m.cpu->reg_pc);
+          } }
+#endif
         if ((A & 0xFFE0) == 0xFF00) {
             mc6821_write(g_m.pia0, A, g_m.cpu->D);
             if (A & 1) g_m.pia_irq_dirty = true;       // CRA/CRB write may change IRQ enable
@@ -877,6 +945,9 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
     if (!p) return 0;
     g_m.cpu = (struct MC6809 *)p;
     g_m.cpu->mem_cycle = DELEGATE_AS2(void, bool, uint16, coco_mem_cycle, g_m.cpu);
+#ifdef FDC_TRACE
+    g_m.cpu->debug_cpu.instruction_hook = DELEGATE_AS0(void, pc_trace_hook, g_m.cpu);
+#endif
 
     p = part_create("SN74LS783", NULL);
     if (!p) return 0;

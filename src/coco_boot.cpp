@@ -682,6 +682,16 @@ extern "C" int coco_boot_disk_read_sector(unsigned drive, unsigned track,
                       drive, track, sector, fr, (unsigned)br);
         return 1;
     }
+#ifdef FDC_TRACE
+    // PIZERO-190: the boot track, for disassembling what DOS runs.
+    if (track == 34) {
+        for (unsigned i = 0; i < 256; i += 32) {
+            Serial.printf("[t34] %02u %02x ", sector, i);
+            for (unsigned j = 0; j < 32; j++) Serial.printf("%02x", out256[i + j]);
+            Serial.print("\r\n");
+        }
+    }
+#endif
     return 0;
 }
 
