@@ -63,6 +63,16 @@ void coco_machine_set_lowercase(_Bool on);
 void coco_machine_pia1b_trace(uint32_t *writes, uint8_t *last, _Bool *ext);
 /* PIZERO-190: the 6809's program counter, for locating a guest hang. */
 uint16_t coco_machine_cpu_pc(void);
+/* PIZERO-191: PIA0 CRB; bit 0 enables the 60 Hz field-sync IRQ. */
+uint8_t coco_machine_pia0_crb(void);
+/* PIZERO-191: row 0-15 of the text screen as ASCII (FDC_TRACE builds). */
+void coco_machine_screen_row(unsigned row, char out[33]);
+/* PIZERO-191: where FDC_TRACE prints. Serial (USB) on a board; the
+ * pizero_fdctrace_uart env sets Serial1 (UART0, GPIO 0/1), which is the
+ * port the cocozero emulator shows. */
+#if defined(FDC_TRACE) && !defined(FDC_TRACE_PORT)
+#define FDC_TRACE_PORT Serial
+#endif
 void coco_machine_palette_set_default(const uint16_t *rgb565, uint16_t mask);
 
 /* PIZERO-81d: restart as if powered on (RAM zeroed so BASIC cold-starts,

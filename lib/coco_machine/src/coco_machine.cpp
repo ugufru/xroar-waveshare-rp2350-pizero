@@ -58,6 +58,7 @@ struct CocoMachine {
     uint32_t csg_writes = 0;             // bytes written to the SN76489 (PIZERO-143)
     int32_t cart_toggle_remaining = 0;   // 6809 cycles until next CART pulse
     bool    cart_cb1_level = true;
+    bool    cart_autostart = false;      // PIZERO-191: this cart drives CART
 
     // Minimal WD279x-ish FDC state, enough for DECB sector reads.
     // Registers map at $FF48 (status/cmd), $FF49 (track), $FF4A (sector),
@@ -477,10 +478,12 @@ static uint8_t fdc_io_read(uint16_t A) {
             g_m.fdc_data = g_m.fdc_buf[g_m.fdc_buf_pos];
             g_m.fdc_status = 0x03;  // BUSY + DRQ
         } else if (g_m.fdc_busy) {
-            // last byte just delivered: clear BUSY + DRQ, set TRACK00 if t0,
-            // and fire NMI to wake DECB's SYNC waiting for FDC completion.
+            // last byte just delivered: clear BUSY + DRQ and fire NMI to wake
+            // DECB's SYNC waiting for FDC completion. PIZERO-191: no TRACK00
+            // here: after a Type II command bit 2 is LOST DATA, and setting
+            // it on track 0 failed every NitrOS-9 read of LSN 0.
             g_m.fdc_busy = false;
-            g_m.fdc_status = (g_m.fdc_track == 0) ? 0x04 : 0x00;
+            g_m.fdc_status = 0x00;
             fdc_signal_intrq();
         }
         return v;
@@ -496,7 +499,7 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
         // $FF40-$FF47: RSDOS latch (drive sel / density / halt enable).
 #ifdef FDC_TRACE
         if (D != g_m.fdc_latch)
-            Serial.printf("[fdc] latch=%02x pc=%04x\r\n", D, g_m.cpu ? g_m.cpu->reg_pc : 0);
+            FDC_TRACE_PORT.printf("[fdc] latch=%02x pc=%04x\r\n", D, g_m.cpu ? g_m.cpu->reg_pc : 0);
 #endif
         g_m.fdc_latch = D;
         // PIZERO-190: bits 0-2 select drives 0-2, else bit 6 drive 3, else
@@ -510,7 +513,7 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
     case 0x8:
         fdc_handle_command(D);
 #ifdef FDC_TRACE
-        Serial.printf("[fdc] cmd=%02x d=%u t=%u s=%u -> st=%02x pc=%04x\r\n",
+        FDC_TRACE_PORT.printf("[fdc] cmd=%02x d=%u t=%u s=%u -> st=%02x pc=%04x\r\n",
                       D, g_m.fdc_drive, g_m.fdc_track, g_m.fdc_sector,
                       g_m.fdc_status, g_m.cpu ? g_m.cpu->reg_pc : 0);
 #endif
@@ -524,15 +527,19 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
 
 #ifdef FDC_TRACE
 // PIZERO-190: the last jumps taken (from -> to, a repeat counted rather
-// than stored), dumped when NitrOS-9's boot loops: armed once the kernel's
-// cold start ($EE8C) runs, fired when execution re-enters REL's relocated
-// copy at $EE00-$EE7A.
+// than stored), dumped when NitrOS-9's boot runs away (PIZERO-191): armed
+// once the guest enters all-RAM mode (SAM TY, which REL sets first), fired
+// the first time the CPU then executes in $8000-$EDFF, where no NitrOS-9
+// Level 1 code lives. A
+// runaway slides through memory without jumping, so the ring still holds
+// the jumps that led to it.
 #define PC_RING 256
 struct pc_jump { uint16_t from, to, s, n; };
 static struct pc_jump g_pc_ring[PC_RING];
 static unsigned g_pc_head = 0;
 static uint16_t g_pc_prev = 0;
 static bool g_pc_armed = false, g_pc_dumped = false;
+static void pc_trace_dump(const char *why, unsigned last);
 static void pc_trace_hook(void *sptr) {
     struct MC6809 *cpu = (struct MC6809 *)sptr;
     uint16_t pc = cpu->reg_pc;
@@ -545,20 +552,41 @@ static void pc_trace_hook(void *sptr) {
             g_pc_head = (g_pc_head + 1) % PC_RING;
         }
     }
+    if (pc == 0xA027 || pc == 0xA00E)     // Color BASIC reset entry (PIZERO-191)
+        FDC_TRACE_PORT.printf("[pctrace] reset path pc=%04x from=%04x rstflg=%02x rstvec=%02x%02x\r\n",
+                              pc, g_pc_prev, g_m.ram[0x71], g_m.ram[0x72], g_m.ram[0x73]);
     g_pc_prev = pc;
-    if (pc == 0xEE8C) g_pc_armed = true;
-    if (g_pc_armed && !g_pc_dumped && pc >= 0xEE00 && pc < 0xEE7B) {
+    if (g_m.sam_ty) g_pc_armed = true;
+    if (g_pc_armed && !g_pc_dumped && pc >= 0x8000 && pc < 0xEE00) {
         g_pc_dumped = true;
-        Serial.print("[pctrace] boot re-entered REL; jumps oldest first (from>to s xN):\r\n");
-        for (unsigned i = 0; i < PC_RING; i++) {
+        pc_trace_dump("runaway into $8000-$EDFF", PC_RING);
+    }
+}
+
+static void pc_trace_dump(const char *why, unsigned last) {
+    struct MC6809 *cpu = g_m.cpu;
+    {
+        FDC_TRACE_PORT.printf("[pctrace] %s; jumps oldest first (from>to s xN):\r\n", why);
+        for (unsigned i = PC_RING - last; i < PC_RING; i++) {
             const struct pc_jump *j = &g_pc_ring[(g_pc_head + i) % PC_RING];
             if (!j->n) continue;
-            Serial.printf("%04x>%04x s%04x x%u%s", j->from, j->to, j->s, j->n,
+            FDC_TRACE_PORT.printf("%04x>%04x s%04x x%u%s", j->from, j->to, j->s, j->n,
                           (i % 6 == 5) ? "\r\n" : "  ");
         }
-        Serial.printf("\r\n[pctrace] cc=%02x a=%02x b=%02x x=%04x y=%04x u=%04x dp=%02x\r\n",
+        FDC_TRACE_PORT.printf("\r\n[pctrace] cc=%02x a=%02x b=%02x x=%04x y=%04x u=%04x dp=%02x\r\n",
                       cpu->reg_cc, MC6809_REG_A(cpu), MC6809_REG_B(cpu),
                       cpu->reg_x, cpu->reg_y, cpu->reg_u, cpu->reg_dp);
+        // Which source holds IRQ/FIRQ up.
+        FDC_TRACE_PORT.printf("[pctrace] pia0 a cr=%02x irq=%u rx=%02x | b cr=%02x irq=%u rx=%02x | "
+                      "pia1 a cr=%02x irq=%u | b cr=%02x irq=%u",
+                      g_m.pia0->a.control_register, g_m.pia0->a.irq, g_m.pia0->a.irq1_received,
+                      g_m.pia0->b.control_register, g_m.pia0->b.irq, g_m.pia0->b.irq1_received,
+                      g_m.pia1->a.control_register, g_m.pia1->a.irq,
+                      g_m.pia1->b.control_register, g_m.pia1->b.irq);
+#ifdef GIME_TIMER
+        FDC_TRACE_PORT.printf(" | gime lines=%02x", gime_timer_lines(&g_gime));
+#endif
+        FDC_TRACE_PORT.print("\r\n");
     }
 }
 #endif
@@ -566,6 +594,26 @@ static void pc_trace_hook(void *sptr) {
 // PIZERO-190: where the guest is, for locating a hang from the console.
 extern "C" uint16_t coco_machine_cpu_pc(void) {
     return g_m.cpu ? g_m.cpu->reg_pc : 0;
+}
+
+#ifdef FDC_TRACE
+// PIZERO-191: one row of the 32x16 text screen as ASCII, for reading the
+// guest's screen from the console. VDG codes fold to 6 bits; semigraphics
+// show as '#'.
+extern "C" void coco_machine_screen_row(unsigned row, char out[33]) {
+    const uint16_t base = g_m.sam_f ? g_m.sam_f : 0x0400;
+    for (unsigned x = 0; x < 32; x++) {
+        uint8_t c = g_m.ram[(uint16_t)(base + row * 32 + x)];
+        uint8_t v = c & 0x3F;
+        out[x] = (c & 0x80) ? '#' : (char)(v < 0x20 ? v + 0x40 : v);
+    }
+    out[32] = '\0';
+}
+#endif
+
+// PIZERO-191: PIA0 control register B, whose bit 0 enables the 60 Hz IRQ.
+extern "C" uint8_t coco_machine_pia0_crb(void) {
+    return g_m.pia0 ? g_m.pia0->b.control_register : 0;
 }
 
 extern "C" void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn) {
@@ -764,7 +812,13 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
         { static unsigned n = 0;
           if (A >= 0xFF90 && A < 0xFFE0 && n < 200) {
               n++;
-              Serial.printf("[fdc] io %04x=%02x pc=%04x\r\n", A, g_m.cpu->D, g_m.cpu->reg_pc);
+              FDC_TRACE_PORT.printf("[fdc] io %04x=%02x pc=%04x\r\n", A, g_m.cpu->D, g_m.cpu->reg_pc);
+          }
+          // PIZERO-191: PIA0 control writes ($FF01/$FF03 and mirrors).
+          static unsigned m = 0;
+          if ((A & 0xFFE1) == 0xFF01 && m < 60) {
+              m++;
+              FDC_TRACE_PORT.printf("[fdc] pia0 %04x=%02x pc=%04x\r\n", A, g_m.cpu->D, g_m.cpu->reg_pc);
           } }
 #endif
         if ((A & 0xFFE0) == 0xFF00) {
@@ -1201,7 +1255,7 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
     // Q clock to nudge BASIC into the FIRQ handler that JMPs $C000. We
     // approximate per upstream xroar by toggling every ~100 ms (~88 950
     // CPU cycles at 0.895 MHz).
-    if (g_m.cart_rom && g_m.pia1) {
+    if (g_m.cart_rom && g_m.cart_autostart && g_m.pia1) {
         g_m.cart_toggle_remaining -= (int32_t)cycles;
         while (g_m.cart_toggle_remaining <= 0) {
             g_m.cart_cb1_level = !g_m.cart_cb1_level;
@@ -1211,15 +1265,12 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
         }
     }
 
-    // PIZERO-31: keep the 60 Hz field-sync timer IRQ alive. The VDG drives FS ->
-    // PIA0 CB1 fine, but this port's autorun DIRECT-jumps into a program that
-    // leaves PIA0 CB1's interrupt DISABLED (CRB bit 0 = 0) and nothing re-enables
-    // it, so BASIC's TIMER freezes -> PLAY hangs on note 1, cursor doesn't blink,
-    // SOUND n,d stalls. On real hardware the FS line is wired and BASIC keeps this
-    // on, so force the enable bit. Verified clean under heavy load (12 SOUNDs +
-    // long PLAY over serial): CRB stays 35, no IRQ storm (irq=0, I=0), PC advances
-    // and returns to idle. Only bit 0 touched -- CB2/sound-mux + edge bits intact.
-    if (g_m.pia0) g_m.pia0->b.control_register |= 0x01;
+    // PIZERO-31's fix forced PIA0 CRB bit 0 (the 60 Hz IRQ enable) on every
+    // frame. That overrode every program that turns the IRQ off, and crashed
+    // NitrOS-9: its REL clears $FF03, enters all-RAM mode, and the forced IRQ
+    // then vectored into Disk BASIC's handler, now RAM (PIZERO-191). The IRQ
+    // was off because of the Disk BASIC autostart above, now fixed at its
+    // source, so the guest owns the bit again.
 
     // PIZERO-121: one servo step per frame. Only after the reader has primed,
     // because the ring is legitimately empty before that and correcting on it
@@ -1269,6 +1320,13 @@ extern "C" void coco_machine_install_cart_sized(const uint8_t *rom, uint32_t len
     gime_timer_reset(&g_gime);          // PIZERO-62: stopped until a guest programs it
 #endif
     g_m.cart_cb1_level = true;
+    // PIZERO-191: a disk controller does not wire CART, so Disk BASIC ("DK"
+    // at $C000, the mark Extended BASIC looks for) must not autostart, as
+    // upstream's RS-DOS cart does not. Pulsing it fired BASIC's autostart
+    // FIRQ ($A0F6) after the cold start: that re-initialises the PIAs,
+    // turning the 60 Hz IRQ off that Extended BASIC had just turned on, and
+    // restarts Disk BASIC at $C000 without turning it back on (PIZERO-31).
+    g_m.cart_autostart = rom && len >= 2 && !(rom[0] == 'D' && rom[1] == 'K');
 }
 
 // PIZERO-142: a bank-switched cartridge of len bytes (see cart_gmc.h),

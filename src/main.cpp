@@ -1347,6 +1347,9 @@ static void bin_settle_tick(void) {
 void setup() {
     settings_defaults(&g_settings);   // PIZERO-145: in force until settings.txt is read
     Serial.begin(115200);
+#if defined(FDC_TRACE) && defined(FDC_TRACE_UART)
+    Serial1.begin(115200);            // PIZERO-191: trace on UART0 for the emulator
+#endif
     // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
     // boot banners. (loop() also repeats a recap for the first ~5 s.)
     uint32_t t0 = millis();
@@ -2042,7 +2045,16 @@ void loop() {
         { static uint32_t n = 0; if (n++ % 5 == 0) video_bench_print(); }
 #endif
 #ifdef FDC_TRACE
-        Serial.printf("[fdc] pc=%04x\r\n", (unsigned)coco_machine_cpu_pc());   // PIZERO-190
+        FDC_TRACE_PORT.printf("[fdc] pc=%04x crb=%02x\r\n", (unsigned)coco_machine_cpu_pc(),
+                              (unsigned)coco_machine_pia0_crb());   // PIZERO-190, 191
+        { static uint32_t n = 0;                   // PIZERO-191: the screen every 5 s
+          if (++n % 5 == 0) {
+              char row[33];
+              for (unsigned r = 0; r < 16; r++) {
+                  coco_machine_screen_row(r, row);
+                  FDC_TRACE_PORT.printf("[scr] |%s|\r\n", row);
+              }
+          } }
 #endif
         Serial.printf("[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
