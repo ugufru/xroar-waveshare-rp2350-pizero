@@ -115,6 +115,8 @@ bool coco_boot_drive_protected(unsigned drive);
 #define COCO_NEWDSK_EXISTS 1
 #define COCO_NEWDSK_FAILED 2
 int coco_boot_create_blank_dsk(const char *base, char *name, size_t name_sz);
+// PIZERO-196: rename old_path (a full path) to BASE.DSK beside it; same errors.
+int coco_boot_rename_dsk(const char *old_path, const char *base, char *name, size_t name_sz);
 bool coco_boot_set_drive_protected(unsigned drive, bool on);
 
 // LOADM .bin parser (AMOLED-26 direct-load path). `path` is full

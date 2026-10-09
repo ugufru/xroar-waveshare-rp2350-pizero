@@ -93,7 +93,8 @@ explained in [`SETTINGS.md`](SETTINGS.md).
 | Edit that game's settings | **TAB** | **X** |
 | Put a disk in drive 0 to 3 | **0** to **3** | |
 | Lock the highlighted disk's drive read-only (and unlock it) | **W** | |
-| Make a new blank disk (`NEW01.DSK`, formatted) in the list | **N** | |
+| Make a new blank, formatted disk: type its name, then Enter | **N** | |
+| Rename the highlighted disk | **R** | |
 | Save a screenshot | **Print Screen** | **M** (GameSir pads) |
 | Change the artifact colors (on, swapped, off), saved for the running game | **F8** | |
 

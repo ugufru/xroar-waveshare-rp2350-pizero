@@ -220,11 +220,14 @@ static void toggle_protect(void) {
 }
 
 // PIZERO-193: N asks for a name in the status row, then makes the blank
-// disk and lands on it, so 0-3 mounts it. Letters, digits, - and _ (upper
-// case, as DECB would show it), up to 16; Backspace, Enter, Esc.
-#define NEW_NAME_MAX 16
+// disk and lands on it, so 0-3 mounts it. PIZERO-196: R asks the same way,
+// pre-filled, and renames. Letters, digits, space, - and _, as typed, up
+// to 24 (what the row holds); Backspace, Enter, Esc.
+#define NEW_NAME_MAX 24
 static bool    g_naming;
+static bool    g_renaming;                 // the prompt is R's, not N's
 static char    g_new_name[NEW_NAME_MAX + 1];
+static int     g_rename_sel;               // the entry R is renaming
 static uint8_t g_naming_prev[6];
 
 static void naming_show(void) {
@@ -236,21 +239,41 @@ static void naming_show(void) {
 static void new_disk(void) {
     if (g_kind != CAT_DSK) return;
     g_naming = true;
+    g_renaming = false;
     g_new_name[0] = '\0';
     naming_show();
 }
 
+static void rename_disk(void) {
+    const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+    int i = g_ovk.sel;
+    if (g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
+    g_rename_sel = i;
+    snprintf(g_new_name, sizeof g_new_name, "%s", cat->e[i].name);
+    size_t l = strlen(g_new_name);
+    if (l > 4 && !strcasecmp(g_new_name + l - 4, ".dsk")) g_new_name[l - 4] = '\0';
+    g_naming = true;
+    g_renaming = true;
+    naming_show();
+}
+
 static void new_disk_commit(void) {
-    char name[NEW_NAME_MAX + 8], msg[CARD_COLS + 1];
-    int rc = coco_boot_create_blank_dsk(g_new_name, name, sizeof name);
+    char name[NEW_NAME_MAX + 8], msg[CARD_COLS + 1], old_path[DSK_NAME_MAX + 16];
+    int rc;
+    if (g_renaming) {
+        if (!dsk_cat_path(coco_boot_dsk_catalog(), g_rename_sel, old_path, sizeof old_path)) return;
+        rc = coco_boot_rename_dsk(old_path, g_new_name, name, sizeof name);
+    } else {
+        rc = coco_boot_create_blank_dsk(g_new_name, name, sizeof name);
+    }
     if (rc == COCO_NEWDSK_EXISTS) { snprintf(msg, sizeof msg, "%s ALREADY EXISTS", name); set_status(msg); return; }
-    if (rc != 0) { set_status("CANNOT MAKE THE DISK: SD CARD?"); return; }
+    if (rc != 0) { set_status(g_renaming ? "CANNOT RENAME IT: SD CARD?" : "CANNOT MAKE THE DISK: SD CARD?"); return; }
     int n = coco_boot_rescan(g_kind);
     ovk_set_count(&g_ovk, n);
     int i = dsk_cat_find_name(coco_boot_dsk_catalog(), name);
     if (i >= 0) g_ovk.sel = i;
     g_dirty = true;
-    snprintf(msg, sizeof msg, "%s MADE: 0-3 PUTS IT IN", name);
+    snprintf(msg, sizeof msg, g_renaming ? "RENAMED TO %s" : "%s MADE: 0-3 PUTS IT IN", name);
     set_status(msg);
 }
 
@@ -273,8 +296,8 @@ static void naming_key(uint8_t mods, const uint8_t codes[6]) {
             naming_show();
         } else {
             char ch = tek_ascii(c, shift);
-            if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
-            bool okch = (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
+            bool okch = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
+                        || ch == '-' || ch == '_' || (ch == ' ' && g_new_name[0]);
             size_t l = strlen(g_new_name);
             if (okch && l < NEW_NAME_MAX) { g_new_name[l] = ch; g_new_name[l + 1] = '\0'; naming_show(); }
         }
@@ -377,6 +400,7 @@ bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool
     case OVK_EDIT:   edit_game_settings(codes); break;
     case OVK_PROTECT: toggle_protect(); break;
     case OVK_NEW:    memcpy(g_naming_prev, codes, 6); new_disk(); break;
+    case OVK_RENAME: memcpy(g_naming_prev, codes, 6); rename_disk(); break;
     case OVK_CLOSE:  Serial.print("[overlay] close\r\n"); break;
     case OVK_MOVED:  legend(); break;
     case OVK_DRIVE:  toggle_drive(r.drive); break;

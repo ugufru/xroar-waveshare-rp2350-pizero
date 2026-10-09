@@ -35,6 +35,7 @@
 #define HK_ESC    0x29
 #define HK_TAB    0x2B
 #define HK_N      0x11   // PIZERO-193: a new blank disk
+#define HK_R      0x15   // PIZERO-196: rename the highlighted disk
 #define HK_W      0x1A   // PIZERO-66: write-protect the highlighted disk's drive
 #define HK_F1     0x3A   // PIZERO-156: the INFO page
 #define HK_F9     0x42
@@ -60,7 +61,7 @@
 #define OVL_TITLE_FILES  "< FILES >"          // PIZERO-146: text files to edit
 #define OVL_TITLE_INFO   "< INFO >"           // PIZERO-156: firmware and board
 // PIZERO-154: the F keys switch lists now, so '<> TYPE' made way for Tab.
-#define OVL_LEGEND_DSK   "0-3 DRIVE W LOCK N NEW ENTER TAB"
+#define OVL_LEGEND_DSK   "0-3 DRIVE W LOCK N NEW R REN TAB"
 #define OVL_LEGEND_BIN   "ENTER RUN  TAB SETTINGS"
 #define OVL_LEGEND_CART  "ENTER START  TAB SETTINGS"
 #define OVL_LEGEND_FILES "ENTER EDIT  ESC EXIT"
@@ -91,6 +92,7 @@ enum ovk_action {
     OVK_GOTO,        // an F key: switch to list `drive` (already set in list)
     OVK_EDIT,        // Tab: edit the highlighted entry's settings (PIZERO-154)
     OVK_NEW,         // N: create a blank disk (PIZERO-193)
+    OVK_RENAME,      // R: rename the highlighted disk (PIZERO-196)
     OVK_PROTECT,     // W: toggle write-protect on the highlighted disk's drive (PIZERO-66)
 };
 
@@ -227,6 +229,8 @@ static inline struct ovk_result ovk_report(struct ovk_state *s,
         if (s->n > 0) r.action = OVK_PROTECT;
     } else if (ovk_newly(s, codes, HK_N)) {
         r.action = OVK_NEW;                     // works on an empty list too
+    } else if (ovk_newly(s, codes, HK_R)) {
+        if (s->n > 0) r.action = OVK_RENAME;
     } else if (ovk_newly(s, codes, HK_HOME)) {
         s->sel = 0;
     } else if (ovk_newly(s, codes, HK_END)) {
