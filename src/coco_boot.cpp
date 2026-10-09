@@ -290,35 +290,52 @@ static time_t fat_to_time(const FILINFO *fi) {
 }
 
 extern "C" void coco_boot_clock_init(void) {
-    if (aon_timer_is_running()) { strcpy(g_clock_src, "kept"); return; }   // a reboot, not a power-on
+    // A running timer with a real date is a reboot, not a power-on: keep it,
+    // unless a file on the card is newer than it says, which proves it wrong
+    // (the core may also start the timer itself at boot with no date in it).
+    struct timespec now = { 0, 0 };
+    bool running = aon_timer_is_running();
+    if (running) aon_timer_get_time(&now);
+    // The newest file time anywhere the Mac writes: the disks, programs,
+    // cartridges and ROMs it copied carry its clock, and the board's own
+    // files carry this clock once it has been set.
     time_t best = 0;
-    const char *files[] = { "0:/coco/settings.txt", "0:/coco/drives.txt", "0:/coco/autorun.txt" };
+    const char *dirs[] = { "0:/coco", "0:/coco/dsk", "0:/coco/bin", "0:/coco/cart", "0:/coco/roms", "0:/coco/log" };
     FILINFO fi;
-    for (const char *f : files)
-        if (f_stat(f, &fi) == FR_OK) { time_t t = fat_to_time(&fi); if (t > best) best = t; }
     DIR d;
-    if (f_opendir(&d, "0:/coco/log") == FR_OK) {           // the board's own newest log
+    for (const char *dir : dirs) {
+        if (f_opendir(&d, dir) != FR_OK) continue;
         while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
+            if (fi.fattrib & AM_DIR) continue;
             time_t t = fat_to_time(&fi); if (t > best) best = t;
         }
         f_closedir(&d);
     }
-    if (best < 1700000000) {                                 // before 2023-11: no usable file time
-        struct tm t; memset(&t, 0, sizeof t);
-        t.tm_year = 2026 - 1900; t.tm_mday = 1;
-        aon_timer_start_calendar(&t);
-        strcpy(g_clock_src, "unset");
-        Serial.print("[clock] no file time on the card: 2026-01-01, uptime only\r\n");
+    if (running && now.tv_sec >= 1700000000 && now.tv_sec >= best) {
+        strcpy(g_clock_src, "kept");
+        char txt[40]; struct tm t; localtime_r(&now.tv_sec, &t);
+        strftime(txt, sizeof txt, "%Y-%m-%d %H:%M:%S", &t);
+        Serial.printf("[clock] kept across the reboot: %s\r\n", txt);
         return;
     }
-    best += 60;                                              // later than the newest file
     struct tm t;
-    localtime_r(&best, &t);
-    aon_timer_start_calendar(&t);
-    strcpy(g_clock_src, "card");
+    memset(&t, 0, sizeof t);
+    if (best < 1700000000) {                                 // before 2023-11: no usable file time
+        // 2000-01-01 is below the threshold, so a later boot that finds a
+        // real file time still takes it, and files written meanwhile are
+        // never mistaken for a seed.
+        t.tm_year = 2000 - 1900; t.tm_mday = 1;
+        strcpy(g_clock_src, "unset");
+    } else {
+        best += 60;                                          // later than the newest file
+        localtime_r(&best, &t);
+        strcpy(g_clock_src, "card");
+    }
+    if (running) aon_timer_set_time_calendar(&t); else aon_timer_start_calendar(&t);
     char txt[40];
     strftime(txt, sizeof txt, "%Y-%m-%d %H:%M:%S", &t);
-    Serial.printf("[clock] set from the card's newest file: %s (approximate)\r\n", txt);
+    if (best < 1700000000) Serial.printf("[clock] no file time on the card: %s, uptime only\r\n", txt);
+    else Serial.printf("[clock] set from the card's newest file: %s (approximate)\r\n", txt);
 }
 
 extern "C" bool coco_boot_clock_text(char *out, size_t n, char *src, size_t src_n) {
