@@ -188,6 +188,13 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   `[run] fps cpu render blit aud …`. Confirm `fps≈60` on `pizero_stream_60`
   (`≈52` on the `pizero_stream` fallback), frame time under budget.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.
+- **6809 correctness (PIZERO-129):** `pio test -e native -f test_mc6809_lockstep`
+  runs the frozen reference core (`test/mc6809_reference/`) and the live core
+  side by side and fails at the first bus cycle or register that differs. Run
+  it after any change under `lib/xroar_core/src/mc6809` or `mc680x`. With
+  `COCO_ROM_DIR=<folder with bas12.rom and extbas11.rom>` it also boots Color
+  BASIC for three million instructions (skipped otherwise; the repo ships no
+  ROMs). The whole native suite runs in about ten seconds.
 - **Soaking without a laptop (PIZERO-201):** put `soak_log = on` in
   `/coco/settings.txt` (F11 edits it on the board; it takes effect at the next
   power-on). Each boot then writes `/coco/log/soak-NNN.txt`: a header with the

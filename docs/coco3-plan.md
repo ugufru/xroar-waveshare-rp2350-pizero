@@ -68,6 +68,9 @@ instruction streams covering all three opcode pages, every indexed mode and
 the interrupt paths; optionally a real ROM boot when a local ROM folder is
 given, since the repo ships no ROMs.
 
+_Built 2026-10-09: `test/test_mc6809_lockstep/`, run with
+`pio test -e native -f test_mc6809_lockstep`; see docs/BUILD.md §5._
+
 ### 2. A 1.79 MHz benchmark (PIZERO-130, hardware)
 
 A new env, `pizero_cpu179`, runs the CoCo 2 machine at twice its cycles per

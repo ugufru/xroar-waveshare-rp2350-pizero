@@ -5,7 +5,6 @@
 {"rank": 5, "id": "PIZERO-120", "why": "Demoted from 3 to 9: the mechanism is understood (our symbol stream is legal but the hardest case for a receiver's equalisation, and this monitor fails on colour in one region) and no other sink has shown it. Pair with PIZERO-99; re-raise immediately if a second screen shows it.", "added": "2026-09-18"}
 {"rank": 6, "id": "PIZERO-99", "why": "Other people's screens, which the kit rests on, and the same session answers whether the fuzz follows the board or the monitor.", "added": "2026-09-17"}
 {"rank": 7, "id": "PIZERO-110", "why": "Turns vetting into something every build repeats. The pieces exist (156 host tests, the soak harness, the [run]/[aud]/[csg] telemetry), so this is mostly assembly: a firmware build that runs the checks and prints PASS or FAIL with the measured number.", "added": "2026-09-17"}
-{"rank": 8, "id": "PIZERO-129", "why": "CoCo 3 track, stage 1: a 6809 lockstep correctness harness. Host only, and the precondition for touching the core at all.", "added": "2026-09-26"}
 {"rank": 9, "id": "PIZERO-130", "why": "CoCo 3 track, stage 2: the 1.79 MHz benchmark and baseline, so the speed work has a target.", "added": "2026-09-26"}
 {"rank": 10, "id": "PIZERO-131", "why": "CoCo 3 track, stage 3: the speed-up the whole CoCo 3 effort hangs on. Its gate decides whether PIZERO-133 happens.", "added": "2026-09-26"}
 {"rank": 11, "id": "PIZERO-133", "why": "CoCo 3 track, stage 4, behind the PIZERO-131 gate and the PIZERO-135 decisions.", "added": "2026-09-26"}
