@@ -60,6 +60,13 @@ RE_BOOT = re.compile(r"XRoar on RP2350-PiZero")
 RE_SILENT = re.compile(r"=== SILENT for (\d+)s")
 RE_USB_ADD = re.compile(r"\[usb\] device attached")
 RE_USB_DEL = re.compile(r"\[usb\] device removed")
+# PIZERO-201: the board's own log on the SD card (soak_log = on). Same
+# telemetry lines, sampled once a minute, with the date on its own line and
+# a cumulative badfps counter so the sampling loses no off-60 windows.
+RE_CARD = re.compile(r"=== CoCo Zero soak log, interval (\d+)s, clock (\S+ \S+) from (\S+)")
+RE_DATE = re.compile(r"=== DATE (\d{4}-\d\d-\d\d)")
+RE_BADFPS = re.compile(r"\bbadfps=(\d+)")
+RE_ENV = re.compile(r"\benv=(\S+)")
 
 # 60 Hz, and how far off it may drift before a second counts as a bad window.
 FPS_TARGET = 60.0
@@ -229,28 +236,61 @@ def parse_log(path: str) -> dict:
     usb_add = usb_del = 0
     first_ts = last_ts = None
     run_lines = 0
+    # PIZERO-201: card logs sample every `interval` seconds; a quiet minute is
+    # not a host-side gap. Dates arrive on their own lines, so timestamps
+    # become absolute seconds and a run may cross any number of midnights.
+    interval = 1.0
+    source = "serial"
+    clock_src = None
+    env_from_log = None
+    day_offset = 0.0
+    cur_date: dt.date | None = None
+    badfps = Counter()
+    first_abs = last_abs = None
+
+    def abs_seconds(ts: str) -> float:
+        t = dt.datetime.strptime(ts, "%H:%M:%S.%f")
+        return day_offset + t.hour * 3600 + t.minute * 60 + t.second + t.microsecond / 1e6
 
     with open(path, "r", errors="replace") as f:
         for raw in f:
             m = RE_TS.match(raw.rstrip("\n"))
             ts, body = (m.group(1), m.group(2)) if m else (None, raw.strip())
+            if not ts:
+                mc = RE_CARD.search(body)
+                if mc:
+                    interval = float(mc.group(1))
+                    source = "card"
+                    clock_src = mc.group(3)
+                md = RE_DATE.search(body)
+                if md:
+                    d0 = dt.date.fromisoformat(md.group(1))
+                    if cur_date is not None:
+                        day_offset += (d0 - cur_date).days * 86400
+                    cur_date = d0
             if ts:
                 first_ts = first_ts or ts
+                a = abs_seconds(ts)
+                if cur_date is None and last_abs is not None and a < last_abs:
+                    day_offset += 86400          # a serial log past midnight
+                    a += 86400
+                first_abs = a if first_abs is None else first_abs
                 # A gap means WE stopped listening, not that the board stopped:
                 # a sleeping laptop loses telemetry the board still emitted.
                 # Rates must be per hour OBSERVED, or they are understated.
-                if last_ts:
-                    fmt = "%H:%M:%S.%f"
-                    d = (dt.datetime.strptime(ts, fmt)
-                         - dt.datetime.strptime(last_ts, fmt)).total_seconds()
-                    if d < 0:
-                        d += 86400
-                    if d > 5.0:
+                # A card log is sampled, so its gap is a missed sample.
+                if last_abs is not None:
+                    d = a - last_abs
+                    if d > max(5.0, 2.5 * interval):
                         gaps.append(d)
+                last_abs = a
                 last_ts = ts
 
             if RE_BOOT.search(body):
                 reboots += 1
+                me = RE_ENV.search(body)
+                if me:
+                    env_from_log = me.group(1)
                 session_start = None
                 session_last = None
                 for c in (freezes, skips, under, rfail):
@@ -270,6 +310,9 @@ def parse_log(path: str) -> dict:
                 aud.append(int(m.group(5)))
                 rfail.see(int(m.group(9)))
                 freezes.see(int(m.group(11)))
+                mb = RE_BADFPS.search(body)
+                if mb:
+                    badfps.see(int(mb.group(1)))
                 continue
 
             m = RE_AUD.search(body)
@@ -342,13 +385,9 @@ def parse_log(path: str) -> dict:
                 usb_del += 1
 
     def span_seconds() -> float:
-        if not (first_ts and last_ts):
-            return float(run_lines)  # ~1 Hz telemetry: lines are a fair proxy
-        fmt = "%H:%M:%S.%f"
-        a = dt.datetime.strptime(first_ts, fmt)
-        b = dt.datetime.strptime(last_ts, fmt)
-        secs = (b - a).total_seconds()
-        return secs + 86400 if secs < 0 else secs  # ran past midnight
+        if first_abs is None or last_abs is None:
+            return float(run_lines) * interval  # lines are a fair proxy
+        return last_abs - first_abs + (interval if source == "card" else 0.0)
 
     duration = span_seconds()
     lost = sum(gaps)
@@ -356,6 +395,10 @@ def parse_log(path: str) -> dict:
     hours = observed / 3600      # per-hour rates are per hour WATCHED
     lo, hi = FPS_TARGET - FPS_BAND, FPS_TARGET + FPS_BAND
     bad = [v for v in fps if not lo <= v <= hi]
+    # A card log sees one second in sixty; the board's badfps counter saw
+    # them all, so it is the count to report when it is there.
+    bad_windows = badfps.total if (source == "card" and badfps.last is not None) else len(bad)
+    windows_total = int(observed) if source == "card" else len(fps)
 
     def stats(xs: list[int]) -> dict:
         if not xs:
@@ -368,6 +411,10 @@ def parse_log(path: str) -> dict:
         }
 
     return {
+        "source": source,
+        "sample_interval_s": interval,
+        "clock_source": clock_src,
+        "env_from_log": env_from_log,
         "duration_s": round(duration, 1),
         "duration_h": round(duration / 3600, 2),
         "observed_h": round(observed / 3600, 2),
@@ -377,9 +424,10 @@ def parse_log(path: str) -> dict:
         "run_lines": run_lines,
         "goal_1_uptime_60hz": {
             "fps": stats(fps),
-            "windows_out_of_band": len(bad),
-            "in_band_pct": round(100.0 * (len(fps) - len(bad)) / len(fps), 3)
-            if fps
+            "windows_out_of_band": bad_windows,
+            "badfps_counter_delta": badfps.total if badfps.last is not None else None,
+            "in_band_pct": round(100.0 * (windows_total - bad_windows) / windows_total, 3)
+            if windows_total
             else None,
             "band": [lo, hi],
         },
@@ -405,7 +453,7 @@ def parse_log(path: str) -> dict:
         "goal_3_no_sync_drops": {
             # A dropout shows up as a short window; the count is the honest
             # proxy until a sink-side measurement exists (PIZERO-99).
-            "short_windows_per_hour": round(len(bad) / hours, 2),
+            "short_windows_per_hour": round(bad_windows / hours, 2),
             "silent_gaps": len(silent),
             "longest_silence_s": max(silent) if silent else 0,
         },

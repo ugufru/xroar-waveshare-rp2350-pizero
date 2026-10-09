@@ -33,6 +33,8 @@ extern "C" {
 #include "settings.h"           // PIZERO-145, host-tested
 #include "png_write.h"          // PIZERO-165, host-tested
 #include "hardware/watchdog.h"   // PIZERO-165: fed while a screenshot writes
+#include <time.h>
+#include "pico/aon_timer.h"      // PIZERO-201: the clock
 
 // Panel native: must match src/main.cpp.
 #define LCD_W   368
@@ -264,6 +266,66 @@ extern "C" bool coco_boot_apply_settings_file(const char *path, struct coco_sett
         if (r == SET_SYNTAX)    Serial.printf("[settings] %s line %d: expected 'name = value', ignored\r\n", path, n);
     }
     f_close(&f);
+    return true;
+}
+
+// PIZERO-201: the clock. The RP2350 has no RTC and this board no backup
+// cell; the power manager's always-on timer runs while powered and through
+// a watchdog reboot, and the SD library stamps files from it (get_fattime).
+// At power-on it is seeded from the newest file time on the card, which the
+// Mac wrote with real time, so the date is right to within "when the card
+// was last touched" and the board's own files keep it monotonic.
+static char g_clock_src[24] = "none";
+
+static time_t fat_to_time(const FILINFO *fi) {
+    struct tm t;
+    memset(&t, 0, sizeof t);
+    t.tm_year = (fi->fdate >> 9) + 80;
+    t.tm_mon  = ((fi->fdate >> 5) & 15) - 1;
+    t.tm_mday = fi->fdate & 31;
+    t.tm_hour = fi->ftime >> 11;
+    t.tm_min  = (fi->ftime >> 5) & 63;
+    t.tm_sec  = (fi->ftime & 31) * 2;
+    return mktime(&t);
+}
+
+extern "C" void coco_boot_clock_init(void) {
+    if (aon_timer_is_running()) { strcpy(g_clock_src, "kept"); return; }   // a reboot, not a power-on
+    time_t best = 0;
+    const char *files[] = { "0:/coco/settings.txt", "0:/coco/drives.txt", "0:/coco/autorun.txt" };
+    FILINFO fi;
+    for (const char *f : files)
+        if (f_stat(f, &fi) == FR_OK) { time_t t = fat_to_time(&fi); if (t > best) best = t; }
+    DIR d;
+    if (f_opendir(&d, "0:/coco/log") == FR_OK) {           // the board's own newest log
+        while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
+            time_t t = fat_to_time(&fi); if (t > best) best = t;
+        }
+        f_closedir(&d);
+    }
+    if (best < 1700000000) {                                 // before 2023-11: no usable file time
+        struct tm t; memset(&t, 0, sizeof t);
+        t.tm_year = 2026 - 1900; t.tm_mday = 1;
+        aon_timer_start_calendar(&t);
+        strcpy(g_clock_src, "unset");
+        Serial.print("[clock] no file time on the card: 2026-01-01, uptime only\r\n");
+        return;
+    }
+    best += 60;                                              // later than the newest file
+    struct tm t;
+    localtime_r(&best, &t);
+    aon_timer_start_calendar(&t);
+    strcpy(g_clock_src, "card");
+    char txt[40];
+    strftime(txt, sizeof txt, "%Y-%m-%d %H:%M:%S", &t);
+    Serial.printf("[clock] set from the card's newest file: %s (approximate)\r\n", txt);
+}
+
+extern "C" bool coco_boot_clock_text(char *out, size_t n, char *src, size_t src_n) {
+    if (src) snprintf(src, src_n, "%s", g_clock_src);
+    struct tm t;
+    if (!aon_timer_is_running() || !aon_timer_get_time_calendar(&t)) { snprintf(out, n, "no clock"); return false; }
+    strftime(out, n, "%Y-%m-%d %H:%M:%S", &t);
     return true;
 }
 
@@ -589,20 +651,26 @@ static uint32_t g_dskw_last_ms;           // when the last sector was written
 // g_drives_saved is what the file holds, so an unchanged state is never
 // rewritten; g_drives_quiet holds saving off during the restore.
 #define DRIVES_PATH "0:/coco/drives.txt"
-static char g_drives_saved[COCO_NDRIVE * 104];
+static uint32_t g_drives_saved_hash;      // FNV-1a of the file's text (PIZERO-201: a copy was 416 bytes)
 static bool g_drives_quiet = false;
+
+static uint32_t text_hash(const char *t) {
+    uint32_t h = 2166136261u;
+    for (; *t; t++) { h ^= (uint8_t)*t; h *= 16777619u; }
+    return h;
+}
 
 static void drives_save(void) {
     if (g_drives_quiet) return;
-    char text[sizeof g_drives_saved];
+    char text[COCO_NDRIVE * 104];
     int k = 0;
     for (unsigned d = 0; d < COCO_NDRIVE; d++)
         k += snprintf(text + k, sizeof text - k, "%u%s = %s\n", d,
                       (g_dsk_open[d] && g_dsk_wp(d)) ? " ro" : "",
                       g_dsk_open[d] ? g_dsk_path[d] : "");
-    if (!strcmp(text, g_drives_saved)) return;
+    if (text_hash(text) == g_drives_saved_hash) return;
     if (coco_boot_save_text(DRIVES_PATH, text, (uint32_t)k)) {
-        strcpy(g_drives_saved, text);
+        g_drives_saved_hash = text_hash(text);
         Serial.print("[dsk] drives saved\n");
     }
 }
@@ -694,13 +762,13 @@ extern "C" bool coco_boot_set_drive_protected(unsigned drive, bool on) {
 
 extern "C" bool coco_boot_restore_drives(char *path0, size_t path0_sz) {
     coco_boot_recover_text(DRIVES_PATH);
-    char text[sizeof g_drives_saved];
+    char text[COCO_NDRIVE * 104];
     uint32_t n = 0;
     if (!coco_boot_load_text(DRIVES_PATH, text, sizeof text - 1, &n)) return false;
     text[n] = '\0';
     // What the file says is what is saved, even where a disk is now missing,
     // so the next real change rewrites it rather than a failed mount here.
-    snprintf(g_drives_saved, sizeof g_drives_saved, "%s", text);
+    g_drives_saved_hash = text_hash(text);
     g_drives_quiet = true;
     for (char *line = text, *nl; line && *line; line = nl) {
         nl = strchr(line, '\n');

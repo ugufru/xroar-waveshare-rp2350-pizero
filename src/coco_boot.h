@@ -66,6 +66,12 @@ bool coco_boot_load_settings(struct coco_settings *out);
 // PIZERO-154: apply a settings-format file on top of *out (a game's NAME.TXT).
 bool coco_boot_apply_settings_file(const char *path, struct coco_settings *out);
 
+// PIZERO-201: the clock (the always-on timer). init seeds it at power-on
+// from the card's newest file time; text gives "YYYY-MM-DD HH:MM:SS" (or
+// "no clock") and, in src, where it came from: card, kept, unset, none.
+void coco_boot_clock_init(void);
+bool coco_boot_clock_text(char *out, size_t n, char *src, size_t src_n);
+
 // PIZERO-146: text files for the on-screen editor. save_text writes PATH.tmp
 // and swaps it in, so a power cut never leaves a half-written file;
 // recover_text finishes a swap a power cut interrupted.

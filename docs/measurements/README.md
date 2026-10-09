@@ -40,6 +40,16 @@ like a board fault and has cost a session before now.
 Start from a **cold power-on** for stability runs: a dev-tool reboot can leave
 `freezes=1` residue from a previous session (PIZERO-33).
 
+## Recording a run on the card instead (PIZERO-201)
+
+With `soak_log = on` in `/coco/settings.txt` the board writes the same
+telemetry to `/coco/log/soak-NNN.txt` itself, once a minute, with timestamps
+from its clock, and no computer needs to be attached. `analyse` reads those
+files as it reads serial logs: the first line names the format and the
+sampling interval, `=== DATE` lines carry the date, and the `badfps` counter
+on the `[run]` line stands in for the per-second fps windows a sampled log
+cannot see. Copy the file into `logs/` with the others; it is evidence too.
+
 ## Turning a log into a record
 
 ```sh

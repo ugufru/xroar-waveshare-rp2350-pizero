@@ -140,6 +140,10 @@ files can be written (PIZERO-66). Things that look like firmware faults but are 
 - **Missing commands:** `dir`, `list` or `build` on a game disk give `ERROR #216` because they are
   not in its CMDS. A proper working disk is PIZERO-199.
 
+**Soaking without a laptop.** `soak_log = on` in `settings.txt` makes the board write its own
+telemetry to `/coco/log/` once a minute, timestamped, so a long run needs only a power supply
+(PIZERO-201; recipe in docs/BUILD.md).
+
 **Stability, measured (`PIZERO-98`, 2026-09-17/18).** A soak of the default build logged 13 h of
 wall clock, about 7.5 h of it observed (the host slept through the rest). Video: 0.38 short sync
 windows an hour and no second-long dropouts, against the Fruit Jam port's 7.6 dropouts an hour.

@@ -188,6 +188,22 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   `[run] fps cpu render blit aud …`. Confirm `fps≈60` on `pizero_stream_60`
   (`≈52` on the `pizero_stream` fallback), frame time under budget.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.
+- **Soaking without a laptop (PIZERO-201):** put `soak_log = on` in
+  `/coco/settings.txt` (F11 edits it on the board; it takes effect at the next
+  power-on). Each boot then writes `/coco/log/soak-NNN.txt`: a header with the
+  firmware, env, whether the boot was power-on or a watchdog reboot and the
+  carried freeze tally, then the `[run]` and `[aud]` lines once a minute,
+  timestamped, synced to the card each time. Power the board from a USB-C
+  supply, keyboard and pad through the simple hub, monitor attached; pull the
+  card afterwards and run `scripts/soak.py analyse /Volumes/<card>/coco/log/soak-001.txt`.
+  A watchdog reboot continues in the same file with a new header; a power
+  cycle starts a new file. The clock is the RP2350's always-on timer, seeded
+  at power-on from the newest file time on the card (the Mac wrote those with
+  real time), so dates are right to within when the card was last touched;
+  F1 INFO shows it and where it came from. The `badfps` field on the `[run]`
+  line counts every second off 60 fps since boot, so the minute sampling
+  loses no video-fault windows. The logger's own writes (about 8 ms a minute)
+  are part of what the soak tests.
 - **Hardware acceptance** (audio/video) is listen/look-on-the-monitor and must be
   user-confirmed. Do not mark an issue `done` from a green build alone (see
   `CLAUDE.md` workflow rules).
