@@ -132,7 +132,9 @@ openscad -o plate.stl -D 'part="both"' pizero_case.scad
 
 `plate.stl` holds both parts as two free-standing bodies with `part_gap`
 (10 mm) of clear air between them, so a slicer sees two objects rather
-than one fused lump. Total footprint 69.8 x 79.6 mm.
+than one fused lump. Total footprint 69.8 x 79.6 mm. `CoCo-Zero Plate.3mf`
+is that plate as a slicer project, orientation and settings included, from
+the 2026-09-26 print.
 
 `part = "assembly"` shows the base, a mock PCB with header and connectors,
 and a ghosted lid. Use it to eyeball port alignment. It is for looking at,
