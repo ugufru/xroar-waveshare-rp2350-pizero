@@ -115,9 +115,13 @@ touching guest code.
   test target), `PIZERO-76` DriveWire/serial, `PIZERO-77` FujiNet-class networked
   storage (major focus; needs a hardware decision first), `PIZERO-78` USB MSC.
 
-`PIZERO-64` (write foundation) and `PIZERO-65` (write-back latency) below are
-unchanged and still gate all of it. The latency problem is identical whether the
-bytes come from DECB or from our own VFS.
+`PIZERO-66` (writable `.DSK` drives, 2026-10-08) writes synchronously from the FDC
+command, as reads always have: both cores never share the card (core 1 only
+scans out video), and the emulated CPU is halted while the drive works. Each
+write is timed and the worst case logged when the drive syncs: 2.1 ms at most
+for a SAVE's four writes, 6 ms for the sync, so `PIZERO-65` (the deferred
+queue) closed as not needed. `PIZERO-64` closed as overtaken: the writable layer and
+atomic replace shipped with settings, `drives.txt` and screendumps.
 
 **No library removes `PIZERO-65`.** Verified in the installed deps: FatFs is
 synchronous at every entry point, SdFat likewise, and carlk3's driver uses DMA
@@ -139,19 +143,16 @@ must stay off the emulation hot path. These tickets underpin the filesystem
 layer above; `PIZERO-66`/`PIZERO-68` are now legacy floppy polish
 (`PIZERO-79`).
 
-- **`PIZERO-64`: SD write foundation.** Writable-file helper layer, atomic
-  replace, an explicit flush/sync policy, and **measurement of real write
-  latency** against the frame budget. Blocks everything else here; its numbers
-  are the design input to `PIZERO-65`.
-- **`PIZERO-65`: Deferred sector write-back.** The genuinely hard part, kept as
-  its own ticket so the timing risk isn't buried in the feature. Core 0 uses
-  ~76% of the frame at 1× (the measured frame budget noted in `platformio.ini`)
-  and SD block-erase stalls run tens-to-hundreds of ms, so a synchronous write on the emulation thread would starve the audio
-  ring and drop frames. Queue + drainer, off the hot path.
-- **`PIZERO-66` (low, legacy): FDC Write Sector → `SAVE`/`SAVEM` to `.DSK`.**
-  Peripheral polish for old images; replaces the FDC write-protect stub in
-  `coco_machine.cpp`. **Not** the route to writable storage; that's
-  `PIZERO-71`.
+- **`PIZERO-64`: closed, overtaken.** The writable layer and atomic replace
+  exist (settings, `drives.txt`, screendumps); the latency numbers now come
+  from `PIZERO-66`'s `[dsk] synced` lines.
+- **`PIZERO-65`: closed, not needed.** Measured on hardware 2026-10-09: a
+  SAVE is 4 writes of at most 2.1 ms and a 6 ms sync, against the ~90 ms
+  audio ring.
+- **`PIZERO-66` (high, in progress): writable `.DSK` drives.** FDC Write
+  Sector, images opened read-write with a read-only fallback, a W-key lock per
+  drive remembered in `drives.txt`, `f_sync` at motor-off and on opening the
+  overlay. Awaiting hardware confirmation.
 - **`PIZERO-68` (low, legacy): DECB disk maintenance.** `DSKINI`/format,
   write-protect toggle, FDC error status. (Four drives already exist,
   `PIZERO-114`.)
@@ -241,8 +242,8 @@ plain CoCo2 boot is untouched.
   it.
 - **`PIZERO-57`'s save half** (a remembered font choice) uses the whole-file
   write that already exists; it does not need `PIZERO-64`.
-- **Storage/filesystem chain**: `PIZERO-64` (write foundation + latency numbers)
-  → `PIZERO-65` (write-back queue) → `PIZERO-70` (backend interface) →
+- **Storage/filesystem chain**: `PIZERO-66` (writable drives, the latency numbers)
+  → `PIZERO-70` (backend interface) →
   `PIZERO-71` (VFS) → `PIZERO-72` (hypercall ABI) → `PIZERO-73` (cart ROM) →
   `PIZERO-74` (commands). `PIZERO-79` (floppy → peripheral) needs `PIZERO-73` for
   the default cart. Backends `PIZERO-75`/`76`/`77`/`78` need only `PIZERO-70`, and

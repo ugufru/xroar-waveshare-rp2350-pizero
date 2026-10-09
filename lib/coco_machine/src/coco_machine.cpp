@@ -74,7 +74,10 @@ struct CocoMachine {
     int     fdc_buf_len = 0;
     unsigned fdc_drive = 0;
     bool    fdc_busy = false;
+    bool    fdc_writing = false;  // PIZERO-66: a Write Sector is collecting bytes
     coco_disk_read_sector_fn fdc_read_cb = nullptr;
+    coco_disk_write_sector_fn fdc_write_cb = nullptr;
+    coco_disk_idle_fn fdc_idle_cb = nullptr;
 
     // AMOLED-33: PIA IRQ outputs only change at well-defined moments, not on
     // every memory access. The dirty flag lets coco_mem_cycle skip the
@@ -401,8 +404,19 @@ static void fdc_signal_intrq(void) {
     }
 }
 
+// PIZERO-66: the status a disk callback's return value maps to. After a
+// Type II command bit 7 is NOT READY, bit 6 WRITE PROTECT, bit 5 WRITE FAULT
+// (on a write), bit 4 RECORD NOT FOUND.
+static uint8_t fdc_status_for(int rc, bool writing) {
+    if (rc == 0) return 0x00;
+    if (rc == COCO_DISK_NOT_READY) return 0x80;
+    if (rc == COCO_DISK_WRITE_PROTECT) return 0x40;
+    return writing ? 0x20 : 0x10;
+}
+
 static void fdc_handle_command(uint8_t cmd) {
     g_m.fdc_command = cmd;
+    g_m.fdc_writing = false;
     uint8_t top = cmd >> 4;
     // Type IV: Force Interrupt
     if (top == 0xD) {
@@ -455,9 +469,25 @@ static void fdc_handle_command(uint8_t cmd) {
         return;
     }
     if (top == 0xA || top == 0xB) {
-        g_m.fdc_status = 0x40;
-        g_m.fdc_busy = false;
-        fdc_signal_intrq();
+        // PIZERO-66: Write Sector. The writer is asked first whether the
+        // drive will take a write (as the WD2797 samples write-protect at
+        // command start); then DRQ stays up while the CPU writes 256 bytes
+        // to $FF4B, and the sector goes to the writer on the last one (see
+        // fdc_io_write). No writer: every disk is write-protected.
+        int rc = g_m.fdc_write_cb
+                     ? g_m.fdc_write_cb(g_m.fdc_drive, g_m.fdc_track, g_m.fdc_sector, nullptr)
+                     : COCO_DISK_WRITE_PROTECT;
+        if (rc != 0) {
+            g_m.fdc_status = fdc_status_for(rc, true);
+            g_m.fdc_busy = false;
+            fdc_signal_intrq();
+            return;
+        }
+        g_m.fdc_buf_pos = 0;
+        g_m.fdc_buf_len = 256;
+        g_m.fdc_writing = true;
+        g_m.fdc_status = 0x03;   // BUSY | DRQ
+        g_m.fdc_busy = true;
         return;
     }
     // Type III: stubs.
@@ -501,6 +531,8 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
         if (D != g_m.fdc_latch)
             FDC_TRACE_PORT.printf("[fdc] latch=%02x pc=%04x\r\n", D, g_m.cpu ? g_m.cpu->reg_pc : 0);
 #endif
+        // PIZERO-66: motor off is when the host syncs the card.
+        if ((g_m.fdc_latch & 0x08) && !(D & 0x08) && g_m.fdc_idle_cb) g_m.fdc_idle_cb();
         g_m.fdc_latch = D;
         // PIZERO-190: bits 0-2 select drives 0-2, else bit 6 drive 3, else
         // drive 0, as upstream rsdos.c does. Bit 3 is MOTOR ON, not a drive.
@@ -520,7 +552,28 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
         return;
     case 0x9: g_m.fdc_track  = D;    return;
     case 0xA: g_m.fdc_sector = D;    return;
-    case 0xB: g_m.fdc_data   = D;    return;
+    case 0xB:
+        g_m.fdc_data = D;
+        if (g_m.fdc_busy && g_m.fdc_writing) {
+            // PIZERO-66: the mirror of the read drain in fdc_io_read.
+            g_m.fdc_buf[g_m.fdc_buf_pos++] = D;
+            if (g_m.fdc_buf_pos < g_m.fdc_buf_len) {
+                g_m.fdc_status = 0x03;  // BUSY + DRQ: next byte please
+                return;
+            }
+            int rc = g_m.fdc_write_cb
+                         ? g_m.fdc_write_cb(g_m.fdc_drive, g_m.fdc_track, g_m.fdc_sector, g_m.fdc_buf)
+                         : COCO_DISK_WRITE_PROTECT;
+            g_m.fdc_status = fdc_status_for(rc, true);
+            g_m.fdc_busy = false;
+            g_m.fdc_writing = false;
+#ifdef FDC_TRACE
+            FDC_TRACE_PORT.printf("[fdc] wrote d=%u t=%u s=%u -> st=%02x\r\n",
+                                  g_m.fdc_drive, g_m.fdc_track, g_m.fdc_sector, g_m.fdc_status);
+#endif
+            fdc_signal_intrq();
+        }
+        return;
     default:  return;
     }
 }
@@ -618,6 +671,14 @@ extern "C" uint8_t coco_machine_pia0_crb(void) {
 
 extern "C" void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn) {
     g_m.fdc_read_cb = fn;
+}
+
+extern "C" void coco_machine_install_disk_writer(coco_disk_write_sector_fn fn) {
+    g_m.fdc_write_cb = fn;
+}
+
+extern "C" void coco_machine_install_disk_idle(coco_disk_idle_fn fn) {
+    g_m.fdc_idle_cb = fn;
 }
 
 extern "C" unsigned coco_machine_fdc_drive(void) {
@@ -1406,6 +1467,7 @@ extern "C" void coco_machine_cold_reset(void) {
     g_m.fdc_latch = 0;
     g_m.fdc_drive = 0;
     g_m.fdc_busy = false;
+    g_m.fdc_writing = false;
     g_m.fdc_buf_pos = g_m.fdc_buf_len = 0;
     g_m.cart_toggle_remaining = 88950;
     g_m.cart_cb1_level = true;

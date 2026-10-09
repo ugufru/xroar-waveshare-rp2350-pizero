@@ -92,6 +92,8 @@ explained in [`SETTINGS.md`](SETTINGS.md).
 | Go back, close | **ESC** (or the list's own F key) | **B** (or Home) |
 | Edit that game's settings | **TAB** | **X** |
 | Put a disk in drive 0 to 3 | **0** to **3** | |
+| Lock the highlighted disk's drive read-only (and unlock it) | **W** | |
+| Make a new blank disk (`NEW01.DSK`, formatted) in the list | **N** | |
 | Save a screenshot | **Print Screen** | **M** (GameSir pads) |
 | Change the artifact colors (on, swapped, off), saved for the running game | **F8** | |
 
@@ -115,7 +117,9 @@ Everything above works on hardware. Known gaps:
 
 - **Plugging in while it is on:** a keyboard or gamepad plugged straight into the board must be
   there when you switch on. Through a USB-C hub, one plugged in later can work (PIZERO-51).
-- **Disks are read-only**, so `SAVE` to disk fails.
+- **Disk writes are new** (PIZERO-66): `SAVE`, `SAVEM`, `KILL` and the rest write straight into the
+  `.DSK` on the card. Press **W** in the disk list to lock a drive read-only. A `.DSK` whose file is
+  read-only on the card is always locked.
 - **High-speed POKEs** (SAM double speed) are accepted but ignored; the machine always runs at
   normal speed (PIZERO-132).
 - **Larger USB-C hubs** with several hub chips inside don't work yet. A simple hub does

@@ -97,6 +97,26 @@ bool coco_boot_restore_drives(char *path0, size_t path0_sz);
 int coco_boot_disk_read_sector(unsigned drive, unsigned track,
                                unsigned sector, uint8_t *out256);
 
+// PIZERO-66: sector write (coco_disk_write_sector_fn: probed with in256 ==
+// NULL first), and the sync of pending writes to the card, which the FDC
+// calls at motor-off and the overlay on opening.
+int coco_boot_disk_write_sector(unsigned drive, unsigned track,
+                                unsigned sector, const uint8_t *in256);
+void coco_boot_flush_drives(void);
+void coco_boot_disk_tick(void);       // once a frame: syncs a drive idle for 1.5 s
+
+// PIZERO-66: a drive's write-protect tab. `protected` is true for the
+// user's tab or a read-only file; the tab can only be set on a writable
+// file (set returns false otherwise). Remembered in drives.txt.
+bool coco_boot_drive_protected(unsigned drive);
+
+// PIZERO-193: create /coco/dsk/BASE.DSK, a blank formatted disk; the file
+// name goes to `name`. 0, or one of the two errors.
+#define COCO_NEWDSK_EXISTS 1
+#define COCO_NEWDSK_FAILED 2
+int coco_boot_create_blank_dsk(const char *base, char *name, size_t name_sz);
+bool coco_boot_set_drive_protected(unsigned drive, bool on);
+
 // LOADM .bin parser (AMOLED-26 direct-load path). `path` is full
 // FatFs path.
 typedef void (*coco_loadm_seg_cb)(uint16_t addr, const uint8_t *data,

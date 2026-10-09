@@ -38,6 +38,7 @@
 #include "coco_boot.h"
 #include "coco_machine.h"
 #include "text_editor.h"
+#include "text_edit_keys.h"          // tek_ascii, for the new-disk name (PIZERO-193)
 #include "settings.h"
 #include "file_templates.h"
 
@@ -154,6 +155,7 @@ static void load_list(void) {
 // last used, so F12 straight after a disk error lands on the disk concerned.
 static void open_now(void) {
     coco_machine_release_all_keys();      // nothing stays held in BASIC
+    coco_boot_flush_drives();             // PIZERO-66: pending writes land before a swap
     load_list();                          // a swapped card is seen at once
     if (g_kind == CAT_DSK) {
         const char *p = coco_boot_drive_path(coco_machine_fdc_drive());
@@ -195,6 +197,91 @@ static void toggle_drive(int d) {
             snprintf(msg, sizeof msg, "CANNOT OPEN %s", name);
     }
     set_status(msg);
+}
+
+// PIZERO-66: W flips the write-protect tab on every drive holding the
+// highlighted disk. A read-only file cannot be unlocked from here.
+static void toggle_protect(void) {
+    const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+    int i = g_ovk.sel;
+    if (g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
+    unsigned mask = drives_holding(cat, i);
+    if (!mask) { set_status("PUT IT IN A DRIVE FIRST"); return; }
+    char msg[CARD_COLS + 1] = "";
+    for (unsigned d = 0; d < OVL_NDRIVE; d++) {
+        if (!(mask & (1u << d))) continue;
+        bool on = !coco_boot_drive_protected(d);
+        if (coco_boot_set_drive_protected(d, on))
+            snprintf(msg, sizeof msg, "DRIVE %u %s", d, on ? "LOCKED: READ-ONLY" : "WRITABLE");
+        else
+            snprintf(msg, sizeof msg, "DRIVE %u: FILE IS READ-ONLY", d);
+    }
+    set_status(msg);
+}
+
+// PIZERO-193: N asks for a name in the status row, then makes the blank
+// disk and lands on it, so 0-3 mounts it. Letters, digits, - and _ (upper
+// case, as DECB would show it), up to 16; Backspace, Enter, Esc.
+#define NEW_NAME_MAX 16
+static bool    g_naming;
+static char    g_new_name[NEW_NAME_MAX + 1];
+static uint8_t g_naming_prev[6];
+
+static void naming_show(void) {
+    char msg[CARD_COLS + 1];
+    snprintf(msg, sizeof msg, "NAME: %s_", g_new_name);
+    set_status(msg);
+}
+
+static void new_disk(void) {
+    if (g_kind != CAT_DSK) return;
+    g_naming = true;
+    g_new_name[0] = '\0';
+    naming_show();
+}
+
+static void new_disk_commit(void) {
+    char name[NEW_NAME_MAX + 8], msg[CARD_COLS + 1];
+    int rc = coco_boot_create_blank_dsk(g_new_name, name, sizeof name);
+    if (rc == COCO_NEWDSK_EXISTS) { snprintf(msg, sizeof msg, "%s ALREADY EXISTS", name); set_status(msg); return; }
+    if (rc != 0) { set_status("CANNOT MAKE THE DISK: SD CARD?"); return; }
+    int n = coco_boot_rescan(g_kind);
+    ovk_set_count(&g_ovk, n);
+    int i = dsk_cat_find_name(coco_boot_dsk_catalog(), name);
+    if (i >= 0) g_ovk.sel = i;
+    g_dirty = true;
+    snprintf(msg, sizeof msg, "%s MADE: 0-3 PUTS IT IN", name);
+    set_status(msg);
+}
+
+// The prompt's keys. Returns when the prompt has closed, with the report
+// recorded as the list's previous one so the closing key is not re-read.
+static void naming_key(uint8_t mods, const uint8_t codes[6]) {
+    bool shift = (mods & 0x22) != 0;
+    for (int i = 0; i < 6; i++) {
+        uint8_t c = codes[i];
+        if (!c || memchr(g_naming_prev, c, 6)) continue;      // held from before
+        if (c == HK_ESC) {
+            g_naming = false; legend();
+        } else if (c == HK_ENTER || c == HK_KP_ENTER) {
+            if (!g_new_name[0]) continue;
+            g_naming = false;
+            new_disk_commit();
+        } else if (c == 0x2A) {                                 // Backspace
+            size_t l = strlen(g_new_name);
+            if (l) g_new_name[l - 1] = '\0';
+            naming_show();
+        } else {
+            char ch = tek_ascii(c, shift);
+            if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
+            bool okch = (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
+            size_t l = strlen(g_new_name);
+            if (okch && l < NEW_NAME_MAX) { g_new_name[l] = ch; g_new_name[l + 1] = '\0'; naming_show(); }
+        }
+        if (!g_naming) break;
+    }
+    memcpy(g_naming_prev, codes, 6);
+    if (!g_naming) { memcpy(g_ovk.prev, codes, 6); g_ovk.held = 0; }
 }
 
 // PIZERO-146/147: ENTER in FILES opens the editor over the list. A missing
@@ -274,6 +361,11 @@ bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool
         if (closed) *closed = false;
         return true;
     }
+    if (g_naming) {                          // PIZERO-193: the new-disk name prompt
+        naming_key(mods, codes);
+        if (closed) *closed = false;
+        return true;
+    }
     struct ovk_result r = ovk_report(&g_ovk, codes, frame);
     bool shut = (r.action == OVK_CLOSE);
     switch (r.action) {
@@ -283,6 +375,8 @@ bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool
         break;
     case OVK_GOTO:   go_to_list(r.drive); break;
     case OVK_EDIT:   edit_game_settings(codes); break;
+    case OVK_PROTECT: toggle_protect(); break;
+    case OVK_NEW:    memcpy(g_naming_prev, codes, 6); new_disk(); break;
     case OVK_CLOSE:  Serial.print("[overlay] close\r\n"); break;
     case OVK_MOVED:  legend(); break;
     case OVK_DRIVE:  toggle_drive(r.drive); break;

@@ -91,6 +91,23 @@ typedef int (*coco_disk_read_sector_fn)(unsigned drive, unsigned track,
  * cartridge-side FDC at $FF48-$FF4B. */
 void coco_machine_install_disk_reader(coco_disk_read_sector_fn fn);
 
+/* PIZERO-66: sector write. Called once with in256 == NULL when a Write
+ * Sector command arrives (the WD2797 samples write-protect at command
+ * start): return 0 if the drive will take a write, else the error. Called
+ * again with the 256 bytes once the CPU has written them all. Return 0 on
+ * success, COCO_DISK_NOT_READY, COCO_DISK_WRITE_PROTECT, or another non-zero
+ * value for a write fault. Without a writer every disk is write-protected. */
+#define COCO_DISK_WRITE_PROTECT 3
+typedef int (*coco_disk_write_sector_fn)(unsigned drive, unsigned track,
+                                         unsigned sector, const uint8_t *in256);
+void coco_machine_install_disk_writer(coco_disk_write_sector_fn fn);
+
+/* PIZERO-66: called when the $FF40 latch turns the drive motor off (bit 3
+ * 1 -> 0), which Disk BASIC and NitrOS-9 do a couple of seconds after the
+ * last access. The host flushes pending writes to the card here. */
+typedef void (*coco_disk_idle_fn)(void);
+void coco_machine_install_disk_idle(coco_disk_idle_fn fn);
+
 /* PIZERO-114: the drive DECB last selected at $FF40 (0-3), so the F12
  * overlay can open on the drive the program was using. */
 unsigned coco_machine_fdc_drive(void);

@@ -1302,6 +1302,8 @@ static void perform_launch(void) {
         char rom[80];
         if (!coco_boot_resolve_cart("disk11.rom", rom, sizeof rom) || !install_cart_file(rom)) return;
         coco_machine_install_disk_reader(coco_boot_disk_read_sector);
+        coco_machine_install_disk_writer(coco_boot_disk_write_sector);   // PIZERO-66
+        coco_machine_install_disk_idle(coco_boot_flush_drives);
         settings_for_game(g_launch_path);         // PIZERO-154
         coco_machine_cold_reset();
         // PIZERO-182: a boot like any other, so autorun decides: on, type
@@ -1792,6 +1794,8 @@ void setup() {
             // the four drives work when filled later from the F12 overlay;
             // an empty drive reports NOT READY rather than having no FDC.
             coco_machine_install_disk_reader(coco_boot_disk_read_sector);
+            coco_machine_install_disk_writer(coco_boot_disk_write_sector);   // PIZERO-66
+            coco_machine_install_disk_idle(coco_boot_flush_drives);
             if (dsk) Serial.printf("[autorun] disk: %s\r\n", path);
             if (have_autorun && autorun.autotype[0]) {
                 g_autotype = autorun.autotype;
@@ -1939,6 +1943,7 @@ void loop() {
     a = micros();
     wd_phase(WP_EMU);
     coco_machine_run_cycles(CYCLES_PER_FRAME);
+    coco_boot_disk_tick();                        // PIZERO-66: sync an idle dirty drive
     b = micros();
     wd_phase(WP_RENDER);
     coco_machine_render_frame();                  // regenerate VDG buffer (SUPPRESS_RENDER_SCANLINE)

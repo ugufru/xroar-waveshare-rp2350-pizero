@@ -557,19 +557,32 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
 // 18 sectors/track, 256 bytes/sector, single-sided = 161 280 bytes.
 // Sector numbers from BASIC/DECB are 1-based; track is 0-based.
 //
-// The data stays on the card and is read a sector at a time: there is no
-// PSRAM here and one image is larger than all free RAM. Read-only; the FDC
-// reports write-protect (PIZERO-66). Mounting and ejecting happen from the
-// F12 overlay while the machine is paused, so they never race a read.
+// The data stays on the card and is read and written a sector at a time:
+// there is no PSRAM here and one image is larger than all free RAM. Both
+// directions run synchronously on core 0 inside the FDC command, while the
+// emulated CPU is halted waiting on the drive (PIZERO-66); core 1 only scans
+// out video, so nothing else touches the card. A write changes no FAT chain
+// (the image is already full size), so a power cut mid-write can lose one
+// sector but not the filesystem. Mounting and ejecting happen from the F12
+// overlay while the machine is paused, so they never race a transfer.
 #define COCO_NDRIVE 4
 static FIL  g_dsk_file[COCO_NDRIVE];
 static bool g_dsk_open[COCO_NDRIVE];
+static bool g_dsk_rw[COCO_NDRIVE];        // opened writable (else the file refused)
+static bool g_dsk_wp[COCO_NDRIVE];        // the user's write-protect tab
+static bool g_dsk_dirty[COCO_NDRIVE];     // written since the last f_sync
 static char g_dsk_path[COCO_NDRIVE][96];
 
+// PIZERO-66: write timing, printed when the drive syncs, so the worst case
+// over a SAVE is on the serial log. The ~90 ms audio ring is the budget.
+static struct { uint32_t n, us_max, us_total; } g_dskw_stat[COCO_NDRIVE];
+static uint32_t g_dskw_last_ms;           // when the last sector was written
+
 // PIZERO-183: /coco/drives.txt, one line per drive, "N = path" ("N =" for
-// an empty drive). Written by the board, so it is plain and fixed; read back
-// leniently. g_drives_saved is what the file holds, so an unchanged state
-// is never rewritten; g_drives_quiet holds saving off during the restore.
+// an empty drive; "N ro = path" for a write-protected one, PIZERO-66).
+// Written by the board, so it is plain and fixed; read back leniently.
+// g_drives_saved is what the file holds, so an unchanged state is never
+// rewritten; g_drives_quiet holds saving off during the restore.
 #define DRIVES_PATH "0:/coco/drives.txt"
 static char g_drives_saved[COCO_NDRIVE * 104];
 static bool g_drives_quiet = false;
@@ -579,7 +592,9 @@ static void drives_save(void) {
     char text[sizeof g_drives_saved];
     int k = 0;
     for (unsigned d = 0; d < COCO_NDRIVE; d++)
-        k += snprintf(text + k, sizeof text - k, "%u = %s\n", d, g_dsk_open[d] ? g_dsk_path[d] : "");
+        k += snprintf(text + k, sizeof text - k, "%u%s = %s\n", d,
+                      (g_dsk_open[d] && g_dsk_wp[d]) ? " ro" : "",
+                      g_dsk_open[d] ? g_dsk_path[d] : "");
     if (!strcmp(text, g_drives_saved)) return;
     if (coco_boot_save_text(DRIVES_PATH, text, (uint32_t)k)) {
         strcpy(g_drives_saved, text);
@@ -587,12 +602,42 @@ static void drives_save(void) {
     }
 }
 
+// Push a drive's pending writes to the card, timed and logged with the
+// write statistics gathered since the last sync.
+static void dsk_sync(unsigned d) {
+    if (!g_dsk_open[d] || !g_dsk_dirty[d]) return;
+    uint32_t t0 = micros();
+    FRESULT fr = f_sync(&g_dsk_file[d]);
+    uint32_t us = micros() - t0;
+    watchdog_update();
+    g_dsk_dirty[d] = false;
+    Serial.printf("[dsk] drive %u synced: %lu writes, max %lu us, mean %lu us, sync %lu us%s\n",
+                  d, (unsigned long)g_dskw_stat[d].n, (unsigned long)g_dskw_stat[d].us_max,
+                  (unsigned long)(g_dskw_stat[d].n ? g_dskw_stat[d].us_total / g_dskw_stat[d].n : 0),
+                  (unsigned long)us, fr == FR_OK ? "" : " FAILED");
+    memset(&g_dskw_stat[d], 0, sizeof g_dskw_stat[d]);
+}
+
+extern "C" void coco_boot_flush_drives(void) {
+    for (unsigned d = 0; d < COCO_NDRIVE; d++) dsk_sync(d);
+}
+
+// Once a frame from the main loop: a drive left dirty for 1.5 s syncs even
+// if the guest never turned the motor off (or we never saw it do so).
+extern "C" void coco_boot_disk_tick(void) {
+    if ((uint32_t)(millis() - g_dskw_last_ms) < 1500) return;
+    for (unsigned d = 0; d < COCO_NDRIVE; d++)
+        if (g_dsk_dirty[d]) { Serial.printf("[dsk] drive %u idle 1.5 s\n", d); dsk_sync(d); }
+}
+
 static void eject_quiet(unsigned drive) {
     if (g_dsk_open[drive]) {
+        dsk_sync(drive);
         f_close(&g_dsk_file[drive]);
         Serial.printf("[dsk] drive %u ejected %s\n", drive, g_dsk_path[drive]);
     }
     g_dsk_open[drive] = false;
+    g_dsk_rw[drive] = g_dsk_wp[drive] = g_dsk_dirty[drive] = false;
     g_dsk_path[drive][0] = '\0';
 }
 
@@ -606,7 +651,11 @@ extern "C" bool coco_boot_mount_drive(unsigned drive, const char *path) {
     if (drive >= COCO_NDRIVE || !path) return false;
     eject_quiet(drive);
     if (strlen(path) >= sizeof g_dsk_path[drive]) { drives_save(); return false; }
-    FRESULT fr = f_open(&g_dsk_file[drive], path, FA_READ);
+    // Writable when the file allows it; a read-only file (its attribute set
+    // on a PC, say) still mounts, and the FDC reports it write-protected.
+    FRESULT fr = f_open(&g_dsk_file[drive], path, FA_READ | FA_WRITE);
+    bool rw = (fr == FR_OK);
+    if (!rw) fr = f_open(&g_dsk_file[drive], path, FA_READ);
     if (fr != FR_OK) {
         Serial.printf("[dsk] drive %u open %s failed: %s (%d)\n",
                       drive, path, FRESULT_str(fr), fr);
@@ -614,10 +663,27 @@ extern "C" bool coco_boot_mount_drive(unsigned drive, const char *path) {
         return false;
     }
     g_dsk_open[drive] = true;
+    g_dsk_rw[drive] = rw;
     strcpy(g_dsk_path[drive], path);
-    Serial.printf("[dsk] drive %u mounted %s (%lu bytes)\n",
-                  drive, path, (unsigned long)f_size(&g_dsk_file[drive]));
+    Serial.printf("[dsk] drive %u mounted %s (%lu bytes%s)\n",
+                  drive, path, (unsigned long)f_size(&g_dsk_file[drive]),
+                  rw ? "" : ", read-only file");
     drives_save();
+    return true;
+}
+
+extern "C" bool coco_boot_drive_protected(unsigned drive) {
+    return drive < COCO_NDRIVE && g_dsk_open[drive] && (g_dsk_wp[drive] || !g_dsk_rw[drive]);
+}
+
+extern "C" bool coco_boot_set_drive_protected(unsigned drive, bool on) {
+    if (drive >= COCO_NDRIVE || !g_dsk_open[drive]) return false;
+    if (!g_dsk_rw[drive]) return false;            // the file decides, not the tab
+    if (g_dsk_wp[drive] != on) {
+        g_dsk_wp[drive] = on;
+        if (on) dsk_sync(drive);
+        drives_save();
+    }
     return true;
 }
 
@@ -637,6 +703,7 @@ extern "C" bool coco_boot_restore_drives(char *path0, size_t path0_sz) {
         char *eq = strchr(line, '=');
         if (!eq || line[0] < '0' || line[0] > '3') continue;
         unsigned d = (unsigned)(line[0] - '0');
+        bool ro = strstr(line, "ro") && strstr(line, "ro") < eq;   // "N ro = path"
         char *p = eq + 1;
         while (*p == ' ' || *p == '\t') p++;
         size_t l = strlen(p);
@@ -644,6 +711,8 @@ extern "C" bool coco_boot_restore_drives(char *path0, size_t path0_sz) {
         if (!*p) continue;
         if (!coco_boot_mount_drive(d, p))
             Serial.printf("[dsk] drive %u: remembered %s is gone\n", d, p);
+        else if (ro)
+            coco_boot_set_drive_protected(d, true);
     }
     g_drives_quiet = false;
     const char *p0 = coco_boot_drive_path(0);
@@ -660,17 +729,109 @@ extern "C" bool coco_boot_attach_dsk(const char *path) {
     return coco_boot_mount_drive(0, path);
 }
 
-extern "C" int coco_boot_disk_read_sector(unsigned drive, unsigned track,
-                                          unsigned sector, uint8_t *out256) {
-    if (drive >= COCO_NDRIVE || !g_dsk_open[drive])
-        return COCO_DISK_NOT_READY;          // empty drive, as a real one reports
+// PIZERO-193: a new blank disk, /coco/dsk/NAME.DSK. 35 tracks x 18 sectors
+// x 256 bytes of $FF is exactly what DSKINI leaves: every FAT granule free,
+// every directory entry unused. Written as .tmp and renamed, so a power cut
+// never leaves a short image under the real name. The machine is paused
+// under the overlay, so the ~160 KB write may take its time; the watchdog
+// is fed per block. Returns 0, or COCO_NEWDSK_EXISTS / COCO_NEWDSK_FAILED.
+extern "C" int coco_boot_create_blank_dsk(const char *base, char *name, size_t name_sz) {
+    const char *dir = cat_kind_dir(CAT_DSK);
+    FRESULT fr = f_mkdir(dir);
+    if (fr != FR_OK && fr != FR_EXIST) {
+        Serial.printf("[dsk] new: mkdir %s failed (%d)\n", dir, fr);
+        return COCO_NEWDSK_FAILED;
+    }
+    char path[96], tmp[100];
+    FILINFO fi;
+    snprintf(name, name_sz, "%s.DSK", base);
+    snprintf(path, sizeof path, "%s/%s", dir, name);
+    if (f_stat(path, &fi) == FR_OK) return COCO_NEWDSK_EXISTS;
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    FIL f;
+    fr = f_open(&f, tmp, FA_WRITE | FA_CREATE_ALWAYS);
+    if (fr != FR_OK) { Serial.printf("[dsk] new: open %s failed (%d)\n", tmp, fr); return COCO_NEWDSK_FAILED; }
+    uint8_t blank[512];                     // on the stack: pizero_wavmeas has no spare RAM
+    memset(blank, 0xFF, sizeof blank);
+    uint32_t t0 = micros();
+    bool ok = true;
+    for (int i = 0; i < 161280 / 512 && ok; i++) {
+        UINT bw = 0;
+        ok = f_write(&f, blank, sizeof blank, &bw) == FR_OK && bw == sizeof blank;
+        watchdog_update();
+    }
+    if (f_close(&f) != FR_OK) ok = false;
+    if (ok) ok = f_rename(tmp, path) == FR_OK;
+    if (!ok) {
+        Serial.printf("[dsk] new: writing %s failed\n", tmp);
+        f_unlink(tmp);
+        return COCO_NEWDSK_FAILED;
+    }
+    Serial.printf("[dsk] new: %s (%lu us)\n", path, (unsigned long)(micros() - t0));
+    return 0;
+}
+
+// A sector's offset in the image, or -1 when the drive is empty or the
+// address is off the 35-track, 18-sector, single-sided disk (PIZERO-68
+// covers more). *rc is the FDC's answer in that case.
+static int32_t dsk_offset(const char *what, unsigned drive, unsigned track,
+                          unsigned sector, int *rc) {
+    if (drive >= COCO_NDRIVE || !g_dsk_open[drive]) {
+        *rc = COCO_DISK_NOT_READY;           // empty drive, as a real one reports
+        return -1;
+    }
     if (track > 34 || sector < 1 || sector > 18) {
-        Serial.printf("[dsk] reject d=%u t=%u s=%u (range)\n", drive, track, sector);
+        Serial.printf("[dsk] reject %s d=%u t=%u s=%u (range)\n", what, drive, track, sector);
+        *rc = 1;
+        return -1;
+    }
+    *rc = 0;
+    return (int32_t)(((uint32_t)track * 18 + (sector - 1)) * 256);
+}
+
+// PIZERO-66: the FDC's write. Probed with in256 == NULL when the command
+// arrives, then given the sector. Synchronous: measured, not deferred (see
+// the note above the drive table; PIZERO-65 is the queue if the numbers
+// ever say so). A write of over 50 ms gets its own line.
+extern "C" int coco_boot_disk_write_sector(unsigned drive, unsigned track,
+                                           unsigned sector, const uint8_t *in256) {
+    int rc;
+    int32_t off = dsk_offset("write", drive, track, sector, &rc);
+    if (off < 0) return rc;
+    if (g_dsk_wp[drive] || !g_dsk_rw[drive]) return COCO_DISK_WRITE_PROTECT;
+    if (!in256) return 0;                    // the probe: this drive takes writes
+    FIL *f = &g_dsk_file[drive];
+    uint32_t t0 = micros();
+    UINT bw = 0;
+    FRESULT fr = f_lseek(f, (FSIZE_t)off);
+    if (fr == FR_OK) fr = f_write(f, in256, 256, &bw);
+    uint32_t us = micros() - t0;
+    watchdog_update();                       // a slow card must not look like a hang
+    g_dsk_dirty[drive] = true;
+    g_dskw_last_ms = millis();
+    if (g_dskw_stat[drive].n < 3)            // the first few of a burst, for the log
+        Serial.printf("[dsk] write d=%u t=%u s=%u: %lu us\n", drive, track, sector, (unsigned long)us);
+    g_dskw_stat[drive].n++;
+    g_dskw_stat[drive].us_total += us;
+    if (us > g_dskw_stat[drive].us_max) g_dskw_stat[drive].us_max = us;
+    if (fr != FR_OK || bw != 256) {
+        Serial.printf("[dsk] write d=%u t=%u s=%u failed: fr=%d bw=%u\n",
+                      drive, track, sector, fr, (unsigned)bw);
         return 1;
     }
+    if (us > 50000)
+        Serial.printf("[dsk] slow write d=%u t=%u s=%u: %lu us\n", drive, track, sector,
+                      (unsigned long)us);
+    return 0;
+}
+
+extern "C" int coco_boot_disk_read_sector(unsigned drive, unsigned track,
+                                          unsigned sector, uint8_t *out256) {
+    int rc;
+    int32_t off = dsk_offset("read", drive, track, sector, &rc);
+    if (off < 0) return rc;
     FIL *f = &g_dsk_file[drive];
-    const uint32_t off = ((uint32_t)track * 18 + (sector - 1)) * 256;
-    FRESULT fr = f_lseek(f, off);
+    FRESULT fr = f_lseek(f, (FSIZE_t)off);
     if (fr != FR_OK) {
         Serial.printf("[dsk] seek d=%u t=%u s=%u failed: %d\n", drive, track, sector, fr);
         return 1;
