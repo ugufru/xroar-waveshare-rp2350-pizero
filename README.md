@@ -128,6 +128,18 @@ Everything above works on hardware. Known gaps:
 - **Gamepads:** tested with a GameSir Tegenaria Lite in its Android and automatic modes. Its
   Switch mode sends nothing (PIZERO-157).
 
+**NitrOS-9 (OS-9 Level 1) notes.** A NitrOS-9 boot disk boots with `DOS` (PIZERO-191) and its
+files can be written (PIZERO-66). Things that look like firmware faults but are not:
+
+- **Case:** OS-9's console driver starts in upper case and toggles case on CTRL-0, where CTRL is the
+  CoCo's CLEAR key, so press **Home+0** on the USB keyboard. Shift+letter gives the other case
+  without toggling. The Caps Lock key sends Color BASIC's toggle (Shift+0), which OS-9 reads as a
+  zero (PIZERO-197 will make it configurable).
+- **Device names:** the disk is whatever descriptor its boot file carries. A game disk may have
+  only `/dd`, so `/d0/...` fails with `ERROR #221` (the kernel looks for a `D0` module).
+- **Missing commands:** `dir`, `list` or `build` on a game disk give `ERROR #216` because they are
+  not in its CMDS. A proper working disk is PIZERO-199.
+
 **Stability, measured (`PIZERO-98`, 2026-09-17/18).** A soak of the default build logged 13 h of
 wall clock, about 7.5 h of it observed (the host slept through the rest). Video: 0.38 short sync
 windows an hour and no second-long dropouts, against the Fruit Jam port's 7.6 dropouts an hour.

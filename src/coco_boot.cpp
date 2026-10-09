@@ -882,6 +882,9 @@ extern "C" int coco_boot_disk_read_sector(unsigned drive, unsigned track,
         return 1;
     }
 #ifdef FDC_TRACE
+    // PIZERO-194: a checksum per sector read, to compare with the image.
+    { uint32_t sum = 0; for (unsigned i = 0; i < 256; i++) sum += out256[i];
+      FDC_TRACE_PORT.printf("[dsk] rd d=%u t=%u s=%u sum=%05lu\r\n", drive, track, sector, (unsigned long)sum); }
     // PIZERO-190: the boot track, for disassembling what DOS runs.
     if (track == 34) {
         for (unsigned i = 0; i < 256; i += 32) {

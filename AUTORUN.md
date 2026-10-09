@@ -39,6 +39,7 @@ Three kinds of lines:
 | `@CART name.ccc` | Start with this cartridge instead of Disk BASIC |
 | `@DIRECT name.bin` | Load this program straight into memory and run it, without BASIC |
 | anything else | Typed at the BASIC prompt, one line at a time |
+| `~` in a typed line | Waits a second before typing on (the CoCo has no `~` key) |
 
 Examples:
 
@@ -48,6 +49,15 @@ LOADM"PARTCLES":EXEC
 
 ```
 @DIRECT INVADERS.BIN
+```
+
+A disk OS needs time to boot before it can take a command. Fifteen `~` is
+fifteen seconds:
+
+```
+DOS
+~~~~~~~~~~~~~~~
+INFOCOM /DD/GAMES/INFOCOM/ZORK1.Z3
 ```
 
 A name that is not on the card is reported on screen, and boot carries on

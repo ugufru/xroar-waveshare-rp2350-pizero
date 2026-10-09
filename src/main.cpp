@@ -426,6 +426,9 @@ static int next_keychar() {
         char c = *g_autotype;
         if (c == '\0') { g_autotype = nullptr; return -1; }
         g_autotype++;
+        // PIZERO-194: '~' in autorun text waits a second before typing on
+        // (the CoCo has no '~' key), so a line can follow a disk boot.
+        if (c == '~') { g_autotype_warmup = 60; return -1; }
         return (unsigned char)c;
     }
     if (g_settings.serial_keyboard && Serial.available()) return Serial.read();
