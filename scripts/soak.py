@@ -67,6 +67,10 @@ RE_CARD = re.compile(r"=== CoCo Zero soak log, interval (\d+)s, clock (\S+ \S+) 
 RE_DATE = re.compile(r"=== DATE (\d{4}-\d\d-\d\d)")
 RE_BADFPS = re.compile(r"\bbadfps=(\d+)")
 RE_ENV = re.compile(r"\benv=(\S+)")
+# The card log's boot header says how the board came up and carries the
+# freeze tally across a watchdog reboot, which the serial log's watchdog
+# message reports instead.
+RE_CARD_BOOT = re.compile(r"\bboot=(power-on|watchdog-reboot) freezes=(\d+) last=(\S+)")
 
 # 60 Hz, and how far off it may drift before a second counts as a bad window.
 FPS_TARGET = 60.0
@@ -233,6 +237,7 @@ def parse_log(path: str) -> dict:
     gaps: list[float] = []               # host-side losses: sleep, suspend, a busy Mac
     last_ts: str | None = None
     reboots = 0
+    power_ons = 0            # card logs: boots that were power-ons, not recoveries
     usb_add = usb_del = 0
     first_ts = last_ts = None
     run_lines = 0
@@ -293,8 +298,22 @@ def parse_log(path: str) -> dict:
                     env_from_log = me.group(1)
                 session_start = None
                 session_last = None
-                for c in (freezes, skips, under, rfail):
+                for c in (freezes, skips, under, rfail, badfps):
                     c.reset_for_reboot()
+                mb = RE_CARD_BOOT.search(body)
+                if mb:
+                    # One header per boot. A watchdog reboot is a freeze the
+                    # watchdog recovered; its tally carries, so the counter
+                    # resumes from it rather than from zero.
+                    if mb.group(1) == "watchdog-reboot":
+                        if reboots == 1:
+                            freezes_before_log.append(mb.group(3))
+                        else:
+                            freeze_phases.append(mb.group(3))
+                    else:
+                        power_ons += 1
+                    if freezes.last is not None:
+                        freezes.last = int(mb.group(2))
                 continue
 
             m = RE_RUN.search(body)
@@ -471,6 +490,7 @@ def parse_log(path: str) -> dict:
             "freezes_ambiguous_first_boot": freezes_before_log,
             "freeze_phases": freeze_phases,
             "reboots_seen": reboots,
+            "power_ons_seen": power_ons,
         },
         "frame_budget_us": {
             "cpu": stats(cpu),
@@ -530,13 +550,16 @@ def cmd_analyse(args: argparse.Namespace) -> int:
           + (f" | counter already at {crash['freezes_before_run']} before this run"
              if crash["freezes_before_run"] else "")
           + (f" | board counter moved {crash['freeze_counter_delta']}"
-             if crash["freeze_counter_delta"] != len(crash["freeze_phases"]) else "")
+             if g.get("source") != "card"
+             and crash["freeze_counter_delta"] != len(crash["freeze_phases"]) else "")
           + (f" | {len(crash['freezes_ambiguous_first_boot'])} at the first boot, "
              f"ambiguous: {crash['freezes_ambiguous_first_boot']}"
              if crash["freezes_ambiguous_first_boot"] else ""))
     print(f"frame budget  {g['frame_budget_us']}")
-    print("5 data loss   not measured here: nothing writes to the card yet "
-          "(PIZERO-113 covers it)")
+    if crash.get("power_ons_seen"):
+        print(f"  power-ons   {crash['power_ons_seen']} (a card log starts a file per boot; "
+              f"a power-on after the first is the supply, or someone, not the firmware)")
+    print("5 data loss   not measured here (PIZERO-113 covers it)")
 
     if args.dry_run:
         print("\n(dry run, nothing archived)")

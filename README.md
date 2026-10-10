@@ -155,7 +155,12 @@ telemetry to `/coco/log/` once a minute, timestamped, so a long run needs only a
 wall clock, about 7.5 h of it observed (the host slept through the rest). Video: 0.38 short sync
 windows an hour and no second-long dropouts, against the Fruit Jam port's 7.6 dropouts an hour.
 Freezes: about 0.46 an hour, all in the emulation phase, every one recovered by the watchdog
-(`PIZERO-33`). A soak of the current firmware is `PIZERO-168`.
+(`PIZERO-33`). **Without a laptop (`PIZERO-168`, 2026-10-09/10).** The first soak logged to the card
+(`soak_log`), on the product build of 2026-10-09, powered from a monitor's USB-C port: 26.7 h
+observed across four boots. Video: 0.67 short windows an hour (0.39 in the first 22.8 h, against
+PIZERO-98's 0.38). Freezes: none in the first 22.8 h; then an unexplained power-on, and two
+watchdog recoveries in the next four hours, both at the end of the frame rather than in the
+emulation, so a different place from PIZERO-98's (`PIZERO-203`).
 
 How USB input got here, and the lessons along the way: [`docs/usb-retrospective.md`](docs/usb-retrospective.md).
 The two days before Tandy Assembly, and their lessons: [`docs/show-prep-retrospective.md`](docs/show-prep-retrospective.md).

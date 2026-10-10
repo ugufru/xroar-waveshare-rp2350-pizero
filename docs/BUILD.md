@@ -203,8 +203,11 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   timestamped, synced to the card each time. Power the board from a USB-C
   supply, keyboard and pad through the simple hub, monitor attached; pull the
   card afterwards and run `scripts/soak.py analyse /Volumes/<card>/coco/log/soak-001.txt`.
-  A watchdog reboot continues in the same file with a new header; a power
-  cycle starts a new file. The clock is the RP2350's always-on timer, seeded
+  Every boot starts the next file, and its header says whether that boot
+  was a power-on or a watchdog recovery (with the carried freeze tally), so
+  a run is all its files joined in order; the clock carries across a
+  watchdog reboot and is re-seeded from the newest log at a power-on, so
+  the timestamps stay in sequence. The clock is the RP2350's always-on timer, seeded
   at power-on from the newest file time on the card (the Mac wrote those with
   real time), so dates are right to within when the card was last touched;
   F1 INFO shows it and where it came from. The `badfps` field on the `[run]`
