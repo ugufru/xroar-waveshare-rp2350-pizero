@@ -138,7 +138,14 @@ files can be written (PIZERO-66). Things that look like firmware faults but are 
 - **Device names:** the disk is whatever descriptor its boot file carries. A game disk may have
   only `/dd`, so `/d0/...` fails with `ERROR #221` (the kernel looks for a `D0` module).
 - **Missing commands:** `dir`, `list` or `build` on a game disk give `ERROR #216` because they are
-  not in its CMDS. A proper working disk is PIZERO-199.
+  not in its CMDS.
+- **A working disk:** `scripts/mkos9disk.py` builds a NitrOS-9 Level 1 boot floppy the board can
+  use (35 tracks, one side) from a NitrOS-9 6809 Level 1 distribution image, such as
+  `NITROS9/nos9l1.dsk` on the CoCo SDC image: `/d0`, `/d1`, `/d2` and `/dd`, pipes, and 66 of the
+  distribution's commands, with about 52 KB free. Boot it with `DOS`; its startup asks for the date
+  and time. Put a game disk in drive 1 and it is `/d1` (PIZERO-199).
+- **`dir` into a file or pipe** drops most names, because it lays out columns for a screen it
+  cannot measure. `dir -e` lists one file a line and redirects cleanly.
 
 **Soaking without a laptop.** `soak_log = on` in `settings.txt` makes the board write its own
 telemetry to `/coco/log/` once a minute, timestamped, so a long run needs only a power supply
