@@ -300,16 +300,30 @@ extern "C" void coco_boot_clock_init(void) {
     // cartridges and ROMs it copied carry its clock, and the board's own
     // files carry this clock once it has been set.
     time_t best = 0;
+    char best_name[80] = "";
     const char *dirs[] = { "0:/coco", "0:/coco/dsk", "0:/coco/bin", "0:/coco/cart", "0:/coco/roms", "0:/coco/log" };
     FILINFO fi;
     DIR d;
     for (const char *dir : dirs) {
         if (f_opendir(&d, dir) != FR_OK) continue;
+        time_t dir_best = 0; char dir_name[40] = "";
         while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
             if (fi.fattrib & AM_DIR) continue;
-            time_t t = fat_to_time(&fi); if (t > best) best = t;
+            time_t t = fat_to_time(&fi);
+            if (t > dir_best) { dir_best = t; snprintf(dir_name, sizeof dir_name, "%s", fi.fname); }
+            if (t > best) { best = t; snprintf(best_name, sizeof best_name, "%s/%s", dir, fi.fname); }
         }
         f_closedir(&d);
+        if (dir_best) {
+            char txt[40]; struct tm bt; localtime_r(&dir_best, &bt);
+            strftime(txt, sizeof txt, "%Y-%m-%d %H:%M:%S", &bt);
+            Serial.printf("[clock]   newest in %s: %s %s\r\n", dir, dir_name, txt);
+        }
+    }
+    {   // PIZERO-201: name the newest file, so a wrong clock can be traced to it
+        char txt[40]; struct tm bt; localtime_r(&best, &bt);
+        strftime(txt, sizeof txt, "%Y-%m-%d %H:%M:%S", &bt);
+        Serial.printf("[clock] newest file on the card: %s, %s\r\n", best_name[0] ? best_name : "none", txt);
     }
     if (running && now.tv_sec >= 1700000000 && now.tv_sec >= best) {
         strcpy(g_clock_src, "kept");
