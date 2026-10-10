@@ -10,6 +10,7 @@
 // Display path: libdvi (PIO) on GPIO 32-39; see README.md. USB host deferred.
 
 #include <Arduino.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -410,6 +411,34 @@ static bool        g_autorun_cancel   = false;
 // PIZERO-163: the CoCo key names and the character chords live in
 // key_translate.h (host-tested), shared by serial typing and the USB keyboard.
 static uint32_t g_bad_fps = 0;     // PIZERO-201: seconds the machine ran off 60 fps
+
+// PIZERO-203: the 1 Hz telemetry never waits on USB. arduino-pico's
+// Serial.write spins while a host holds the port open and its buffer is full,
+// a second at a time, and every bit of progress restarts the second; a host
+// that has the port open and reads slowly (a monitor hub on a Mac) stalled the
+// end of the frame past the watchdog. Each second prints only if the last
+// second's output has drained; a line gets 10 ms to find room, else the rest
+// of the second is dropped and counted (tdrop= on the [run] line).
+static bool     g_tele_ok = true;
+static uint32_t g_tele_dropped = 0;
+static void tele_write(const char *s, size_t n) {
+    if (!g_tele_ok) { g_tele_dropped++; return; }
+    if (!Serial) return;                              // no host: nothing would be sent
+    uint32_t t0 = micros();
+    while (Serial.availableForWrite() < (int)n) {
+        if (micros() - t0 > 10000) { g_tele_ok = false; g_tele_dropped++; return; }
+    }
+    Serial.write((const uint8_t *)s, n);
+}
+static void tprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void tprintf(const char *fmt, ...) {
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    if (n > 0) tele_write(buf, (size_t)n < sizeof buf ? (size_t)n : sizeof buf - 1);
+}
 static int g_kb_hold = 0;
 static int g_kb_gap  = 0;
 // Serial and autotype press keys on their own layer (PIZERO-163), so
@@ -1005,7 +1034,10 @@ static void audio_encode_frame(void) {
 // PIZERO-51: scratch[4] sentinel marking a DELIBERATE watchdog reboot for USB
 // re-enumeration (device unplugged) so setup() reports it as a replug, not a freeze.
 #define USB_REPLUG_MAGIC 0x51D15C09u
-enum { WP_NONE = 0, WP_SETUP, WP_LOOP, WP_USB, WP_KBD, WP_EMU, WP_RENDER, WP_BLIT, WP_AUDIO, WP_PACE };
+// PIZERO-203: WP_TELEM and WP_SOAKLOG split the end of the frame, so a freeze
+// there names the pacing wait, the serial telemetry or the card log.
+enum { WP_NONE = 0, WP_SETUP, WP_LOOP, WP_USB, WP_KBD, WP_EMU, WP_RENDER, WP_BLIT, WP_AUDIO, WP_PACE,
+       WP_TELEM, WP_SOAKLOG, WP_LAST = WP_SOAKLOG };
 static bool g_run_button_reset = false;    // PIZERO-116: this boot came from RUN
 static uint32_t g_freeze_count = 0;        // persistent across reboots (from scratch[3])
 static uint32_t g_last_freeze_phase = WP_NONE;
@@ -1015,7 +1047,8 @@ static const char *wd_phase_name(uint32_t p) {
         case WP_USB:   return "USBHost.task"; case WP_KBD:   return "keyboard";
         case WP_EMU:   return "emulate";     case WP_RENDER: return "VDG-render";
         case WP_BLIT:  return "blit";        case WP_AUDIO:  return "audio-encode";
-        case WP_PACE:  return "frame-pace";  default:        return "?";
+        case WP_PACE:  return "frame-pace";
+        case WP_TELEM: return "telemetry";   case WP_SOAKLOG: return "soak-log";  default:        return "?";
     }
 }
 #ifdef WATCHDOG_DISABLE
@@ -1351,6 +1384,21 @@ static void bin_settle_tick(void) {
     }
 }
 
+// PIZERO-203: why the chip last reset, so a crash (a fault handler's
+// software reset), a supply dip and a real power-on are told apart.
+static const char *reset_reason_name(void) {
+    switch (rp2040.getResetReason()) {
+    case RP2040::PWRON_RESET:    return "power-on";
+    case RP2040::RUN_PIN_RESET:  return "run-pin";
+    case RP2040::SOFT_RESET:     return "software";
+    case RP2040::WDT_RESET:      return "watchdog";
+    case RP2040::DEBUG_RESET:    return "debugger";
+    case RP2040::GLITCH_RESET:   return "glitch";
+    case RP2040::BROWNOUT_RESET: return "brownout";
+    default:                     return "unknown";
+    }
+}
+
 void setup() {
     settings_defaults(&g_settings);   // PIZERO-145: in force until settings.txt is read
     Serial.begin(115200);
@@ -1399,7 +1447,7 @@ void setup() {
     // plausible frame count (a week at 60 Hz is 36.3 M) and a phase that is
     // actually one of ours.
     bool scratch_sane = watchdog_hw->scratch[2] < 40000000u
-                        && watchdog_hw->scratch[1] <= WP_PACE;
+                        && watchdog_hw->scratch[1] <= WP_LAST;
     bool freeze_reboot = (watchdog_hw->reason & WATCHDOG_REASON_TIMER_BITS)
                          && watchdog_hw->scratch[0] == WD_MAGIC
                          && scratch_sane
@@ -1697,9 +1745,11 @@ void setup() {
     if (!coco_boot_load_settings(&g_settings))
         Serial.print("[settings] no /coco/settings.txt: defaults\r\n");
     settings_apply();
+    Serial.printf("[boot] reset reason: %s\r\n", reset_reason_name());   // PIZERO-203
     if (g_settings.soak_log)                   // PIZERO-201
         soak_log_begin(FW_VERSION, FW_ENV, watchdog_caused_reboot(), g_freeze_count,
-                       g_freeze_count ? wd_phase_name(g_last_freeze_phase) : "none");
+                       g_freeze_count ? wd_phase_name(g_last_freeze_phase) : "none",
+                       reset_reason_name());
 
     // PIZERO-92: a missing extbas11.rom is NOT fatal, it just silently costs
     // Extended and Disk BASIC. Someone who notices DISK commands failing has
@@ -2020,6 +2070,9 @@ void loop() {
 #ifdef AUDIO_WAV_DUMP
         if (g_audio_dumping) { frames = 0; last = now; return; }  // don't corrupt the base64 stream
 #endif
+        wd_phase(WP_TELEM);                                // PIZERO-203
+        g_tele_ok = !Serial || Serial.availableForWrite() >= 192;
+        if (!g_tele_ok) g_tele_dropped++;
         // PIZERO-11 diagnostic: D+/D- (post-INOVER, as PIO-USB sees them),
         // SOF frame counter (proves the 1 ms timer is firing), USB devices
         // mounted. With a FS device the lib expects D+=1 D-=0 (J state);
@@ -2036,7 +2089,7 @@ void loop() {
         // loudly and name the callback. This is the suspected cause of the
         // freezes in phase 'emulate'.
         if (event_runaway_count) {
-            Serial.printf("[runaway] *** EVENT QUEUE RUNAWAY x%lu *** callback=%p tick=%lu\r\n",
+            tprintf("[runaway] *** EVENT QUEUE RUNAWAY x%lu *** callback=%p tick=%lu\r\n",
                           (unsigned long)event_runaway_count,
                           event_runaway_fn, (unsigned long)event_runaway_tick);
         }
@@ -2047,12 +2100,12 @@ void loop() {
                       (vdg & 0x08) ? "c" : "");
         uint32_t pbw; uint8_t pbl; bool ext;
         coco_machine_pia1b_trace(&pbw, &pbl, &ext);
-        Serial.printf("[vdg] mode=%s bits=%02x sam=%u pb_writes=%lu pb_last=%02x lower=%u\r\n",
+        tprintf("[vdg] mode=%s bits=%02x sam=%u pb_writes=%lu pb_last=%02x lower=%u\r\n",
                       mode, (unsigned)vdg, (unsigned)coco_machine_sam_v(),
                       (unsigned long)pbw, (unsigned)pbl, (unsigned)ext);
         // PIZERO-143: only while a program is using the GMC's sound chip.
         if (coco_machine_cart_csg_writes())
-            Serial.printf("[csg] writes=%lu dropped=%lu\r\n",
+            tprintf("[csg] writes=%lu dropped=%lu\r\n",
                           (unsigned long)coco_machine_cart_csg_writes(),
                           (unsigned long)coco_machine_cart_csg_dropped());
 #ifdef VIDEO_BENCH
@@ -2079,7 +2132,7 @@ void loop() {
         snprintf(g_run_line, sizeof g_run_line,
                       "[run] fps=%lu cpu=%luus render=%luus blit=%luus aud=%luus "
                       "| ls=%s conn=%d sof=%lu usb=%lu rpts=%lu rfail=%lu eperr=%u ints=%x "
-                      "| freezes=%lu last=%s badfps=%lu",
+                      "| freezes=%lu last=%s badfps=%lu tdrop=%lu",
                       (unsigned long)frames, (unsigned long)(b - a),
                       (unsigned long)(c - b), (unsigned long)(d - c),
                       (unsigned long)(e - d),
@@ -2091,13 +2144,13 @@ void loop() {
                       usbdiag_ep_error(), usbdiag_ints(),
                       (unsigned long)g_freeze_count,
                       g_freeze_count ? wd_phase_name(g_last_freeze_phase) : "none",
-                      (unsigned long)g_bad_fps);
-        Serial.print(g_run_line); Serial.print("\r\n");
+                      (unsigned long)g_bad_fps, (unsigned long)g_tele_dropped);
+        tprintf("%s\r\n", g_run_line);
         (void)dp; (void)dm;
         { static uint32_t last_pad = 0;      // PIZERO-13: only while a pad talks
           uint32_t n = g_pad_decoded;
           if (n != last_pad)
-              Serial.printf("[pad] reports=%lu/s right-joystick x=%u y=%u fire=%u\r\n",
+              tprintf("[pad] reports=%lu/s right-joystick x=%u y=%u fire=%u\r\n",
                             (unsigned long)(n - last_pad), (unsigned)(g_pad_x >> 10),
                             (unsigned)(g_pad_y >> 10), (unsigned)g_pad_fire);
           last_pad = n; }
@@ -2133,8 +2186,9 @@ void loop() {
                         (unsigned long)(short_x10 / 10), (unsigned long)(short_x10 % 10),
                         (unsigned long)tone_s, (unsigned long)skips,
                         (unsigned long)g_stream_under);
-          Serial.print(g_aud_line); Serial.print("\r\n"); }
+          tprintf("%s\r\n", g_aud_line); }
 #endif
+        wd_phase(WP_SOAKLOG);                                // PIZERO-203
         soak_log_tick(g_run_line, g_aud_line);           // PIZERO-201
         frames = 0; last = now;
     }

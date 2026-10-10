@@ -71,6 +71,9 @@ RE_ENV = re.compile(r"\benv=(\S+)")
 # freeze tally across a watchdog reboot, which the serial log's watchdog
 # message reports instead.
 RE_CARD_BOOT = re.compile(r"\bboot=(power-on|watchdog-reboot) freezes=(\d+) last=(\S+)")
+# PIZERO-203: the chip's own reset reason (logs from 2026-10-10 on). A
+# "software" reset is a fault handler's: a crash, not a power-on.
+RE_RESET = re.compile(r"\breset=(\S+)")
 
 # 60 Hz, and how far off it may drift before a second counts as a bad window.
 FPS_TARGET = 60.0
@@ -238,6 +241,8 @@ def parse_log(path: str) -> dict:
     last_ts: str | None = None
     reboots = 0
     power_ons = 0            # card logs: boots that were power-ons, not recoveries
+    reset_reasons = Counter_ = {}   # reason -> boots, from the card headers
+    crashes: list[int] = []         # boot numbers whose reset was a software reset
     usb_add = usb_del = 0
     first_ts = last_ts = None
     run_lines = 0
@@ -310,8 +315,13 @@ def parse_log(path: str) -> dict:
                             freezes_before_log.append(mb.group(3))
                         else:
                             freeze_phases.append(mb.group(3))
-                    else:
+                    mr = RE_RESET.search(body)
+                    if mb.group(1) != "watchdog-reboot" and not (mr and mr.group(1) == "software"):
                         power_ons += 1
+                    if mr:
+                        reset_reasons[mr.group(1)] = reset_reasons.get(mr.group(1), 0) + 1
+                        if mr.group(1) == "software" and reboots > 1:
+                            crashes.append(reboots)
                     if freezes.last is not None:
                         freezes.last = int(mb.group(2))
                 continue
@@ -491,6 +501,8 @@ def parse_log(path: str) -> dict:
             "freeze_phases": freeze_phases,
             "reboots_seen": reboots,
             "power_ons_seen": power_ons,
+            "reset_reasons": reset_reasons,
+            "crash_resets": len(crashes),
         },
         "frame_budget_us": {
             "cpu": stats(cpu),
@@ -556,6 +568,9 @@ def cmd_analyse(args: argparse.Namespace) -> int:
              f"ambiguous: {crash['freezes_ambiguous_first_boot']}"
              if crash["freezes_ambiguous_first_boot"] else ""))
     print(f"frame budget  {g['frame_budget_us']}")
+    if crash.get("reset_reasons"):
+        print(f"  resets      {crash['reset_reasons']} | crashes (software resets after the first boot) "
+              f"{crash['crash_resets']}")
     if crash.get("power_ons_seen"):
         print(f"  power-ons   {crash['power_ons_seen']} (a card log starts a file per boot; "
               f"a power-on after the first is the supply, or someone, not the firmware)")

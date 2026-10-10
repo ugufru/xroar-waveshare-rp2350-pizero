@@ -40,7 +40,7 @@ static void sync_now(void) {
 }
 
 extern "C" bool soak_log_begin(const char *fw, const char *env, bool watchdog_reboot,
-                               uint32_t freezes, const char *freeze_phase) {
+                               uint32_t freezes, const char *freeze_phase, const char *reset_reason) {
     FRESULT fr = f_mkdir(LOG_DIR);
     if (fr != FR_OK && fr != FR_EXIST) { Serial.printf("[soak] cannot create %s (%d)\r\n", LOG_DIR, fr); return false; }
     char path[48];
@@ -64,10 +64,10 @@ extern "C" bool soak_log_begin(const char *fw, const char *env, bool watchdog_re
     snprintf(head, sizeof head,
              "=== CoCo Zero soak log, interval %us, clock %s from %s\r\n"
              "=== DATE %.10s\r\n"
-             "XRoar on RP2350-PiZero (soak log) fw=%s env=%s boot=%s freezes=%lu last=%s\r\n",
+             "XRoar on RP2350-PiZero (soak log) fw=%s env=%s boot=%s freezes=%lu last=%s reset=%s\r\n",
              SOAK_INTERVAL_S, clock, src, clock, fw, env,
              watchdog_reboot ? "watchdog-reboot" : "power-on",
-             (unsigned long)freezes, freeze_phase);
+             (unsigned long)freezes, freeze_phase, reset_reason);
     if (!append(head)) return false;
     sync_now();
     Serial.printf("[soak] logging to %s every %u s, clock %s (%s)\r\n", path, SOAK_INTERVAL_S, clock, src);
