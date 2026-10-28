@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" width="1200" height="860" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<title>CoCo Zero I/O page map</title>
+<desc>PIZERO-279: where each sound device sits in $FF00-$FFFF, and which work beside Disk BASIC without a Multi-Pak slot switch. Hover an address or a device; click a device to take it out of the machine.</desc>
+<style>
+  svg { --bg:#ffffff; --fg:#1d232a; --muted:#66707a; --line:#d5dae0; --empty:#f3f5f7;
+        --cell-fg:#111418; --panel:#f7f8fa; --ok:#2e7d32; --warn:#b26a00; --bad:#c62828; --clash:#c62828; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#15191e; --fg:#e6e9ed; --muted:#98a2ad; --line:#323a43; --empty:#20262d;
+          --cell-fg:#0d1014; --panel:#1b2026; --ok:#7bc67e; --warn:#f0b04a; --bad:#ef7a7a; --clash:#ff6b6b; }
+  }
+  .bg { fill:var(--bg); }
+  .fg { fill:var(--fg); }
+  .muted { fill:var(--muted); }
+  .h1 { font-size:22px; font-weight:650; fill:var(--fg); }
+  .h2 { font-size:13px; font-weight:600; fill:var(--muted); letter-spacing:.04em; text-transform:uppercase; }
+  .small { font-size:12px; }
+  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .cell text { font-size:11px; pointer-events:none; }
+  .cell { cursor:crosshair; }
+  .cell.dim { opacity:.18; }
+  .row { cursor:pointer; }
+  .row:hover .rowbg { fill:var(--line); }
+  .rowbg { fill:transparent; }
+  .btn { cursor:pointer; }
+  .btn rect { fill:var(--panel); stroke:var(--line); }
+  .btn:hover rect { stroke:var(--muted); }
+  .btn text { font-size:12px; fill:var(--fg); }
+  .panel { fill:var(--panel); stroke:var(--line); }
+  .ok { fill:var(--ok); } .warn { fill:var(--warn); } .bad { fill:var(--bad); }
+</style>
+<defs>
+  <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="6" stroke="#000" stroke-opacity=".18" stroke-width="2"/>
+  </pattern>
+</defs>
+<rect class="bg" width="1200" height="860"/>
+<text class="h1" x="40" y="42">CoCo Zero I/O page, $FF00-$FFFF</text>
+<text class="muted small" x="40" y="64">Where each sound device sits, and which can live beside Disk BASIC without a Multi-Pak slot switch. Hover an address or a device; click a device to take it out.</text>
+<g id="grid"></g>
+<g id="legend"></g>
+<g id="buttons"></g>
+<g id="info"></g>
+<g id="key"></g>
+<script><![CDATA[
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  var X0 = 96, Y0 = 112, CW = 34, CH = 28;
+
+  // r: [first, last, role, what it is there]. role 'use' = a register the
+  // device answers and its software touches; 'mirror' = a repeat its decoder
+  // answers but software never uses. v: the verdict beside Disk BASIC.
+  function odd(a, b, what) { var r = []; for (var x = a; x <= b; x += 2) r.push([x, x, 'use', what]); return r; }
+  var DEVS = [
+    { id:'pia0', name:'PIA0', col:'#a7b0ba', sys:true, st:'built in', addr:'$FF00-$FF03',
+      r:[[0xFF00,0xFF03,'use','keyboard, joystick, and the sound select lines CA2 and CB2'],[0xFF04,0xFF1F,'mirror','PIA0 repeats every 4 bytes']],
+      v:'sys', why:'Part of the machine. CA2 ($FF01 bit 3) and CB2 ($FF03 bit 3) pick the sound source for the multiplexer.' },
+    { id:'pia1', name:'PIA1: 6-bit DAC, single bit', col:'#7fb3d5', st:'built in', addr:'$FF20-$FF23',
+      r:[[0xFF20,0xFF20,'use','6-bit DAC (bits 2-7), cassette out'],[0xFF21,0xFF21,'use','PIA1 control A'],[0xFF22,0xFF22,'use','single-bit sound (bit 1), VDG mode'],[0xFF23,0xFF23,'use','sound enable (CB2, bit 3)'],[0xFF24,0xFF3F,'mirror','PIA1 repeats every 4 bytes']],
+      v:'ok', why:'The CoCo\'s own sound. Always there, nothing to collide with.' },
+    { id:'disk', name:'Disk controller (Disk BASIC)', col:'#ffb74d', st:'built in', addr:'$FF40, $FF48-$FF4B',
+      r:[[0xFF40,0xFF40,'use','drive latch: drive select, motor, density, NMI enable'],[0xFF41,0xFF47,'mirror','drive latch repeat'],
+         [0xFF48,0xFF48,'use','WD279x command / status'],[0xFF49,0xFF49,'use','WD279x track'],[0xFF4A,0xFF4A,'use','WD279x sector'],[0xFF4B,0xFF4B,'use','WD279x data'],
+         [0xFF50,0xFF57,'mirror','drive latch repeat'],[0xFF58,0xFF5B,'mirror','WD279x repeat']],
+      v:'self', why:'The decoder looks at A3-A0 only: offsets 0-7 are the latch, 8-B the WD279x, C-F nothing, repeated at $FF50. Disk BASIC and OS-9 touch only $FF40 and $FF48-$FF4B, so every repeat is free to borrow.' },
+    { id:'sn', name:'SN76489 (Games Master Cartridge)', col:'#6cc4a4', st:'shipped', addr:'odd $FF41-$FF57',
+      r:odd(0xFF41,0xFF47,'SN76489 data port').concat(odd(0xFF51,0xFF57,'SN76489 data port')),
+      v:'mirror', why:'Coexists by borrowing: it takes the odd repeats of the drive latch, which Disk BASIC never writes. With a banked GMC game loaded the whole window is the cartridge\'s and the disk controller is off.' },
+    { id:'psg', name:'CoCo PSG (AY-3-8910)', col:'#b39ddb', st:'shipped', addr:'$FF5D-$FF5F',
+      r:[[0xFF5D,0xFF5D,'use','CoCo PSG clock select (bit 0)'],[0xFF5E,0xFF5E,'use','CoCo PSG register select'],[0xFF5F,0xFF5F,'use','CoCo PSG data']],
+      v:'ok', why:'Coexists: $FF5D-$FF5F are offsets D-F, which the disk controller ignores.' },
+    { id:'sym', name:'Symphony-12 (4 x AY)', col:'#f48fb1', st:'shipped', addr:'$FF60-$FF63',
+      r:[[0xFF60,0xFF60,'use','Symphony-12 PIA port A: chip data'],[0xFF61,0xFF61,'use','Symphony-12 PIA control A'],[0xFF62,0xFF62,'use','Symphony-12 PIA port B: two bits a chip'],[0xFF63,0xFF63,'use','Symphony-12 PIA control B']],
+      v:'ok', why:'Coexists: outside the cartridge window altogether.' },
+    { id:'dlx', name:'Deluxe CoCo PSG (AY-3-8913)', col:'#ce93d8', st:'shipped, off', addr:'$FF38-$FF39',
+      r:[[0xFF38,0xFF38,'use','Deluxe CoCo AY data write'],[0xFF39,0xFF39,'use','Deluxe CoCo AY register latch / data read']],
+      v:'ok', why:'Coexists with the disk. On the CoCo 2 it sits on a repeat of PIA1, which is why it is off by default; on the CoCo 3 those addresses are free.' },
+    { id:'orch', name:'Orchestra-90CC (2 DACs)', col:'#aed581', st:'shipped', addr:'$FF7A-$FF7B',
+      r:[[0xFF7A,0xFF7A,'use','Orchestra-90 left DAC'],[0xFF7B,0xFF7B,'use','Orchestra-90 right DAC']],
+      v:'ok', why:'Coexists: outside the cartridge window.' },
+    { id:'spk', name:'Speech/Sound Cartridge', col:'#ffd54f', st:'planned, PIZERO-249', addr:'$FF7D-$FF7E',
+      r:[[0xFF7D,0xFF7E,'use','Speech/Sound Cartridge microcontroller']],
+      v:'ok', why:'Would coexist: outside the cartridge window.' },
+    { id:'opl', name:'YMF262 OPL3 (MEGA mini MPI)', col:'#4fc3f7', st:'planned, PIZERO-267', addr:'$FF50-$FF54',
+      r:[[0xFF50,0xFF50,'use','OPL3 port 0 register select / status'],[0xFF51,0xFF51,'use','OPL3 port 0 data'],[0xFF52,0xFF52,'use','OPL3 port 1 register select'],[0xFF53,0xFF53,'use','OPL3 port 1 data'],[0xFF54,0xFF54,'use','OPL3 reset']],
+      v:'mirror', why:'Would coexist with Disk BASIC: $FF50-$FF54 are only repeats of the drive latch. But $FF51 and $FF53 are odd latch repeats the SN76489 already takes, so with both on they clash unless a slot switch (or sn76489 = off) separates them.' },
+    { id:'sid', name:'SID (CoCoXSID)', col:'#e57373', st:'planned, PIZERO-278', addr:'$FF40-$FF5C',
+      r:[[0xFF40,0xFF46,'use','SID voice 1'],[0xFF47,0xFF4D,'use','SID voice 2'],[0xFF4E,0xFF54,'use','SID voice 3'],[0xFF55,0xFF56,'use','SID filter cutoff'],[0xFF57,0xFF57,'use','SID resonance and routing'],[0xFF58,0xFF58,'use','SID mode and volume'],[0xFF59,0xFF5C,'use','SID read registers (paddles, osc 3, env 3), if the cart answers']],
+      v:'bad', why:'Needs a slot switch. Voice 1 starts on $FF40, the drive latch, and voice 2\'s $FF48-$FF4B are the WD279x\'s own registers: a SID write would move the drive motor or start a disk command.' },
+    { id:'mpi', name:'Multi-Pak slot select', col:'#90a4ae', st:'planned', addr:'$FF7F',
+      r:[[0xFF7F,0xFF7F,'use','Multi-Pak: SCS (bits 1-0) picks who answers $FF40-$FF5F, CTS (bits 5-4) the ROM']],
+      v:'sys', why:'Not emulated yet. With it, each slot gets its own copy of $FF40-$FF5F, and only that 32-byte window switches.' },
+    { id:'gime', name:'GIME (CoCo 3)', col:'#a7b0ba', sys:true, st:'built in', addr:'$FF90-$FFBF',
+      r:[[0xFF90,0xFF95,'use','GIME init, interrupts, timer (the CoCo Zero has the timer too)'],[0xFF96,0xFF9F,'use','GIME video registers'],[0xFFA0,0xFFAF,'use','GIME MMU'],[0xFFB0,0xFFBF,'use','GIME palette (the CoCo Zero has the palette too)']],
+      v:'sys', why:'The CoCo 3\'s chip. On the CoCo Zero only the timer and palette exist.' },
+    { id:'sam', name:'SAM', col:'#a7b0ba', sys:true, st:'built in', addr:'$FFC0-$FFDF',
+      r:[[0xFFC0,0xFFDF,'use','SAM bit pairs: video mode, display offset, speed, map type']],
+      v:'sys', why:'Part of the machine.' },
+    { id:'vec', name:'Vectors (ROM)', col:'#a7b0ba', sys:true, st:'built in', addr:'$FFE0-$FFFF',
+      r:[[0xFFE0,0xFFFF,'use','interrupt and reset vectors, read from ROM']],
+      v:'sys', why:'Part of the machine.' }
+  ];
+  var VERDICT = { ok:['Yes','ok'], mirror:['Yes, on mirrors','warn'], bad:['No: switch','bad'], self:['(Disk BASIC)','muted'], sys:['','muted'] };
+
+  var on = {}; DEVS.forEach(function (d) { on[d.id] = true; });
+  var focus = null;
+
+  function el(name, attrs, parent, text) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function hex(a) { return '$' + a.toString(16).toUpperCase(); }
+  function claims(a) {
+    var out = [];
+    DEVS.forEach(function (d) {
+      if (!on[d.id]) return;
+      d.r.forEach(function (r) { if (a >= r[0] && a <= r[1]) out.push({ d:d, role:r[2], what:r[3] }); });
+    });
+    return out;
+  }
+  function state(a) {
+    var c = claims(a), uses = c.filter(function (x) { return x.role === 'use'; });
+    var mirrors = c.filter(function (x) { return x.role === 'mirror'; });
+    return { c:c, uses:uses, mirrors:mirrors, clash:uses.length > 1, borrow:uses.length === 1 && mirrors.length > 0 };
+  }
+
+  var grid = document.getElementById('grid');
+  function drawGrid() {
+    while (grid.firstChild) grid.removeChild(grid.firstChild);
+    for (var i = 0; i < 16; i++) {
+      el('text', { x:X0 + i * CW + CW / 2, y:Y0 - 8, 'text-anchor':'middle', 'class':'muted small mono' }, grid, i.toString(16).toUpperCase());
+      el('text', { x:X0 - 10, y:Y0 + i * CH + CH / 2 + 4, 'text-anchor':'end', 'class':'muted small mono' }, grid, hex(0xFF00 + i * 16));
+    }
+    for (var a = 0xFF00; a <= 0xFFFF; a++) drawCell(a);
+  }
+  function drawCell(a) {
+    var n = a - 0xFF00, x = X0 + (n % 16) * CW, y = Y0 + Math.floor(n / 16) * CH, w = CW - 2, h = CH - 2;
+    var s = state(a), g = el('g', { 'class':'cell' }, grid);
+    var mine = !focus || s.c.some(function (k) { return k.d.id === focus; });
+    if (!mine) g.setAttribute('class', 'cell dim');
+    if (s.clash) {
+      el('rect', { x:x, y:y, width:w / 2, height:h, fill:s.uses[0].d.col }, g);
+      el('rect', { x:x + w / 2, y:y, width:w / 2, height:h, fill:s.uses[1].d.col }, g);
+      el('rect', { x:x + 1, y:y + 1, width:w - 2, height:h - 2, fill:'none', stroke:'var(--clash)', 'stroke-width':2.5 }, g);
+    } else if (s.uses.length) {
+      el('rect', { x:x, y:y, width:w, height:h, rx:3, fill:s.uses[0].d.col }, g);
+      if (s.borrow) el('path', { d:'M' + (x + w - 10) + ' ' + y + 'h10v10z', fill:'var(--warn)' }, g);
+    } else if (s.mirrors.length) {
+      el('rect', { x:x, y:y, width:w, height:h, rx:3, fill:s.mirrors[0].d.col, 'fill-opacity':.4 }, g);
+      el('rect', { x:x, y:y, width:w, height:h, rx:3, fill:'url(#hatch)' }, g);
+    } else {
+      el('rect', { x:x, y:y, width:w, height:h, rx:3, fill:'var(--empty)', stroke:'var(--line)' }, g);
+    }
+    el('text', { x:x + w / 2, y:y + h / 2 + 4, 'text-anchor':'middle', 'class':'mono',
+                 fill:s.c.length ? 'var(--cell-fg)' : 'var(--muted)' }, g, (a & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
+    g.addEventListener('mouseenter', function () { showAddr(a); });
+    g.addEventListener('mouseleave', function () { showIdle(); });
+  }
+
+  // The information panel under the grid.
+  var info = document.getElementById('info');
+  var IX = 40, IY = 616, IW = 1120, IH = 132;
+  function panel(title, lines) {
+    while (info.firstChild) info.removeChild(info.firstChild);
+    el('rect', { x:IX, y:IY, width:IW, height:IH, rx:8, 'class':'panel' }, info);
+    el('text', { x:IX + 16, y:IY + 26, 'class':'fg mono', 'font-size':15, 'font-weight':600 }, info, title);
+    lines.slice(0, 5).forEach(function (l, i) {
+      var t = el('text', { x:IX + 16, y:IY + 50 + i * 19, 'class':l.cls || 'fg', 'font-size':13 }, info);
+      if (l.sw) el('tspan', { fill:l.sw }, t, '■ ');
+      el('tspan', {}, t, l.t);
+    });
+  }
+  function wrap(s, n) {
+    var words = s.split(' '), out = [], cur = '';
+    words.forEach(function (w) { if ((cur + ' ' + w).trim().length > n) { out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); });
+    if (cur) out.push(cur);
+    return out;
+  }
+  function showAddr(a) {
+    var s = state(a), lines = [];
+    s.c.forEach(function (k) {
+      lines.push({ sw:k.d.col, t:k.d.name + ': ' + k.what + (k.role === 'mirror' ? ' (a repeat; software never uses it)' : '') });
+    });
+    if (!s.c.length) lines.push({ t:'Nothing decodes here in this emulator.', cls:'muted' });
+    if (s.clash) lines.push({ t:'Clash: two devices answer this address. They cannot both be in without a slot switch.', cls:'bad' });
+    else if (s.borrow) lines.push({ t:'Borrowed: the device answers on another\'s repeat, which works because that repeat is never used.', cls:'warn' });
+    panel(hex(a), lines);
+  }
+  function showDev(d) {
+    var v = VERDICT[d.v], lines = [{ sw:d.col, t:d.addr + '    ' + d.st }];
+    if (v[0]) lines.push({ t:'Beside Disk BASIC without a slot switch: ' + v[0], cls:v[1] });
+    wrap(d.why, 150).forEach(function (l) { lines.push({ t:l }); });
+    panel(d.name, lines);
+  }
+  function showIdle() {
+    panel('Hover an address or a device', [
+      { t:'Solid: a register software uses. Hatched: a repeat of one, answered by the decoder but never used.' },
+      { t:'Orange corner: a device borrowing another\'s unused repeat. Split cell with a red frame: a clash.' },
+      { t:'Click a device to take it out and see what clears. Only $FF40-$FF5F switches with a Multi-Pak; everything else is always on the bus.' }
+    ]);
+  }
+
+  // The device list.
+  var legend = document.getElementById('legend');
+  var LX = 680, LY = 100, LH = 27;
+  function drawLegend() {
+    while (legend.firstChild) legend.removeChild(legend.firstChild);
+    el('text', { x:LX, y:LY, 'class':'h2' }, legend, 'Device');
+    el('text', { x:LX + 360, y:LY, 'class':'h2' }, legend, 'With Disk BASIC');
+    DEVS.forEach(function (d, i) {
+      var y = LY + 12 + i * LH, g = el('g', { 'class':'row' }, legend);
+      el('rect', { x:LX - 6, y:y, width:500, height:LH - 2, rx:4, 'class':'rowbg' }, g);
+      el('rect', { x:LX, y:y + 6, width:14, height:14, rx:3, fill:on[d.id] ? d.col : 'none', stroke:d.col, 'stroke-width':2 }, g);
+      var t = el('text', { x:LX + 24, y:y + 18, 'class':on[d.id] ? 'fg' : 'muted', 'font-size':13 }, g, d.name);
+      if (!on[d.id]) t.setAttribute('text-decoration', 'line-through');
+      el('text', { x:LX + 248, y:y + 18, 'class':'muted mono', 'font-size':11 }, g, d.addr);
+      var v = VERDICT[d.v];
+      el('text', { x:LX + 360, y:y + 18, 'class':v[1], 'font-size':13, 'font-weight':600 }, g, v[0]);
+      g.addEventListener('click', function () { on[d.id] = !on[d.id]; drawLegend(); drawGrid(); showDev(d); });
+      g.addEventListener('mouseenter', function () { focus = d.id; drawGrid(); showDev(d); });
+      g.addEventListener('mouseleave', function () { focus = null; drawGrid(); showIdle(); });
+    });
+  }
+
+  // Presets.
+  var buttons = document.getElementById('buttons');
+  var PRESETS = [
+    ['Everything', function (d) { return true; }],
+    ['Shipped only', function (d) { return !/planned/.test(d.st); }],
+    ['Disk BASIC + SID', function (d) { return d.sys || d.id === 'pia1' || d.id === 'disk' || d.id === 'sid'; }],
+    ['OPL3 + SN76489', function (d) { return d.sys || d.id === 'disk' || d.id === 'sn' || d.id === 'opl'; }]
+  ];
+  PRESETS.forEach(function (p, i) {
+    var x = X0 + i * 136, g = el('g', { 'class':'btn' }, buttons);
+    el('rect', { x:x, y:Y0 + 16 * CH + 14, width:128, height:28, rx:6 }, g);
+    el('text', { x:x + 64, y:Y0 + 16 * CH + 32, 'text-anchor':'middle' }, g, p[0]);
+    g.addEventListener('click', function () { DEVS.forEach(function (d) { on[d.id] = p[1](d); }); drawLegend(); drawGrid(); showIdle(); });
+  });
+
+  // The verdict, in words, at the foot.
+  var key = document.getElementById('key');
+  [ 'Beside Disk BASIC with no switching: the CoCo\'s own DAC, the SN76489, CoCo PSG, Symphony-12, Deluxe PSG, Orchestra-90, and the planned Speech/Sound Cartridge.',
+    'The planned OPL3 also fits beside Disk BASIC, but collides with the always-on SN76489 at $FF51 and $FF53. The planned SID cannot: it sits on the disk controller\'s own registers.',
+    'Sources: lib/coco_machine/src/coco_machine.cpp (fdc_io_write, the bus write decode), cart_gmc.h, docs/sound.md; PIZERO-249, 267, 278.' ]
+    .forEach(function (s, i) { el('text', { x:40, y:764 + i * 22, 'class':i === 2 ? 'muted small' : 'fg', 'font-size':i === 2 ? 12 : 14 }, key, s); });
+
+  drawGrid(); drawLegend(); showIdle();
+})();
+]]></script>
+</svg>

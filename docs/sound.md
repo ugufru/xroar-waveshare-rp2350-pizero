@@ -20,6 +20,10 @@ mixed sample.
 \* Loading a Games Master Cartridge image (a bank-switched `.ccc`, 32 KB to
 256 KB) brings its SN76489 on any machine, whatever the setting says.
 
+[`io-map.svg`](io-map.svg) draws the whole I/O page, shipped and planned
+devices together, and shows which can sit beside Disk BASIC without a
+Multi-Pak slot switch (open it in a browser and hover).
+
 Everything can play at once: on the CoCo Zero that is the DAC, three SN76489
 tones and its noise, twelve AY tones and the Orchestra-90's two DACs.
 [`ay-checks/allvoice.bas`](ay-checks/allvoice.bas) does exactly that.
