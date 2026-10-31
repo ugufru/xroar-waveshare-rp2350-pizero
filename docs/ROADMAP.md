@@ -227,9 +227,11 @@ matters now that the guest writes to the card. `PIZERO-69` (save-states) and
 - **`PIZERO-56`**: higher-fidelity NTSC artifacts (the current path is a
   deliberate 2-bit LUT, not composite decoding).
 - **Synth and MIDI**: `PIZERO-58` (voice-budget bench) → `PIZERO-17`
-  (wavetable synth device); `PIZERO-61` (Lyra's serial MIDI driver) →
-  `PIZERO-59` (MIDI bus over the bit-banger port) → `PIZERO-60` (USB-MIDI and
-  DIN endpoints). All build-flag gated; `PIZERO-170` (GIME timer reload quirk)
+  (wavetable synth device). MIDI goes first through `PIZERO-287` (the MIDI
+  Pak, a 6850 at `$FF6E`, which Lyra, UltiMusE III and CoCo MIDI Pro use,
+  wired to USB MIDI on both ports; open, for `PIZERO-281`); the bit-banger
+  path `PIZERO-61` → `PIZERO-59` and the DIN endpoints in `PIZERO-60` stay
+  deferred behind it. All build-flag gated; `PIZERO-170` (GIME timer reload quirk)
   sets the tempo of timer music.
 - **`PIZERO-128`**: the BOOT button as an overlay key. **`PIZERO-80`**: SDIO.
 
