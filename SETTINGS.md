@@ -29,9 +29,10 @@ You can also edit the file on a computer. Lines may end the Mac way (LF), the
 Windows way (CRLF) or the CoCo way (CR alone); the board reads all three, and
 when it changes a line itself (F8, the volume keys) it keeps the file's own.
 
-The on-screen editor holds up to 4 KB. A bigger file, or one with CR line
-endings (which the editor cannot keep yet), is not opened, and the bottom row
-says why, so nothing is ever saved back cut short or changed.
+The on-screen editor holds up to 4 KB. A bigger file is not opened, and the
+bottom row says why, so nothing is ever saved back cut short. A file with CR
+line endings (which the editor cannot keep yet) opens read-only, so you can
+read it but not change it there.
 
 ## Settings for one game
 
