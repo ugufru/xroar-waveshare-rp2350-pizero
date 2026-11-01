@@ -66,6 +66,7 @@
 
 #include "gamepad.h"        // PIZERO-164: pad buttons (struct pad_map)
 #include "key_translate.h"  // PIZERO-164: CoCo key names
+#include "text_lines.h"     // PIZERO-294: CR, LF or CRLF line ends
 
 enum { ART_OFF = 0, ART_ON = 1, ART_SWAPPED = 2 };
 // PIZERO-242: the machine profiles. cocozero, the default, is a CoCo 2 with
@@ -355,32 +356,37 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
 // one replaced ("name = value", any comment on it dropped); with none, the
 // line is added at the end. buf holds len bytes and has room for cap.
 // Returns the new length, or -1 if it would not fit.
+// PIZERO-294: lines may end in CR, LF or CRLF, and an added line ends the
+// way the file's lines already do (LF for a new file).
 static inline int settings_set_line(char *buf, int len, int cap,
                                     const char *name, const char *value) {
     char line[128], n[32], v[40];
     int at = -1, at_end = -1;
     for (int pos = 0; pos < len;) {
-        int e = pos;
-        while (e < len && buf[e] != '\n') e++;
-        int l = e - pos < (int)sizeof line - 1 ? e - pos : (int)sizeof line - 1;
-        memcpy(line, buf + pos, (size_t)l);
+        int b, l0;
+        pos = tl_next(buf, len, pos, &b, &l0);
+        int l = l0 < (int)sizeof line - 1 ? l0 : (int)sizeof line - 1;
+        memcpy(line, buf + b, (size_t)l);
         line[l] = '\0';
         bool syntax;
         if (settings_split(line, n, sizeof n, v, sizeof v, &syntax) && !strcmp(n, name)) {
-            at = pos; at_end = e;
+            at = b; at_end = b + l0;
         }
-        pos = e + 1;
     }
     char repl[96];
     int rl = snprintf(repl, sizeof repl, "%s = %s", name, value);
     if (rl < 0 || rl >= (int)sizeof repl) return -1;
     if (at < 0) {                                    // append, on a line of its own
-        int need = len + rl + 1 + ((len > 0 && buf[len - 1] != '\n') ? 1 : 0);
+        const char *eol = tl_eol(tl_convention(buf, len));
+        int el = (int)strlen(eol);
+        bool open_end = len > 0 && !tl_is_eol(buf[len - 1]);
+        int need = len + rl + el + (open_end ? el : 0);
         if (need > cap) return -1;
-        if (len > 0 && buf[len - 1] != '\n') buf[len++] = '\n';
+        if (open_end) { memcpy(buf + len, eol, (size_t)el); len += el; }
         memcpy(buf + len, repl, (size_t)rl);
         len += rl;
-        buf[len++] = '\n';
+        memcpy(buf + len, eol, (size_t)el);
+        len += el;
         return len;
     }
     int old = at_end - at, nl = len - old + rl;
@@ -417,13 +423,13 @@ static inline bool settings_game_path(const char *game, char *out, size_t n) {
 // and returns the length. No index arrays, so it is safe on a small stack:
 // the sort picks the next line by scanning, fine for a 4 KB file.
 static inline int settings_tidy_line(const char *in, int n, int pos, int *start, int *len) {
-    int e = pos;
-    while (e < n && in[e] != '\n') e++;
-    int b = pos, l = e;
+    int s0, l0;
+    int next = tl_next(in, n, pos, &s0, &l0);      // PIZERO-294: CR, LF or CRLF
+    int b = s0, l = s0 + l0;
     while (b < l && (in[b] == ' ' || in[b] == '\t')) b++;
-    while (l > b && (in[l - 1] == '\r' || in[l - 1] == ' ' || in[l - 1] == '\t')) l--;
+    while (l > b && (in[l - 1] == ' ' || in[l - 1] == '\t')) l--;
     *start = b; *len = l - b;
-    return e < n ? e + 1 : n;                       // the next line's start
+    return next;                                    // the next line's start
 }
 
 // Compare two settings lines by name (up to '=' or a space), case ignored.

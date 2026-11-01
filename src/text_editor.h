@@ -19,11 +19,14 @@ void text_editor_init(text_editor_present_fn present, text_editor_saved_fn saved
 
 // Open `path`, or `template_text` when the file does not exist. The buffer
 // is taken from the heap only while editing. Returns false if there is no
-// memory for it (the message is then on screen). `tidy` is for a settings
-// file: it opens comments first, then the settings by name (PIZERO-181),
-// and in lower case, Caps Lock off, where autorun.txt opens in upper case
-// like the BASIC prompt (PIZERO-180).
-bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy);
+// memory for it (the message is then on screen), or if the file is too big
+// or cannot be read (PIZERO-296: never opened cut short). `tidy` is for a
+// settings file: it opens comments first, then the settings by name
+// (PIZERO-181). `caps`: Caps Lock on at the start, as for autorun.txt and
+// CoCo source, which look like the BASIC prompt (PIZERO-180); off for
+// settings files and prose such as a README.
+bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy,
+                      bool caps);
 
 bool text_editor_is_open(void);
 

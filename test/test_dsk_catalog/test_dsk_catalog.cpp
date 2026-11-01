@@ -151,8 +151,54 @@ static void test_cartridge_sizes(void) {
     TEST_ASSERT_FALSE(cat_cart_size_ok(0, 16384));
 }
 
+// PIZERO-296: the FILES list.
+static void test_text_list_skips_by_name(void) {
+    TEST_ASSERT_TRUE(text_cat_skip("", "settings.txt"));          // listed first, always
+    TEST_ASSERT_TRUE(text_cat_skip("", "AUTORUN.TXT"));
+    TEST_ASSERT_TRUE(text_cat_skip("", "drives.txt"));            // the board rewrites it
+    TEST_ASSERT_FALSE(text_cat_skip("dsk", "settings.txt"));      // only /coco's own
+    TEST_ASSERT_TRUE(text_cat_skip("", ".gitignore"));
+    TEST_ASSERT_TRUE(text_cat_skip("dsk", "ORBIT.DSK"));
+    TEST_ASSERT_TRUE(text_cat_skip("", "README.md.tmp"));
+    TEST_ASSERT_TRUE(text_cat_skip("bin", "game.BIN"));
+    TEST_ASSERT_FALSE(text_cat_skip("", "README.md"));
+    TEST_ASSERT_FALSE(text_cat_skip("", "LICENSE"));
+    TEST_ASSERT_FALSE(text_cat_skip("dsk", "ORBIT.TXT"));
+    TEST_ASSERT_TRUE(text_cat_skip_dir("roms"));
+    TEST_ASSERT_TRUE(text_cat_skip_dir("screendumps"));
+    TEST_ASSERT_TRUE(text_cat_skip_dir(".git"));
+    TEST_ASSERT_FALSE(text_cat_skip_dir("dsk"));
+}
+
+static void test_text_list_paths_order_and_leaf(void) {
+    dsk_cat_clear(&cat, CAT_TEXT);
+    TEST_ASSERT_TRUE(text_cat_add(&cat, "dsk", "ORBIT.TXT"));
+    TEST_ASSERT_TRUE(text_cat_add(&cat, "", "README.md"));
+    TEST_ASSERT_TRUE(text_cat_add(&cat, "", "LICENSE"));
+    TEST_ASSERT_TRUE(text_cat_add(&cat, "bin", "ARCADE.TXT"));
+    TEST_ASSERT_FALSE(text_cat_add(&cat, "", "readme.md"));       // the same name twice
+    dsk_cat_sort(&cat);
+    TEST_ASSERT_EQUAL_INT(4, cat.n);
+    TEST_ASSERT_EQUAL_STRING("LICENSE", cat.e[0].name);           // /coco's own first
+    TEST_ASSERT_EQUAL_STRING("README.md", cat.e[1].name);
+    TEST_ASSERT_EQUAL_STRING("bin/ARCADE.TXT", cat.e[2].name);
+    TEST_ASSERT_EQUAL_STRING("dsk/ORBIT.TXT", cat.e[3].name);
+    char path[DSK_NAME_MAX + 16];
+    TEST_ASSERT_TRUE(dsk_cat_path(&cat, 3, path, sizeof path));
+    TEST_ASSERT_EQUAL_STRING("0:/coco/dsk/ORBIT.TXT", path);
+    TEST_ASSERT_EQUAL_STRING("ORBIT.TXT", text_cat_leaf(cat.e[3].name));
+    TEST_ASSERT_EQUAL_STRING("LICENSE", text_cat_leaf(cat.e[0].name));
+    // A path too long to store is counted, not cut short.
+    char longleaf[80];
+    memset(longleaf, 'x', sizeof longleaf - 1); longleaf[sizeof longleaf - 1] = '\0';
+    TEST_ASSERT_FALSE(text_cat_add(&cat, "dsk", longleaf));
+    TEST_ASSERT_EQUAL_INT(1, cat.skipped_long);
+}
+
 int main(void) {
     UNITY_BEGIN();
+    RUN_TEST(test_text_list_skips_by_name);
+    RUN_TEST(test_text_list_paths_order_and_leaf);
     RUN_TEST(test_only_dsk_files_count);
     RUN_TEST(test_directories_and_dotfiles_are_skipped);
     RUN_TEST(test_list_is_sorted_case_insensitively);

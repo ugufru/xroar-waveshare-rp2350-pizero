@@ -44,6 +44,11 @@
 #define DSK_NAME_MAX     64     // bytes including the terminator
 
 enum cat_kind { CAT_DSK = 0, CAT_BIN, CAT_CART, CAT_KINDS };
+// PIZERO-296: the FILES list, every text file under /coco. Not one of the
+// launcher kinds (it sits where the overlay's FILES list does, after them).
+// Its names are paths relative to /coco ("README.md", "dsk/ORBIT.TXT"),
+// always with dir DSK_DIR_ROOT, so dsk_cat_path gives "0:/coco/<name>".
+#define CAT_TEXT CAT_KINDS
 enum { DSK_DIR_DSK = 0, DSK_DIR_ROOT = 1 };   // the kind's folder, then /coco
 
 // The kind's own folder; dir DSK_DIR_ROOT is always /coco.
@@ -111,17 +116,82 @@ static inline bool dsk_cat_add(struct dsk_catalog *c, const char *fname,
     return true;
 }
 
+// Order: case-insensitive by name. In the FILES list (PIZERO-296) the files
+// in /coco itself come before those in its folders.
+static inline int dsk_cat_cmp(int kind, const char *a, const char *b) {
+    if (kind == CAT_TEXT) {
+        int sa = strchr(a, '/') != NULL, sb = strchr(b, '/') != NULL;
+        if (sa != sb) return sa - sb;
+    }
+    return strcasecmp(a, b);
+}
+
 // Insertion sort: the list is at most 128 short names, filled once per scan.
 static inline void dsk_cat_sort(struct dsk_catalog *c) {
     for (int i = 1; i < c->n; i++) {
         struct dsk_entry t = c->e[i];
         int j = i - 1;
-        while (j >= 0 && strcasecmp(c->e[j].name, t.name) > 0) {
+        while (j >= 0 && dsk_cat_cmp(c->kind, c->e[j].name, t.name) > 0) {
             c->e[j + 1] = c->e[j];
             j--;
         }
         c->e[j + 1] = t;
     }
+}
+
+// ---- PIZERO-296: the FILES list ----
+//
+// Every text file in /coco and its folders one level down, judged by content
+// (decb_files.h's decb_is_text, read by the caller). This half decides which
+// names are even worth opening, and how they are listed.
+
+// Files the FILES list leaves out by name: the two it always lists first
+// (settings.txt, autorun.txt), drives.txt (the board rewrites it whenever a
+// drive changes, so a hand edit would be lost until PIZERO-293 re-reads it),
+// a save's leftover .tmp, and extensions that are never text, so the scan
+// does not open every disk image to find out.
+static inline bool text_cat_skip(const char *sub, const char *leaf) {
+    if (!leaf || !leaf[0] || leaf[0] == '.') return true;
+    if (!sub || !sub[0]) {
+        if (!strcasecmp(leaf, "settings.txt") || !strcasecmp(leaf, "autorun.txt") ||
+            !strcasecmp(leaf, "drives.txt")) return true;
+    }
+    const char *ext = strrchr(leaf, '.');
+    if (!ext || ext == leaf) return false;
+    static const char *const binary[] = { ".tmp", ".dsk", ".bin", ".ccc", ".rom", ".png",
+                                          ".zip", ".cas", ".wav", ".pal", ".fnt", ".uf2" };
+    for (unsigned i = 0; i < sizeof binary / sizeof binary[0]; i++)
+        if (!strcasecmp(ext, binary[i])) return true;
+    return false;
+}
+
+// Folders under /coco the scan does not enter: the ROMs and screen dumps
+// are never text.
+static inline bool text_cat_skip_dir(const char *name) {
+    return !name || !name[0] || name[0] == '.' || !strcasecmp(name, "roms") ||
+           !strcasecmp(name, "screendumps");
+}
+
+// Add a text file found in /coco/<sub> (sub "" for /coco itself). The caller
+// has already checked text_cat_skip and the content. A path too long to
+// store is counted, not truncated, as in dsk_cat_add.
+static inline bool text_cat_add(struct dsk_catalog *c, const char *sub, const char *leaf) {
+    char rel[DSK_NAME_MAX + 16];
+    int len = (sub && sub[0]) ? snprintf(rel, sizeof rel, "%s/%s", sub, leaf)
+                              : snprintf(rel, sizeof rel, "%s", leaf);
+    if (len < 0 || len >= DSK_NAME_MAX) { c->skipped_long++; return false; }
+    if (dsk_cat_find_name(c, rel) >= 0) return false;
+    if (c->n >= DSK_CAT_MAX) { c->skipped_full++; return false; }
+    struct dsk_entry *e = &c->e[c->n++];
+    strcpy(e->name, rel);
+    e->dir = DSK_DIR_ROOT;
+    return true;
+}
+
+// The file's own name, after its folder: what the editor's title shows.
+static inline const char *text_cat_leaf(const char *rel) {
+    const char *slash = strrchr(rel, '/');
+    return slash ? slash + 1 : rel;
 }
 
 // The FatFs path for entry i. Returns false if it does not fit.

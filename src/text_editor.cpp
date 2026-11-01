@@ -65,7 +65,8 @@ bool text_editor_is_open(void) { return g_t != nullptr; }
 
 void text_editor_hold(const uint8_t codes[6]) { memcpy(g_k.prev, codes, 6); }
 
-bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy) {
+bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy,
+                      bool caps) {
     g_t = (struct text_edit *)malloc(sizeof *g_t);
     if (!g_t) {
         coco_boot_card_clear();
@@ -76,7 +77,13 @@ bool text_editor_open(const char *path, const char *title, const char *template_
     snprintf(g_path, sizeof g_path, "%s", path);
     snprintf(g_title, sizeof g_title, "%s", title);
     uint32_t n = 0;
-    if (coco_boot_load_text(path, g_t->buf, TED_MAX, &n)) {
+    int rd = coco_boot_read_text(path, g_t->buf, TED_MAX, &n);
+    if (rd == COCO_TEXT_TOO_BIG || rd == COCO_TEXT_ERROR) {   // PIZERO-296: never cut short
+        Serial.printf("[editor] %s not opened (%s)\r\n", path, rd == COCO_TEXT_TOO_BIG ? "too big" : "read error");
+        close_editor();
+        return false;
+    }
+    if (rd == COCO_TEXT_OK) {
         ted_load(g_t, g_t->buf, (int)n);       // ted_load compacts '\r' in place
         status(TEK_HINT);
     } else {
@@ -94,7 +101,7 @@ bool text_editor_open(const char *path, const char *title, const char *template_
         free(tmp);
     }
     tek_init(&g_k);
-    g_k.caps = !tidy;                      // settings: lower case; autorun: BASIC's upper
+    g_k.caps = caps;                       // settings, prose: lower case; autorun, source: BASIC's upper
     Serial.printf("[editor] open %s (%d bytes)\r\n", g_path, g_t->len);
     draw();
     return true;

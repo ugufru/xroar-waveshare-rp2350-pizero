@@ -1477,10 +1477,12 @@ static void volume_save_due(void) {
     bool ok = false;
     if (buf) {
         uint32_t n = 0;
-        if (!coco_boot_load_text(path, buf, cap, &n)) n = 0;
+        int rd = coco_boot_read_text(path, buf, cap, &n);   // PIZERO-296: never a cut-short file
+        if (rd == COCO_TEXT_MISSING) n = 0;
         char val[4];
         snprintf(val, sizeof val, "%u", (unsigned)g_settings.volume);
-        int m = settings_set_line(buf, (int)n, cap, "volume", val);
+        int m = (rd == COCO_TEXT_OK || rd == COCO_TEXT_MISSING)
+                ? settings_set_line(buf, (int)n, cap, "volume", val) : -1;
         ok = m >= 0 && coco_boot_save_text(path, buf, (uint32_t)m);
         free(buf);
     }
@@ -1505,8 +1507,10 @@ static void artifact_cycle_and_save(void) {
     bool ok = false;
     if (buf) {
         uint32_t n = 0;
-        if (!coco_boot_load_text(path, buf, cap, &n)) n = 0;   // a new file
-        int m = settings_set_line(buf, (int)n, cap, "artifact_colors", names[a]);
+        int rd = coco_boot_read_text(path, buf, cap, &n);   // PIZERO-296: never a cut-short file
+        if (rd == COCO_TEXT_MISSING) n = 0;                 // a new file
+        int m = (rd == COCO_TEXT_OK || rd == COCO_TEXT_MISSING)
+                ? settings_set_line(buf, (int)n, cap, "artifact_colors", names[a]) : -1;
         ok = m >= 0 && coco_boot_save_text(path, buf, (uint32_t)m);
         free(buf);
     }
@@ -1534,7 +1538,19 @@ static const char *on_file_saved(const char *path) {
         return TEK_MSG_APPLIED;
     }
     if (strcmp(path, "0:/coco/autorun.txt") == 0) return TEK_MSG_NEXT;
-    return TEK_MSG_GAME;
+    // PIZERO-296: FILES opens any text file now. Only a game's own settings
+    // file (NAME.TXT beside NAME.BIN, .CCC or .DSK) waits for its game.
+    const char *dot = strrchr(path, '.');
+    if (dot && !strcasecmp(dot, ".txt")) {
+        static const char *const games[] = { ".BIN", ".CCC", ".DSK" };
+        char g[100];
+        FILINFO fi;
+        for (unsigned i = 0; i < 3; i++) {
+            snprintf(g, sizeof g, "%.*s%s", (int)(dot - path), path, games[i]);
+            if (f_stat(g, &fi) == FR_OK) return TEK_MSG_GAME;
+        }
+    }
+    return nullptr;                             // TEK_MSG_SAVED
 }
 
 // PIZERO-145: put every setting into effect. Called at boot and again

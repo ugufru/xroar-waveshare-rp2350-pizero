@@ -222,6 +222,23 @@ static void test_set_line_replaces_adds_and_keeps_the_rest(void) {
     TEST_ASSERT_EQUAL_INT(-1, settings_set_line(tiny, 6, 8, "artifact_colors", "on"));
 }
 
+// PIZERO-294: a file with CR (the CoCo) or CRLF (Windows) line ends is edited
+// in place and keeps them; an added line ends the same way.
+static void test_set_line_keeps_the_files_line_ends(void) {
+    set_is("volume = 8\rartifact_colors = on\rfont = classic\r", "artifact_colors", "off",
+           "volume = 8\rartifact_colors = off\rfont = classic\r");
+    set_is("volume = 8\r", "artifact_colors", "off", "volume = 8\rartifact_colors = off\r");
+    set_is("volume = 8\r\n", "artifact_colors", "off", "volume = 8\r\nartifact_colors = off\r\n");
+    set_is("# a\r\nvolume = 8", "artifact_colors", "off", "# a\r\nvolume = 8\r\nartifact_colors = off\r\n");
+    set_is("volume = 8\r\nartifact_colors = on\r\n", "artifact_colors", "swapped",
+           "volume = 8\r\nartifact_colors = swapped\r\n");
+}
+
+static void test_tidy_reads_cr_and_crlf_lines(void) {
+    tidy_is("volume = 8\r# mine\r\rfont = classic\r", "# mine\n\nfont = classic\nvolume = 8\n");
+    tidy_is("volume = 8\r\n# mine\r\nfont = classic", "# mine\n\nfont = classic\nvolume = 8\n");
+}
+
 static void test_the_template_parses_back_to_the_defaults(void) {
     // The editor offers this when there is no file; saving it unchanged
     // must leave every setting exactly at its default, with no errors.
@@ -313,6 +330,8 @@ int main(void) {
     RUN_TEST(test_the_template_parses_back_to_the_defaults);
     RUN_TEST(test_machine_profiles);
     RUN_TEST(test_set_line_replaces_adds_and_keeps_the_rest);
+    RUN_TEST(test_set_line_keeps_the_files_line_ends);
+    RUN_TEST(test_tidy_reads_cr_and_crlf_lines);
     RUN_TEST(test_tidy_puts_comments_first_and_sorts_settings);
     RUN_TEST(test_tidy_keeps_repeated_names_in_order);
     RUN_TEST(test_tidy_sorts_by_name_not_by_line);

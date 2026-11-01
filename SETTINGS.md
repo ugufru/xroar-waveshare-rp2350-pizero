@@ -24,7 +24,13 @@ The file always opens tidied: comment lines (`#`) first, then the settings in
 alphabetical order, with blank lines dropped. A game's own settings file opens
 the same way. Nothing changes on the card unless you save. The save writes a new copy and
 then swaps it in, so pulling the power mid-save cannot leave a broken file.
-You can also edit the file on a computer.
+You can also edit the file on a computer. Lines may end the Mac way (LF), the
+Windows way (CRLF) or the CoCo way (CR alone); the board reads all three, and
+when it changes a line itself (F8, the volume keys) it keeps the file's own.
+
+The on-screen editor holds up to 4 KB. A bigger file, or one with CR line
+endings (which the editor cannot keep yet), is not opened, and the bottom row
+says why, so nothing is ever saved back cut short or changed.
 
 ## Settings for one game
 

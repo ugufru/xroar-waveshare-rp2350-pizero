@@ -31,6 +31,8 @@ extern "C" {
 #include "coco_boot.h"
 #include "dsk_catalog.h"        // PIZERO-81a, host-tested
 #include "settings.h"           // PIZERO-145, host-tested
+#include "text_lines.h"         // PIZERO-294: CR, LF or CRLF line ends, host-tested
+#include "decb_files.h"         // PIZERO-289: decb_is_text, host-tested
 #include "png_write.h"          // PIZERO-165, host-tested
 #include "hardware/watchdog.h"   // PIZERO-165: fed while a screenshot writes
 #include <time.h>
@@ -229,8 +231,61 @@ static void cat_scan_dir(const char *dir, uint8_t which) {
     f_closedir(&d);
 }
 
+// PIZERO-296: is this file text, by its first 512 bytes (decb_is_text)?
+static bool file_is_text(const char *path) {
+    FIL f;
+    if (f_open(&f, path, FA_READ) != FR_OK) return false;
+    uint8_t head[512];
+    UINT br = 0;
+    bool ok = f_read(&f, head, sizeof head, &br) == FR_OK && decb_is_text(head, (int)br);
+    f_close(&f);
+    return ok;
+}
+
+// PIZERO-296: the FILES list's walk of /coco/<sub>. At the top level the
+// folders found are noted in subs (up to max) for a second pass, so only one
+// directory is ever open at a time. The rules are dsk_catalog.h's.
+#define TEXT_SUBS_MAX 16
+static int text_scan_dir(const char *sub, char subs[][32], int max) {
+    char dir[48];
+    snprintf(dir, sizeof dir, sub[0] ? "0:/coco/%s" : "0:/coco", sub);
+    DIR d;
+    if (f_opendir(&d, dir) != FR_OK) return 0;
+    FILINFO fi;
+    int nsub = 0;
+    while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
+        if (fi.fattrib & (AM_HID | AM_SYS)) continue;
+        if (fi.fattrib & AM_DIR) {
+            if (subs && nsub < max && strlen(fi.fname) < 32 && !text_cat_skip_dir(fi.fname))
+                snprintf(subs[nsub++], 32, "%s", fi.fname);
+            continue;
+        }
+        if (text_cat_skip(sub, fi.fname)) continue;
+        if (strlen(sub) + 1 + strlen(fi.fname) >= DSK_NAME_MAX) {   // counted, not opened
+            text_cat_add(&g_dsk_cat, sub, fi.fname);
+            continue;
+        }
+        char path[DSK_NAME_MAX + 16];
+        snprintf(path, sizeof path, "%s/%s", dir, fi.fname);
+        if (file_is_text(path)) text_cat_add(&g_dsk_cat, sub, fi.fname);
+        watchdog_update();
+    }
+    f_closedir(&d);
+    return nsub;
+}
+
 extern "C" int coco_boot_rescan(int kind) {
     dsk_cat_clear(&g_dsk_cat, kind);
+    if (kind == CAT_TEXT) {
+        // On the heap only for the scan: static RAM is what a CoCo 3 runs
+        // short of (CLAUDE.md). Without it, /coco alone is scanned.
+        char (*subs)[32] = (char (*)[32])malloc(TEXT_SUBS_MAX * 32);
+        int nsub = text_scan_dir("", subs, subs ? TEXT_SUBS_MAX : 0);
+        for (int i = 0; i < nsub; i++) text_scan_dir(subs[i], nullptr, 0);
+        free(subs);
+        dsk_cat_sort(&g_dsk_cat);
+        return g_dsk_cat.n;
+    }
     cat_scan_dir(cat_kind_dir(kind), DSK_DIR_DSK);
     cat_scan_dir("0:/coco", DSK_DIR_ROOT);
     dsk_cat_sort(&g_dsk_cat);
@@ -248,12 +303,22 @@ extern "C" bool coco_boot_load_settings(struct coco_settings *out) {
     return coco_boot_load_settings_for(nullptr, out, nullptr);
 }
 
+// PIZERO-294: files are read a line at a time through text_lines.h, so a
+// line may end in CR (the CoCo), LF (the Mac) or CRLF (Windows). f_gets ends
+// a line at LF only, so a CR file read as one line.
+static int fil_read(void *ctx, char *buf, int n) {
+    UINT br = 0;
+    return f_read((FIL *)ctx, buf, (UINT)n, &br) == FR_OK ? (int)br : 0;
+}
+
 static bool apply_settings_file(const char *path, struct coco_settings *out, bool quiet) {
     FIL f;
     if (f_open(&f, path, FA_READ) != FR_OK) return false;
     char line[96], name[32];
     int n = 0;
-    while (f_gets(line, sizeof line, &f)) {
+    struct tl_reader rd;
+    tl_reader_init(&rd, fil_read, &f);
+    while (tl_gets(&rd, line, sizeof line)) {
         n++;
         name[0] = '\0';
         int r = settings_parse_line(out, line, name, sizeof name);
@@ -383,16 +448,52 @@ extern "C" bool coco_boot_clock_text(char *out, size_t n, char *src, size_t src_
 
 // PIZERO-146: text files the on-screen editor opens and saves. Load reads up
 // to max bytes; it returns false (with *len = 0) when there is no file.
-extern "C" bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *len) {
+// PIZERO-296: a file longer than max is refused, not cut short. Truncating
+// it let a save (the editor, F8, the volume keys) write back only the first
+// max bytes and lose the rest.
+extern "C" int coco_boot_read_text(const char *path, char *buf, uint32_t max, uint32_t *len) {
     *len = 0;
     FIL f;
-    if (f_open(&f, path, FA_READ) != FR_OK) return false;
+    FRESULT fo = f_open(&f, path, FA_READ);
+    if (fo == FR_NO_FILE || fo == FR_NO_PATH) return COCO_TEXT_MISSING;
+    if (fo != FR_OK) return COCO_TEXT_ERROR;
+    if (f_size(&f) > max) {
+        Serial.printf("[text] %s: %lu bytes, over the %lu limit, not read\r\n", path,
+                      (unsigned long)f_size(&f), (unsigned long)max);
+        f_close(&f);
+        return COCO_TEXT_TOO_BIG;
+    }
     UINT br = 0;
     FRESULT fr = f_read(&f, buf, max, &br);
     f_close(&f);
-    if (fr != FR_OK) return false;
+    if (fr != FR_OK) return COCO_TEXT_ERROR;
     *len = br;
-    return true;
+    return COCO_TEXT_OK;
+}
+
+extern "C" bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *len) {
+    return coco_boot_read_text(path, buf, max, len) == COCO_TEXT_OK;
+}
+
+// PIZERO-296: can the editor open this file without changing what it does
+// not show? Too big (over max) or CR line ends (the editor would join its
+// lines and save them back as LF, until PIZERO-295) say no. *size is set
+// when the file exists.
+extern "C" int coco_boot_text_check(const char *path, uint32_t max, uint32_t *size) {
+    *size = 0;
+    FIL f;
+    FRESULT fo = f_open(&f, path, FA_READ);
+    if (fo == FR_NO_FILE || fo == FR_NO_PATH) return COCO_TEXT_MISSING;
+    if (fo != FR_OK) return COCO_TEXT_ERROR;
+    *size = (uint32_t)f_size(&f);
+    char head[512];
+    UINT br = 0;
+    FRESULT fr = f_read(&f, head, sizeof head, &br);
+    f_close(&f);
+    if (fr != FR_OK) return COCO_TEXT_ERROR;
+    if (*size > max) return COCO_TEXT_TOO_BIG;
+    if (tl_convention(head, (int)br) == TL_CR) return COCO_TEXT_CR;
+    return COCO_TEXT_OK;
 }
 
 // Save safely: write the whole text to PATH.tmp, then swap it in for PATH.
@@ -665,7 +766,9 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
 
     char line[260];
     size_t at_used = 0;
-    while (f_gets(line, sizeof(line), &f)) {
+    struct tl_reader rd;                         // PIZERO-294
+    tl_reader_init(&rd, fil_read, &f);
+    while (tl_gets(&rd, line, sizeof line)) {
         char *p = trim_leading(line);
         trim_trailing(p);
         if (*p == '\0' || *p == '#') continue;
@@ -740,6 +843,7 @@ static uint32_t g_dskw_last_ms;           // when the last sector was written
 #define DRIVES_PATH "0:/coco/drives.txt"
 static uint32_t g_drives_saved_hash;      // FNV-1a of the file's text (PIZERO-201: a copy was 416 bytes)
 static bool g_drives_quiet = false;
+static int  g_drives_eol = TL_NONE;       // PIZERO-294: the line ends the file had (LF if new)
 
 static uint32_t text_hash(const char *t) {
     uint32_t h = 2166136261u;
@@ -752,9 +856,9 @@ static void drives_save(void) {
     char text[COCO_NDRIVE * 104];
     int k = 0;
     for (unsigned d = 0; d < COCO_NDRIVE; d++)
-        k += snprintf(text + k, sizeof text - k, "%u%s = %s\n", d,
+        k += snprintf(text + k, sizeof text - k, "%u%s = %s%s", d,
                       (g_dsk_open[d] && g_dsk_wp(d)) ? " ro" : "",
-                      g_dsk_open[d] ? g_dsk_path[d] : "");
+                      g_dsk_open[d] ? g_dsk_path[d] : "", tl_eol(g_drives_eol));
     if (text_hash(text) == g_drives_saved_hash) return;
     if (coco_boot_save_text(DRIVES_PATH, text, (uint32_t)k)) {
         g_drives_saved_hash = text_hash(text);
@@ -856,10 +960,12 @@ extern "C" bool coco_boot_restore_drives(char *path0, size_t path0_sz) {
     // What the file says is what is saved, even where a disk is now missing,
     // so the next real change rewrites it rather than a failed mount here.
     g_drives_saved_hash = text_hash(text);
+    g_drives_eol = tl_convention(text, (int)n);   // PIZERO-294: kept when rewritten
     g_drives_quiet = true;
-    for (char *line = text, *nl; line && *line; line = nl) {
-        nl = strchr(line, '\n');
-        if (nl) *nl++ = '\0';
+    for (int pos = 0, ls, ll; pos < (int)n;) {
+        pos = tl_next(text, (int)n, pos, &ls, &ll);   // CR, LF or CRLF
+        char *line = text + ls;
+        line[ll] = '\0';                               // the line end, or the final NUL
         char *eq = strchr(line, '=');
         if (!eq || line[0] < '0' || line[0] > '3') continue;
         unsigned d = (unsigned)(line[0] - '0');

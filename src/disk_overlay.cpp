@@ -45,7 +45,9 @@
 #define OVL_NDRIVE 4
 
 // The three catalogue lists, then FILES (PIZERO-146): text files to edit.
-#define OVL_FILES  CAT_KINDS
+// PIZERO-296: FILES is settings.txt and autorun.txt, then every text file
+// under /coco, scanned into the shared catalogue as kind CAT_TEXT.
+#define OVL_FILES  CAT_TEXT
 #define OVL_INFO   (CAT_KINDS + 1)      // PIZERO-156: firmware and board facts
 #define OVL_LISTS  (CAT_KINDS + 2)
 // PIZERO-153: the F keys name lists by overlay_keys.h's numbers.
@@ -95,6 +97,13 @@ static unsigned drives_holding(const struct dsk_catalog *cat, int i) {
     return mask;
 }
 
+// PIZERO-296: FILES row i: the fixed files first, then the scanned ones.
+static const char *files_name(const struct dsk_catalog *cat, int i) {
+    if (i < OVL_NFILES) return k_files[i].name;
+    i -= OVL_NFILES;
+    return (cat->kind == CAT_TEXT && i < cat->n) ? cat->e[i].name : "";
+}
+
 static void draw(void) {
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     coco_boot_card_clear();
@@ -106,9 +115,14 @@ static void draw(void) {
         int n = g_info ? g_info(lines, CARD_ROWS - 2) : 0;
         for (int i = 0; i < n; i++) coco_boot_card_text(0, 1 + i, lines[i]);
     } else if (g_kind == OVL_FILES) {
-        for (int i = 0; i < OVL_NFILES; i++) {
-            coco_boot_card_text(0, 1 + i, k_files[i].name);
-            if (i == g_ovk.sel) coco_boot_card_invert_row(1 + i);
+        int n = g_ovk.n;
+        g_top = ovk_top(g_ovk.sel, g_top, n);
+        for (int r = 0; r < OVK_ROWS && g_top + r < n; r++) {
+            int i = g_top + r;
+            char line[CARD_COLS + 1];
+            snprintf(line, sizeof line, "%s", files_name(cat, i));   // clipped to the row
+            coco_boot_card_text(0, 1 + r, line);
+            if (i == g_ovk.sel) coco_boot_card_invert_row(1 + r);
         }
     } else if (cat->n == 0) {
         coco_boot_card_wrap(2, 3, 28, 6, k_empty[g_kind]);
@@ -137,10 +151,9 @@ static void draw(void) {
 // Rescan the list on show. A skipped-file notice replaces the legend until
 // the next key, so it cannot hide the controls for good.
 static void load_list(void) {
-    if (g_kind == OVL_FILES) { ovk_set_count(&g_ovk, OVL_NFILES); legend(); return; }
     if (g_kind == OVL_INFO)  { ovk_set_count(&g_ovk, 0); legend(); return; }
-    int n = coco_boot_rescan(g_kind);
-    ovk_set_count(&g_ovk, n);
+    int n = coco_boot_rescan(g_kind);                   // FILES: CAT_TEXT (PIZERO-296)
+    ovk_set_count(&g_ovk, g_kind == OVL_FILES ? OVL_NFILES + n : n);
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     if (cat->skipped_long) {
         char msg[CARD_COLS + 1];
@@ -307,17 +320,57 @@ static void naming_key(uint8_t mods, const uint8_t codes[6]) {
     if (!g_naming) { memcpy(g_ovk.prev, codes, 6); g_ovk.held = 0; }
 }
 
+// PIZERO-296: may the editor open this file without changing what it does
+// not show? If not, say why on the status row and return false. Nothing is
+// opened cut short, and a CR file waits for PIZERO-295, since today's editor
+// would join its lines and save them back with LF.
+static bool editable(const char *path) {
+    char msg[CARD_COLS + 1];
+    if (strlen(path) + 5 > 96) { set_status("PATH TOO LONG TO EDIT"); return false; }   // .tmp, g_path
+    uint32_t size = 0;
+    switch (coco_boot_text_check(path, TED_MAX, &size)) {
+    case COCO_TEXT_OK: case COCO_TEXT_MISSING: return true;
+    case COCO_TEXT_TOO_BIG:
+        snprintf(msg, sizeof msg, "TOO BIG: %lu KB, LIMIT 4 KB", (unsigned long)((size + 1023) / 1024));
+        set_status(msg);
+        return false;
+    case COCO_TEXT_CR: set_status("CR LINE ENDS: CANNOT EDIT YET"); return false;
+    default:           set_status("CANNOT READ IT: SD CARD?"); return false;
+    }
+}
+
+// CoCo source opens in upper case like the BASIC prompt; prose in lower.
+static bool caps_for(const char *name) {
+    const char *ext = strrchr(name, '.');
+    return ext && (!strcasecmp(ext, ".bas") || !strcasecmp(ext, ".asm"));
+}
+
 // PIZERO-146/147: ENTER in FILES opens the editor over the list. A missing
 // file starts from its template: every setting at its default for
-// settings.txt, commented examples for autorun.txt.
+// settings.txt, commented examples for autorun.txt. PIZERO-296: the rest of
+// the list is every text file under /coco, opened as it is.
 static void edit_file(const uint8_t codes[6]) {
     int i = g_ovk.sel;
-    if (i < 0 || i >= OVL_NFILES) return;
-    static char gen[1024];                   // PIZERO-164: the pad lines made it longer
-    const char *tmpl = k_files[i].tmpl;
-    if (!tmpl) { settings_template(gen, sizeof gen); tmpl = gen; }
-    if (text_editor_open(k_files[i].path, k_files[i].name, tmpl, k_files[i].tidy))
-        text_editor_hold(codes);            // the ENTER that opened it is not typed
+    if (i < 0 || i >= g_ovk.n) return;
+    if (i < OVL_NFILES) {
+        if (!editable(k_files[i].path)) return;
+        static char gen[1024];               // PIZERO-164: the pad lines made it longer
+        const char *tmpl = k_files[i].tmpl;
+        if (!tmpl) { settings_template(gen, sizeof gen); tmpl = gen; }
+        bool caps = !k_files[i].tidy;        // settings: lower case; autorun: BASIC's upper
+        if (text_editor_open(k_files[i].path, k_files[i].name, tmpl, k_files[i].tidy, caps))
+            text_editor_hold(codes);         // the ENTER that opened it is not typed
+        return;
+    }
+    const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+    char path[DSK_NAME_MAX + 16];
+    if (cat->kind != CAT_TEXT || !dsk_cat_path(cat, i - OVL_NFILES, path, sizeof path)) return;
+    if (!editable(path)) return;
+    const char *leaf = text_cat_leaf(cat->e[i - OVL_NFILES].name);
+    if (text_editor_open(path, leaf, "", false, caps_for(leaf)))
+        text_editor_hold(codes);
+    else
+        set_status("CANNOT OPEN IT");
 }
 
 // PIZERO-154: Tab on a disk, program or cartridge edits its own settings
@@ -329,7 +382,8 @@ static void edit_game_settings(const uint8_t codes[6]) {
     if (!dsk_cat_path(cat, g_ovk.sel, game, sizeof game)) return;
     if (!settings_game_path(game, path, sizeof path)) { set_status(OVL_NO_SETTINGS); return; }
     const char *slash = strrchr(path, '/');
-    if (text_editor_open(path, slash ? slash + 1 : path, GAME_TEMPLATE, true))
+    if (!editable(path)) return;             // PIZERO-296
+    if (text_editor_open(path, slash ? slash + 1 : path, GAME_TEMPLATE, true, false))
         text_editor_hold(codes);            // the Tab that opened it is not typed
 }
 

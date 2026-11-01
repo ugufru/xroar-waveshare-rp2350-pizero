@@ -80,6 +80,14 @@ bool coco_boot_clock_text(char *out, size_t n, char *src, size_t src_n);
 // and swaps it in, so a power cut never leaves a half-written file;
 // recover_text finishes a swap a power cut interrupted.
 bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *len);
+// PIZERO-296: the same, saying why it failed. A file over max is refused
+// (COCO_TEXT_TOO_BIG), never cut short, so a save cannot lose its end.
+enum { COCO_TEXT_OK = 0, COCO_TEXT_MISSING, COCO_TEXT_TOO_BIG, COCO_TEXT_ERROR, COCO_TEXT_CR };
+int coco_boot_read_text(const char *path, char *buf, uint32_t max, uint32_t *len);
+// PIZERO-296: whether the editor may open path (max: its whole-file limit):
+// COCO_TEXT_OK, _MISSING (a new file), _TOO_BIG, _CR (CR line ends, which the
+// editor cannot keep yet, PIZERO-295) or _ERROR. *size is the file's length.
+int coco_boot_text_check(const char *path, uint32_t max, uint32_t *size);
 bool coco_boot_save_text(const char *path, const char *buf, uint32_t len);
 void coco_boot_recover_text(const char *path);
 
