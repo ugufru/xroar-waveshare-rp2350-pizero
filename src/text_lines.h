@@ -15,6 +15,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 enum { TL_NONE = 0, TL_LF, TL_CR, TL_CRLF };
 
@@ -62,6 +63,27 @@ static inline int tl_to_lf(char *b, int n) {
         } else {
             b[k++] = b[i];
         }
+    }
+    return k;
+}
+
+// PIZERO-295: the editor keeps text with LF line ends and saves it with the
+// file's own. Copy from b (n bytes, from *pos) into out (cap bytes), writing
+// each LF as eol (NULL: unchanged), and advance *pos. Returns the bytes put
+// in out; a line end is never split across two calls, so cap must be at
+// least 2. Call until *pos reaches n.
+static inline int tl_out_chunk(const char *b, int n, int *pos, const char *eol, char *out, int cap) {
+    int k = 0, el = eol ? (int)strlen(eol) : 1;
+    while (*pos < n) {
+        char c = b[*pos];
+        if (c == '\n' && eol) {
+            if (k + el > cap) break;
+            for (int i = 0; i < el; i++) out[k++] = eol[i];
+        } else {
+            if (k + 1 > cap) break;
+            out[k++] = c;
+        }
+        (*pos)++;
     }
     return k;
 }

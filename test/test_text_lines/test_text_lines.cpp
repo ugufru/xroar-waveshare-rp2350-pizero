@@ -113,6 +113,30 @@ static void test_to_lf(void) {
     TEST_ASSERT_EQUAL_STRING("x\ny\n\nz\n", b);
 }
 
+// PIZERO-295: saving LF text with the file's own line ends, in chunks too
+// small to hold it, never splitting a CRLF.
+static const char *out_all(const char *in, const char *eol, int cap) {
+    static char res[256];
+    char chunk[8];
+    int pos = 0, n = (int)strlen(in), k = 0;
+    while (pos < n) {
+        int got = tl_out_chunk(in, n, &pos, eol, chunk, cap);
+        TEST_ASSERT_TRUE(got > 0);
+        memcpy(res + k, chunk, (size_t)got); k += got;
+    }
+    res[k] = 0;
+    return res;
+}
+
+static void test_out_chunk_writes_the_files_line_ends(void) {
+    for (int cap = 2; cap <= 8; cap++) {
+        TEST_ASSERT_EQUAL_STRING("a\rbc\r\rd", out_all("a\nbc\n\nd", "\r", cap));
+        TEST_ASSERT_EQUAL_STRING("a\r\nbc\r\n", out_all("a\nbc\n", "\r\n", cap));
+        TEST_ASSERT_EQUAL_STRING("a\nbc\n", out_all("a\nbc\n", "\n", cap));
+        TEST_ASSERT_EQUAL_STRING("a\nbc\n", out_all("a\nbc\n", NULL, cap));
+    }
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_next_splits_every_convention);
@@ -122,5 +146,6 @@ int main(int, char **) {
     RUN_TEST(test_gets_last_line_without_an_end);
     RUN_TEST(test_gets_cuts_a_long_line_once);
     RUN_TEST(test_to_lf);
+    RUN_TEST(test_out_chunk_writes_the_files_line_ends);
     return UNITY_END();
 }

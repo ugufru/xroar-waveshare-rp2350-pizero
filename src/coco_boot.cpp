@@ -588,27 +588,44 @@ static void tmp_path_for(const char *path, char *out, size_t n) {
     snprintf(out, n, "%s.tmp", path);
 }
 
-extern "C" bool coco_boot_save_text(const char *path, const char *buf, uint32_t len) {
+// PIZERO-295: eol is what each LF in buf is written as ("\r" for a CoCo
+// file, "\r\n" for Windows), or NULL to write buf as it is. The FIL and the
+// chunk buffer are on the heap: saves run from the USB key handler, where
+// core 0's stack is already deep (PIZERO-296's crash).
+extern "C" bool coco_boot_save_text_eol(const char *path, const char *buf, uint32_t len, const char *eol) {
     char tmp[96];
     tmp_path_for(path, tmp, sizeof tmp);
-    FIL f;
-    FRESULT fr = f_open(&f, tmp, FA_WRITE | FA_CREATE_ALWAYS);
-    if (fr != FR_OK) { Serial.printf("[save] %s: open failed (%d)\r\n", tmp, fr); return false; }
-    UINT bw = 0;
-    fr = f_write(&f, buf, len, &bw);
-    FRESULT fc = f_close(&f);                 // close flushes to the card
-    if (fr != FR_OK || fc != FR_OK || bw != len) {
-        Serial.printf("[save] %s: write failed (%d/%d, %u of %lu)\r\n", tmp, fr, fc,
-                      (unsigned)bw, (unsigned long)len);
+    struct { FIL f; char out[256]; } *w = (decltype(w))malloc(sizeof *w);
+    if (!w) { Serial.printf("[save] %s: no memory\r\n", path); return false; }
+    FRESULT fr = f_open(&w->f, tmp, FA_WRITE | FA_CREATE_ALWAYS);
+    if (fr != FR_OK) { Serial.printf("[save] %s: open failed (%d)\r\n", tmp, fr); free(w); return false; }
+    uint32_t written = 0;
+    bool ok = true;
+    for (int pos = 0; ok && pos < (int)len;) {
+        int n = tl_out_chunk(buf, (int)len, &pos, eol, w->out, (int)sizeof w->out);
+        UINT bw = 0;
+        ok = f_write(&w->f, w->out, (UINT)n, &bw) == FR_OK && bw == (UINT)n;
+        written += bw;
+    }
+    FRESULT fc = f_close(&w->f);              // close flushes to the card
+    free(w);
+    if (!ok || fc != FR_OK) {
+        Serial.printf("[save] %s: write failed (%d, %lu bytes written)\r\n", tmp, fc, (unsigned long)written);
         f_unlink(tmp);
         return false;
     }
+    len = written;
     fr = f_unlink(path);
     if (fr != FR_OK && fr != FR_NO_FILE) { Serial.printf("[save] %s: remove old failed (%d)\r\n", path, fr); return false; }
     fr = f_rename(tmp, path);
     if (fr != FR_OK) { Serial.printf("[save] %s: rename failed (%d)\r\n", path, fr); return false; }
-    Serial.printf("[save] %s: %lu bytes\r\n", path, (unsigned long)len);
+    Serial.printf("[save] %s: %lu bytes%s\r\n", path, (unsigned long)len,
+                  eol && eol[0] == '\r' ? (eol[1] ? " (CRLF)" : " (CR)") : "");
     return true;
+}
+
+extern "C" bool coco_boot_save_text(const char *path, const char *buf, uint32_t len) {
+    return coco_boot_save_text_eol(path, buf, len, nullptr);
 }
 
 // PIZERO-165: save the screen as the next /coco/screendumps/SCRnnnn.PNG.

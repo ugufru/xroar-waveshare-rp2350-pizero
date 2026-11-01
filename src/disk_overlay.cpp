@@ -324,11 +324,6 @@ static void naming_key(uint8_t mods, const uint8_t codes[6]) {
 // not show? If not, say why on the status row and return false. Nothing is
 // opened cut short, and a CR file waits for PIZERO-295, since today's editor
 // would join its lines and save them back with LF.
-// A CR file opens READ-ONLY instead (PIZERO-294): the view never saves, so
-// its line ends are safe, and its contents can still be read.
-static bool view_card_file(const char *path, const char *title, const uint8_t codes[6]);
-static const uint8_t *g_open_codes;            // the key that asked, for view_card_file
-
 static bool editable(const char *path) {
     char msg[CARD_COLS + 1];
     if (strlen(path) + 5 > 96) { set_status("PATH TOO LONG TO EDIT"); return false; }   // .tmp, g_path
@@ -339,12 +334,7 @@ static bool editable(const char *path) {
         snprintf(msg, sizeof msg, "TOO BIG: %lu KB, LIMIT 4 KB", (unsigned long)((size + 1023) / 1024));
         set_status(msg);
         return false;
-    case COCO_TEXT_CR: {
-        const char *slash = strrchr(path, '/');
-        if (!view_card_file(path, slash ? slash + 1 : path, g_open_codes))
-            set_status("CR LINE ENDS: CANNOT EDIT YET");
-        return false;                          // opened read-only, or refused
-    }
+    case COCO_TEXT_CR: return true;          // PIZERO-295: the editor keeps CR now
     default:           set_status("CANNOT READ IT: SD CARD?"); return false;
     }
 }
@@ -372,23 +362,11 @@ static void view_disk_file(int d, const char *name, const uint8_t codes[6]) {
     else set_status("CANNOT READ IT FROM THE DISK");
 }
 
-// PIZERO-294: a CR file on the card, shown read-only through the same view.
-static int fill_card_file(void *ctx, char *buf, uint32_t max, uint32_t *len) {
-    return coco_boot_read_text((const char *)ctx, buf, max, len);
-}
-
-static bool view_card_file(const char *path, const char *title, const uint8_t codes[6]) {
-    if (text_editor_open_view(title, fill_card_file, (void *)path) != COCO_TEXT_OK) return false;
-    if (codes) text_editor_hold(codes);
-    return true;
-}
-
 // PIZERO-146/147: ENTER in FILES opens the editor over the list. A missing
 // file starts from its template: every setting at its default for
 // settings.txt, commented examples for autorun.txt. PIZERO-296: the rest of
 // the list is every text file under /coco, opened as it is.
 static void edit_file(const uint8_t codes[6]) {
-    g_open_codes = codes;
     int i = g_ovk.sel;
     if (i < 0 || i >= g_ovk.n) return;
     if (i < OVL_NFILES) {
@@ -418,7 +396,6 @@ static void edit_file(const uint8_t codes[6]) {
 // PIZERO-154: Tab on a disk, program or cartridge edits its own settings
 // file, NAME.TXT beside it, from a template of commented examples if new.
 static void edit_game_settings(const uint8_t codes[6]) {
-    g_open_codes = codes;
     if (g_kind == OVL_FILES || g_kind == OVL_INFO) return;
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     char game[DSK_NAME_MAX + 16], path[DSK_NAME_MAX + 16];

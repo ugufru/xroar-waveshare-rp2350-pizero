@@ -30,6 +30,7 @@ static char g_title[CARD_COLS + 1];
 static char g_status[CARD_COLS + 1];
 static bool g_dirty_draw;
 static const char *g_hint = TEK_HINT;  // PIZERO-309: TEK_HINT_VIEW when read-only
+static int g_eol = TL_CR;              // PIZERO-295: the line ends a save writes
 
 static void status(const char *s) {
     snprintf(g_status, sizeof g_status, "%s", s);
@@ -104,11 +105,17 @@ bool text_editor_open(const char *path, const char *title, const char *template_
         return false;
     }
     if (rd == COCO_TEXT_OK) {
-        ted_load(g_t, g_t->buf, (int)n);       // ted_load compacts '\r' in place
+        // PIZERO-295: CR, LF and CRLF all read as lines, and a save writes
+        // back the file's own. A file with no line end yet has no precedent,
+        // so it gets the CoCo's, as a new one does.
+        g_eol = tl_convention(g_t->buf, (int)n);
+        if (g_eol == TL_NONE) g_eol = TL_CR;
+        ted_load(g_t, g_t->buf, tl_to_lf(g_t->buf, (int)n));
         status(g_hint);
     } else {
         ted_load(g_t, template_text ? template_text : "",
                  template_text ? (int)strlen(template_text) : 0);
+        g_eol = TL_CR;                         // PIZERO-295: new files in the CoCo's CR
         status(TEK_MSG_NEW);
     }
     // PIZERO-181: a settings file always opens the same way, comments first
@@ -122,7 +129,8 @@ bool text_editor_open(const char *path, const char *title, const char *template_
     }
     tek_init(&g_k);
     g_k.caps = caps;                       // settings, prose: lower case; autorun, source: BASIC's upper
-    Serial.printf("[editor] open %s (%d bytes)\r\n", g_path, g_t->len);
+    Serial.printf("[editor] open %s (%d bytes, %s)\r\n", g_path, g_t->len,
+                  g_eol == TL_CR ? "CR" : g_eol == TL_CRLF ? "CRLF" : "LF");
     draw();
     return true;
 }
@@ -158,7 +166,7 @@ void text_editor_key(uint8_t mods, const uint8_t codes[6], uint32_t frame) {
         break;
     case TEK_SAVE:
         if (g_k.view || !g_path[0]) break;    // PIZERO-309: read-only never saves
-        if (coco_boot_save_text(g_path, g_t->buf, (uint32_t)g_t->len)) {
+        if (coco_boot_save_text_eol(g_path, g_t->buf, (uint32_t)g_t->len, tl_eol(g_eol))) {
             g_t->dirty = false;
             const char *msg = g_saved ? g_saved(g_path) : nullptr;
             status(msg ? msg : TEK_MSG_SAVED);

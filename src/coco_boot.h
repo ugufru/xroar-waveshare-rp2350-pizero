@@ -93,6 +93,9 @@ int coco_boot_text_check(const char *path, uint32_t max, uint32_t *size);
 // _TOO_BIG (*len the true size), _MISSING or _ERROR.
 int coco_boot_dsk_read_text(unsigned d, const char *name, char *buf, uint32_t max, uint32_t *len);
 bool coco_boot_save_text(const char *path, const char *buf, uint32_t len);
+// PIZERO-295: the same, writing each LF in buf as eol ("\r", "\r\n"; NULL
+// for as it is), so the editor saves a file with its own line ends.
+bool coco_boot_save_text_eol(const char *path, const char *buf, uint32_t len, const char *eol);
 void coco_boot_recover_text(const char *path);
 
 // PIZERO-165: save the w x h RGB565 screen `fb` as the next
