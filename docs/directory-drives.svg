@@ -104,23 +104,23 @@
 <rect class="r2" x="342" y="440" width="276" height="52" rx="4"/>
 <text class="word t2" x="354" y="462">Partial</text>
 <text class="note t2" x="354" y="480">a new 8K ROM, assembler in build</text></g>
-<g class="cell"><title>Extended DECB, 6809 ROM space needed: Weak. DECB is full; CoCo 3 room unknown</title>
+<g class="cell"><title>Extended DECB, 6809 ROM space needed: Weak. 48 bytes free; none on a CoCo 3</title>
 <rect class="r1" x="622" y="440" width="276" height="52" rx="4"/>
 <text class="word t1" x="634" y="462">Weak</text>
-<text class="note t1" x="634" y="480">DECB is full; CoCo 3 room unknown</text></g>
+<text class="note t1" x="634" y="480">48 bytes free; none on a CoCo 3</text></g>
 <g class="cell"><title>Virtual floppy, 6809 ROM space needed: Strong. none</title>
 <rect class="r3" x="902" y="440" width="276" height="52" rx="4"/>
 <text class="word t3" x="914" y="462">Strong</text>
 <text class="note t3" x="914" y="480">none</text></g>
 <text class="crit" x="40" y="526">Same on CoCo 1, 2 and 3</text>
-<g class="cell"><title>Our own DOS, Same on CoCo 1, 2 and 3: Partial. must survive CoCo 3 patching</title>
+<g class="cell"><title>Our own DOS, Same on CoCo 1, 2 and 3: Partial. must plan for CoCo 3 patching</title>
 <rect class="r2" x="342" y="496" width="276" height="52" rx="4"/>
 <text class="word t2" x="354" y="518">Partial</text>
-<text class="note t2" x="354" y="536">must survive CoCo 3 patching</text></g>
-<g class="cell"><title>Extended DECB, Same on CoCo 1, 2 and 3: Partial. CoCo 3 room unverified</title>
-<rect class="r2" x="622" y="496" width="276" height="52" rx="4"/>
-<text class="word t2" x="634" y="518">Partial</text>
-<text class="note t2" x="634" y="536">CoCo 3 room unverified</text></g>
+<text class="note t2" x="354" y="536">must plan for CoCo 3 patching</text></g>
+<g class="cell"><title>Extended DECB, Same on CoCo 1, 2 and 3: Weak. the CoCo 3 window is full</title>
+<rect class="r1" x="622" y="496" width="276" height="52" rx="4"/>
+<text class="word t1" x="634" y="518">Weak</text>
+<text class="note t1" x="634" y="536">the CoCo 3 window is full</text></g>
 <g class="cell"><title>Virtual floppy, Same on CoCo 1, 2 and 3: Strong. it sits below the ROM</title>
 <rect class="r3" x="902" y="496" width="276" height="52" rx="4"/>
 <text class="word t3" x="914" y="518">Strong</text>
@@ -225,15 +225,15 @@
 <rect class="r2" x="902" y="1022" width="120" height="30" rx="4"/>
 <text class="word t2" x="914" y="1042">Helps</text></g>
 <line class="rule" x1="40" x2="1180" y1="1060" y2="1060"/>
-<text class="crit" x="40" y="1080">Check the DECB facts in the disassembly</text>
-<text class="sub" x="40" y="1097">filename parser, FAT re-read, CoCo 3 room</text>
-<g class="cell"><title>Check the DECB facts in the disassembly: helps for Our own DOS</title>
+<text class="crit" x="40" y="1080">Check the DECB facts in the ROMs</text>
+<text class="sub" x="40" y="1097">done 2026-11-01: FAT, filenames, CoCo 3</text>
+<g class="cell"><title>Check the DECB facts in the ROMs: helps for Our own DOS</title>
 <rect class="r2" x="342" y="1068" width="120" height="30" rx="4"/>
 <text class="word t2" x="354" y="1088">Helps</text></g>
-<g class="cell"><title>Check the DECB facts in the disassembly: core for Extended DECB</title>
+<g class="cell"><title>Check the DECB facts in the ROMs: core for Extended DECB</title>
 <rect class="r3" x="622" y="1068" width="120" height="30" rx="4"/>
 <text class="word t3" x="634" y="1088">Core piece</text></g>
-<g class="cell"><title>Check the DECB facts in the disassembly: core for Virtual floppy</title>
+<g class="cell"><title>Check the DECB facts in the ROMs: core for Virtual floppy</title>
 <rect class="r3" x="902" y="1068" width="120" height="30" rx="4"/>
 <text class="word t3" x="914" y="1088">Core piece</text></g>
 <line class="rule" x1="40" x2="1180" y1="1106" y2="1106"/>

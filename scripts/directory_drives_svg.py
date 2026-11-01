@@ -23,9 +23,9 @@ ROWS = [
     ("Capacity", "files per drive, size per file",
      [(S, "host limits"), (P, "DECB limits on plain commands"), (P, "156K a file, 72 a view, no disk full")]),
     ("6809 ROM space needed", "",
-     [(P, "a new 8K ROM, assembler in build"), (X, "DECB is full; CoCo 3 room unknown"), (S, "none")]),
+     [(P, "a new 8K ROM, assembler in build"), (X, "48 bytes free; none on a CoCo 3"), (S, "none")]),
     ("Same on CoCo 1, 2 and 3", "",
-     [(P, "must survive CoCo 3 patching"), (P, "CoCo 3 room unverified"), (S, "it sits below the ROM")]),
+     [(P, "must plan for CoCo 3 patching"), (X, "the CoCo 3 window is full"), (S, "it sits below the ROM")]),
     ("Build effort", "what the hard part is",
      [(X, "a DOS's BASIC side, from scratch"), (P, "hooks inside a full 8K ROM"), (P, "write inference, refresh rule")]),
     ("Shares work with native/Forth", "the PIZERO-72 hypercall",
@@ -38,7 +38,7 @@ WINS = [
     ("Editor reads any line ending", "reads CR, LF, CRLF; new files CR", [H, H, H]),
     ("Unpack GAME.DSK into GAME/, pack it back", "the same mapping option 3 runs on", [H, H, C]),
     ("ZIP import", "open the zipped .DSK files most archives ship", [H, H, H]),
-    ("Check the DECB facts in the disassembly", "filename parser, FAT re-read, CoCo 3 room", [H, C, C]),
+    ("Check the DECB facts in the ROMs", "done 2026-11-01: FAT, filenames, CoCo 3", [H, C, C]),
     ("Overlay conveniences", "text files, Markdown, boot flag, DIR popup, hex editor", [H, H, H]),
 ]
 

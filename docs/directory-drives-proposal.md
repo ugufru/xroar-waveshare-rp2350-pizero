@@ -3,8 +3,8 @@
 Written 2026-11-01 (PIZERO-288) from a discussion about reaching files on a
 USB drive (FAT) from Disk BASIC: Disk BASIC thinks it is reading a floppy, but
 it is really reading a directory chosen beforehand. It is a direction, not a
-plan with dates. Nothing here is built yet, and the facts marked **to verify**
-come from memory of Disk BASIC's internals, not from reading the disassembly.
+plan with dates. Nothing here is built yet. The Disk BASIC and CoCo 3 facts
+below were checked in the ROMs themselves (see *Verified in the ROMs*).
 
 ![How the three options compare, and the short-term wins](directory-drives.svg)
 
@@ -41,24 +41,38 @@ what BASIC sees.
 - **File contents are the host file's bytes.** A tokenized `.BAS` or a
   LOADM-format `.BIN` is byte for byte what sits in the granules. No
   conversion is needed, which is what makes option 3 possible.
-- **State.** DECB keeps each drive's FAT in RAM with a count of the files open
-  on that drive, and re-reads the FAT from disk when it needs it and no file
-  is open there. **To verify** the exact rule.
+- **State.** DECB keeps a 74-byte copy of each drive's FAT in RAM at $0800 +
+  74 x drive: 6 control bytes, then the 68 FAT bytes. Byte 0 counts the files
+  open on that drive. The FAT read routine ($C79D) uses the copy while that
+  count is nonzero, and otherwise re-reads track 17 sector 2 from the disk
+  every time (and clears byte 1, the changed flag). The FAT is written back by
+  $C71E. Verified.
 - **DSKCON**, the sector routine, is reached through the vector at $C004, with
   its parameters at $EA to $F0 (operation, drive, track, sector, buffer
   pointer, status). Many programs call it directly.
-- **ROM room.** DECB 1.1 is 8 KB at $C000 to $DFFF and nearly full. On a CoCo
-  1 or 2 the cartridge window runs to $FEFF, so about another 8 KB is free
-  above it. The CoCo 3 is tighter: Super Extended BASIC runs from RAM and uses
-  the high area, and patches DECB when it copies it. **To verify** against the
-  CoCo 3 memory map.
+- **ROM room.** DECB 1.1 is 8 KB at $C000 to $DFFF with 48 unused bytes
+  ($D8D0 to $D8FF). On a CoCo 1 or 2 the cartridge window runs to $FEFF, so
+  the 8 KB above DECB is free in a cartridge we emulate. On a CoCo 3 there is
+  no room in that window: Super Extended BASIC's code fills $E000 to $FEFF,
+  and $8000 to $BFFF is full too. Verified.
+- **The CoCo 3 patches DECB.** At boot it copies its ROMs to RAM and, if
+  `DK` is at $C000, patches Disk BASIC in place (routine $C322 in the CoCo 3
+  ROM): for DECB 1.1 it writes 11 NOPs at $C8B4 and `JMP $E297` at $C0D9; for
+  1.0 (told apart by the DSKCON vector at $C004) `JMP $E29D` at $C0C6.
+  Verified.
 - **Keywords.** The token space is finite and Super Extended BASIC uses much
   of it. Accepting more in existing keywords (quoted paths in `LOAD`, `OPEN`,
   `DIR`, `DRIVE`) is cheaper than adding keywords.
-- **Default extensions.** A name without an extension gets one from the
-  command: `BAS` for LOAD and SAVE, `BIN` for LOADM and SAVEM, `DAT` for OPEN.
-  A trailing dot (`"LICENSE."`) may give an explicitly blank one. **To
-  verify** in the filename parser.
+- **Filenames and default extensions.** The parser ($C938) starts with a
+  blank name and the command's default extension, from a table at $C2A6:
+  `BAS` (the LOAD and SAVE family), `DAT` (OPEN), `BIN` (LOADM and SAVEM), and
+  blank (KILL, and COPY). A `.` or `/` clears the extension to spaces before
+  reading up to 3 characters, so a trailing dot (`"LICENSE."`) gives a blank
+  extension. A name over 8 characters, an extension over 3, or nothing before
+  the dot is `?FN ERROR`. So Disk BASIC itself cannot make a name that is not
+  8.3, and cannot even type one starting with a dot. Verified; which command
+  uses which default is read from the callers, so the LOAD/SAVE and COPY
+  attributions are inferred.
 
 ## Option 1: our own DOS
 
@@ -73,8 +87,10 @@ behaviour is reproduced only where software needs it, through hooks.
 - **Against:** a program that goes below BASIC (DSKCON, `DSKI$`, a sector
   editor, its own loader) finds no disk, unless option 3 is built underneath
   anyway. Compatibility is only as good as our copy of DECB's syntax and side
-  effects. The most work of the three, and the CoCo 3's patching of DECB has
-  to be survived.
+  effects. The most work of the three. On a CoCo 3, a ROM that starts with
+  `DK` gets Super Extended BASIC's patches written at DECB's fixed addresses
+  ($C0D9, $C8B4), and one that does not is not treated as Disk BASIC at all,
+  so the replacement has to plan for one or the other.
 
 ## Option 2: extended Disk BASIC
 
@@ -84,8 +100,10 @@ to the host through the hypercall before DECB's parser packs them into 8.3.
 
 - **For:** everything DECB does keeps working, because DECB is still there.
   Long names reach the host without mangling.
-- **Against:** finding hook points in a full 8 KB ROM, and the CoCo 3's room
-  is unverified. Plain DECB commands still see floppy limits. Sector-level
+- **Against:** DECB has 48 spare bytes, and on a CoCo 3 the whole $C000 to
+  $FEFF window is taken (DECB and Super Extended BASIC), so an extension there
+  needs memory outside the 64 KB map (another GIME block) or has to shrink to
+  a stub that calls the host. Plain DECB commands still see floppy limits. Sector-level
   software works on `.DSK` images but needs option 3 to see a directory.
 
 ## Option 3: a virtual floppy built from a directory
@@ -115,8 +133,9 @@ and can be read on the CoCo. Anything meant to be read is fair game.
 **Files without an extension** (`LICENSE`, `README`) are valid 8.3 and map
 1:1: FAT and DECB both pad the extension with spaces. They come only from the
 host, since every DECB save supplies an extension. They are not given one
-(mapping them to `.TXT` would break the name identity). Reaching them from
-BASIC depends on the trailing-dot rule above.
+(mapping them to `.TXT` would break the name identity). From BASIC, KILL and
+COPY reach them as `"LICENSE"`, since their default extension is blank, and
+every other command as `"LICENSE."`.
 
 **Building the view.** At mount, give each file a run of granules and build
 the FAT and the 9 directory sectors (about 2.5 KB). Data is not copied: a
@@ -139,8 +158,9 @@ Disk BASIC ends a line with CR ($0D) only, so an ASCII BASIC program saved on a
 Mac with LF line endings will not LOAD until its line endings are CR.
 
 **When the view may change.** It must hold still while DECB holds a FAT copy
-with files open. A natural refresh point is a FAT read while no file is open on
-that drive: rebuild there, hold until the next. This is the same hazard as
+with files open. Disk BASIC re-reads the FAT from the disk exactly when no
+file is open on that drive (verified, above), so that read is the refresh
+point: rebuild the view there, hold it until the next. This is the same hazard as
 swapping a real floppy with a file open.
 
 **No more disk full.** The emulator owns the disk, so free space is its to
@@ -181,8 +201,8 @@ DriveWire's virtual drives work) than by a made-up disk.
 | Long file names | Strong: native | Strong: through the extension | Weak: 8.3 only, by design |
 | A host directory just works | Strong: every file | Strong: every file, extended commands | Strong: 8.3 files, byte for byte |
 | Capacity | Strong: host limits | Partial: DECB limits on plain commands | Partial: 156K a file, 72 a view, no disk full |
-| 6809 ROM space needed | Partial: a new 8K ROM, assembler in the build | Weak: DECB is full, CoCo 3 room unknown | Strong: none |
-| Same on CoCo 1, 2 and 3 | Partial: must survive CoCo 3 patching | Partial: CoCo 3 room unverified | Strong: below the ROM |
+| 6809 ROM space needed | Partial: a new 8K ROM, assembler in the build | Weak: 48 bytes free in DECB; none on a CoCo 3 | Strong: none |
+| Same on CoCo 1, 2 and 3 | Partial: must plan for CoCo 3 patching | Weak: the CoCo 3 window is full | Strong: below the ROM |
 | Build effort | Weak: a DOS's BASIC side from scratch | Partial: hooks inside a full ROM | Partial: write inference, refresh rule |
 | Shares work with native/Forth | Strong: same hypercall | Strong: same hypercall | Partial: shares the storage backend |
 
@@ -207,7 +227,7 @@ option is built. "Core" means the option is partly built out of it.
 | The editor and viewer read any line ending and UTF-8 (next sections) | helps | helps | helps |
 | Unpack a `.DSK` into a subdirectory of the same name and pack one back (next section) | helps | helps | core |
 | ZIP import: open the zipped `.DSK` files most archives ship | helps | helps | helps |
-| Check the DECB facts marked **to verify** in the disassembly (*Disk BASIC Unravelled*) | helps | core | core |
+| Check the DECB facts in the ROMs (done 2026-11-01, *Verified in the ROMs*) | helps | core | core |
 | Overlay conveniences (next section) | helps | helps | helps |
 
 The first win is the important one: option 3 can be built and proven on the
@@ -347,7 +367,26 @@ These help users now, whichever option ships.
 - The USB drive shares the PIO-USB host port through a hub: full speed, about
   1 MB a second, plenty for a CoCo.
 
-## Open questions
+## Verified in the ROMs
 
-- The **to verify** facts: the FAT re-read rule, the trailing-dot rule, and
-  the CoCo 3's ROM room and DECB patching.
+Checked 2026-11-01 by disassembling the ROM images in `~/github/cocotech/references`
+(`disk11.rom`, Disk BASIC 1.1, MD5 `8cab28f4b7311b8df63c07bb3b59bfd5`) and the
+CoCo 3 ROM (`coco3.rom`, MD5 `7233c6c429f3ce1c7392f28a933e0b6f`), with the
+error tables in `bas12.rom` and `extbas11.rom`. Addresses are as mapped at run
+time.
+
+| Fact | Where | What the code does |
+|---|---|---|
+| FAT re-read | DECB $C79D | FAT copy at $0800 + 74 x drive. If byte 0 (open files) is nonzero, return; else clear byte 1, read track $11 sector 2 into $0600, copy 68 bytes in. |
+| FAT write | DECB $C71E | Copy the 68 bytes to $0600 and write track $11 sector 2 (operation 3). Called after KILL frees a chain, and from two other paths ($C376, $C5B7). |
+| Filename parser | DECB $C938 | Name field $094C to $0953 filled with spaces, extension $0954 to $0956 seeded with the default; `0:` prefix or `:0` suffix picks the drive; `.` or `/` blanks the extension; overflow or an empty name is error 31, `?FN`. |
+| Default extensions | DECB $C2A6 | `BAS` $C2A6 (used at $CA33), blank $C2A9 (KILL $C6EF, COPY $D3B9 and $D3CB), `DAT` $C2AC (OPEN $C466), `BIN` $C2AF ($CFBB). |
+| `?FN` is error 31 | `bas12.rom` $ABAF, `extbas11.rom`, DECB $C290 | 25 Color BASIC codes, then `UF` `NE`, then DECB's `BR DF OB WP FN FS AE FO SE`; FN is index 31, B = $3E. |
+| DECB spare room | `disk11.rom` | One unused run: $D8D0 to $D8FF, 48 bytes of $00. |
+| CoCo 3 room | `coco3.rom` | No unused run of 32 bytes or more in $8000 to $BFFF or $E000 to $FEFF. The internal $C000 to $DFFF is boot code, overwritten by Disk BASIC when a disk cartridge is present. |
+| CoCo 3 patches DECB | CoCo 3 $C120, $C322 | If `DK` at $C000: DSKCON vector high byte $D6 (1.0) gets `JMP $E29D` at $C0C6; otherwise (1.1) 11 NOPs at $C8B4 and `JMP $E297` at $C0D9. |
+
+What this changes: option 3's refresh rule rests on DECB's own behaviour, not
+a guess; option 2 has no room on a CoCo 3 without leaving the 64 KB map, which
+strengthens the recommendation; and names that are not 8.3 cannot be made by
+Disk BASIC at all, so the 8.3 rule matches DECB exactly.
