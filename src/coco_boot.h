@@ -88,6 +88,10 @@ int coco_boot_read_text(const char *path, char *buf, uint32_t max, uint32_t *len
 // COCO_TEXT_OK, _MISSING (a new file), _TOO_BIG, _CR (CR line ends, which the
 // editor cannot keep yet, PIZERO-295) or _ERROR. *size is the file's length.
 int coco_boot_text_check(const char *path, uint32_t max, uint32_t *size);
+// PIZERO-309: a text file inside the disk in drive d, by the name the FILES
+// list shows ("README.TXT:1"), read into buf (max bytes). COCO_TEXT_OK,
+// _TOO_BIG (*len the true size), _MISSING or _ERROR.
+int coco_boot_dsk_read_text(unsigned d, const char *name, char *buf, uint32_t max, uint32_t *len);
 bool coco_boot_save_text(const char *path, const char *buf, uint32_t len);
 void coco_boot_recover_text(const char *path);
 

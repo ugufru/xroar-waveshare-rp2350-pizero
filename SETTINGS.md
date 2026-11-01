@@ -12,6 +12,7 @@ is no file yet, it opens a template listing every setting at its default.
 
 - Arrows, Home/End and PgUp/PgDn move; typing inserts; Backspace, Delete and
   Enter work as usual. Held keys repeat.
+- **F5** wraps long lines onto the next row, and turns wrapping off again.
 - **Ctrl-S** saves. The settings take effect straight away, no reboot.
 - **ESC** leaves. With unsaved changes, the first ESC warns and a second one
   discards them.

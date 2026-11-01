@@ -28,6 +28,14 @@ void text_editor_init(text_editor_present_fn present, text_editor_saved_fn saved
 bool text_editor_open(const char *path, const char *title, const char *template_text, bool tidy,
                       bool caps);
 
+// PIZERO-309: open text that is not a card file (a file inside a mounted
+// disk) READ-ONLY: fill(ctx, buf, max, &len) puts it in the editor's own
+// buffer and returns COCO_TEXT_OK or the reason it cannot (coco_boot.h).
+// Its CR line ends are shown as lines, since nothing is saved back; only
+// moving and ESC work. Returns COCO_TEXT_OK when open.
+typedef int (*text_editor_fill_fn)(void *ctx, char *buf, uint32_t max, uint32_t *len);
+int text_editor_open_view(const char *title, text_editor_fill_fn fill, void *ctx);
+
 bool text_editor_is_open(void);
 
 // Treat these keys as already held, so the key that opened the editor is

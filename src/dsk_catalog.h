@@ -50,6 +50,9 @@ enum cat_kind { CAT_DSK = 0, CAT_BIN, CAT_CART, CAT_KINDS };
 // always with dir DSK_DIR_ROOT, so dsk_cat_path gives "0:/coco/<name>".
 #define CAT_TEXT CAT_KINDS
 enum { DSK_DIR_DSK = 0, DSK_DIR_ROOT = 1 };   // the kind's folder, then /coco
+// PIZERO-309: in the FILES list, a file inside the disk in drive d has dir
+// DSK_DIR_DRIVE0 + d and a name like "README.TXT:1". It has no card path.
+#define DSK_DIR_DRIVE0 2
 
 // The kind's own folder; dir DSK_DIR_ROOT is always /coco.
 static inline const char *cat_kind_dir(int kind) {
@@ -188,6 +191,22 @@ static inline bool text_cat_add(struct dsk_catalog *c, const char *sub, const ch
     return true;
 }
 
+// PIZERO-309: a text file inside the disk in drive d, listed as Disk BASIC
+// names it ("README.TXT:1").
+static inline bool text_cat_add_disk(struct dsk_catalog *c, unsigned d, const char *name) {
+    if (strlen(name) >= DSK_NAME_MAX) { c->skipped_long++; return false; }
+    if (c->n >= DSK_CAT_MAX) { c->skipped_full++; return false; }
+    struct dsk_entry *e = &c->e[c->n++];
+    strcpy(e->name, name);
+    e->dir = (uint8_t)(DSK_DIR_DRIVE0 + d);
+    return true;
+}
+
+// The drive whose disk holds entry i, or -1 for a file on the card.
+static inline int dsk_cat_drive(const struct dsk_catalog *c, int i) {
+    return (i >= 0 && i < c->n && c->e[i].dir >= DSK_DIR_DRIVE0) ? c->e[i].dir - DSK_DIR_DRIVE0 : -1;
+}
+
 // The file's own name, after its folder: what the editor's title shows.
 static inline const char *text_cat_leaf(const char *rel) {
     const char *slash = strrchr(rel, '/');
@@ -198,6 +217,7 @@ static inline const char *text_cat_leaf(const char *rel) {
 static inline bool dsk_cat_path(const struct dsk_catalog *c, int i,
                                 char *out, size_t out_sz) {
     if (i < 0 || i >= c->n || !out) return false;
+    if (c->e[i].dir >= DSK_DIR_DRIVE0) return false;   // inside a disk: no card path
     int len = snprintf(out, out_sz, "%s/%s",
                        c->e[i].dir == DSK_DIR_DSK ? cat_kind_dir(c->kind) : "0:/coco",
                        c->e[i].name);

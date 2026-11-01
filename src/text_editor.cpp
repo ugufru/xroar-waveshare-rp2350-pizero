@@ -19,6 +19,7 @@
 #include "text_card.h"
 #include "coco_boot.h"
 #include "settings.h"
+#include "text_lines.h"       // PIZERO-309: tl_to_lf for the read-only view
 
 static struct text_edit *g_t;            // on the heap only while editing
 static struct tek_state g_k;
@@ -28,6 +29,7 @@ static char g_path[96];               // a game's NAME.TXT can be ~80 (PIZERO-15
 static char g_title[CARD_COLS + 1];
 static char g_status[CARD_COLS + 1];
 static bool g_dirty_draw;
+static const char *g_hint = TEK_HINT;  // PIZERO-309: TEK_HINT_VIEW when read-only
 
 static void status(const char *s) {
     snprintf(g_status, sizeof g_status, "%s", s);
@@ -41,11 +43,28 @@ static void draw(void) {
     coco_boot_card_center(0, title);
     coco_boot_card_invert_row(0);
     char row[CARD_COLS + 1];
-    for (int r = 0; r < TEK_ROWS; r++)
-        if (ted_row(g_t, g_t->top + r, g_t->left, TEK_COLS, row))
-            coco_boot_card_text(0, 1 + r, row);
     int line = ted_line_of(g_t, g_t->cur), col = ted_col_of(g_t, g_t->cur);
-    coco_boot_card_invert_cell(col - g_t->left, 1 + line - g_t->top);
+    if (g_t->wrap) {                        // F5: long lines continue on the next row
+        int r = 0;
+        for (int l = g_t->top; r < TEK_ROWS; l++) {
+            if (ted_offset_of_line(g_t, l) < 0) break;
+            int len = ted_line_len(g_t, l);
+            for (int k = 0; k < ted_wrap_rows(len, TEK_COLS) && r < TEK_ROWS; k++, r++) {
+                ted_wrap_row(g_t, l, k, TEK_COLS, row);
+                coco_boot_card_text(0, 1 + r, row);
+                if (l == line) {
+                    int cr, cc;
+                    ted_wrap_at(col, len, TEK_COLS, &cr, &cc);
+                    if (cr == k) coco_boot_card_invert_cell(cc, 1 + r);
+                }
+            }
+        }
+    } else {
+        for (int r = 0; r < TEK_ROWS; r++)
+            if (ted_row(g_t, g_t->top + r, g_t->left, TEK_COLS, row))
+                coco_boot_card_text(0, 1 + r, row);
+        coco_boot_card_invert_cell(col - g_t->left, 1 + line - g_t->top);
+    }
     coco_boot_card_text(0, CARD_ROWS - 1, g_status);
     if (g_present) g_present();
     g_dirty_draw = false;
@@ -76,6 +95,7 @@ bool text_editor_open(const char *path, const char *title, const char *template_
     }
     snprintf(g_path, sizeof g_path, "%s", path);
     snprintf(g_title, sizeof g_title, "%s", title);
+    g_hint = TEK_HINT;
     uint32_t n = 0;
     int rd = coco_boot_read_text(path, g_t->buf, TED_MAX, &n);
     if (rd == COCO_TEXT_TOO_BIG || rd == COCO_TEXT_ERROR) {   // PIZERO-296: never cut short
@@ -85,7 +105,7 @@ bool text_editor_open(const char *path, const char *title, const char *template_
     }
     if (rd == COCO_TEXT_OK) {
         ted_load(g_t, g_t->buf, (int)n);       // ted_load compacts '\r' in place
-        status(TEK_HINT);
+        status(g_hint);
     } else {
         ted_load(g_t, template_text ? template_text : "",
                  template_text ? (int)strlen(template_text) : 0);
@@ -107,17 +127,37 @@ bool text_editor_open(const char *path, const char *title, const char *template_
     return true;
 }
 
+int text_editor_open_view(const char *title, text_editor_fill_fn fill, void *ctx) {
+    g_t = (struct text_edit *)malloc(sizeof *g_t);
+    if (!g_t) return COCO_TEXT_ERROR;
+    uint32_t n = 0;
+    int rc = fill(ctx, g_t->buf, TED_MAX, &n);
+    if (rc != COCO_TEXT_OK) { close_editor(); return rc; }
+    int m = tl_to_lf(g_t->buf, (int)n);       // CR files read as lines; nothing is saved
+    ted_load(g_t, g_t->buf, m);
+    g_path[0] = '\0';                         // no card file: a save can never happen
+    snprintf(g_title, sizeof g_title, "%s", title);
+    tek_init(&g_k);
+    g_k.view = true;
+    g_hint = TEK_HINT_VIEW;
+    status(g_hint);
+    Serial.printf("[editor] view %s (%d bytes)\r\n", title, g_t->len);
+    draw();
+    return COCO_TEXT_OK;
+}
+
 void text_editor_key(uint8_t mods, const uint8_t codes[6], uint32_t frame) {
     if (!g_t) return;
     uint8_t a = tek_report(&g_k, g_t, mods, codes, frame);
     switch (a) {
     case TEK_CHANGED:
-        status(g_t->full ? TEK_MSG_FULL : TEK_HINT);
+        status(g_t->full ? TEK_MSG_FULL : g_hint);
         break;
     case TEK_WARN_UNSAVED:
         status(TEK_MSG_WARN);
         break;
     case TEK_SAVE:
+        if (g_k.view || !g_path[0]) break;    // PIZERO-309: read-only never saves
         if (coco_boot_save_text(g_path, g_t->buf, (uint32_t)g_t->len)) {
             g_t->dirty = false;
             const char *msg = g_saved ? g_saved(g_path) : nullptr;
@@ -138,6 +178,6 @@ void text_editor_key(uint8_t mods, const uint8_t codes[6], uint32_t frame) {
 void text_editor_frame(uint32_t frame) {
     if (!g_t) return;
     if (tek_tick(&g_k, g_t, frame) == TEK_CHANGED)
-        status(g_t->full ? TEK_MSG_FULL : TEK_HINT);
+        status(g_t->full ? TEK_MSG_FULL : g_hint);
     if (g_dirty_draw) draw();
 }

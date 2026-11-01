@@ -23,7 +23,7 @@
 
 // The editor's fixed words, here so the host test can check they fit the
 // 32-column card and use only characters the 6847 can draw.
-#define TEK_HINT        "CTRL-S SAVE   ESC EXIT"
+#define TEK_HINT        "CTRL-S SAVE  F5 WRAP  ESC EXIT"
 #define TEK_MSG_SAVED   "SAVED"
 #define TEK_MSG_APPLIED "SAVED AND APPLIED"
 #define TEK_MSG_NEXT    "SAVED: USED AT NEXT POWER-ON"
@@ -33,6 +33,7 @@
 #define TEK_MSG_FULL    "FILE FULL: 4096 CHARACTERS"
 #define TEK_MSG_NEW     "NEW FILE: CTRL-S TO CREATE IT"
 #define TEK_MSG_NOMEM   "NOT ENOUGH MEMORY TO EDIT"
+#define TEK_HINT_VIEW   "VIEW ONLY  F5 WRAP  ESC EXIT"  // PIZERO-309: a file on a disk
 
 #define TEK_ROWS          14   // text rows on screen
 #define TEK_COLS          32
@@ -54,6 +55,7 @@ struct tek_state {
     uint32_t next_repeat;
     bool     esc_armed;        // the last key was an ESC that warned
     bool     caps;             // letters type upper case (Caps Lock toggles)
+    bool     view;             // PIZERO-309: read-only: only moving and ESC
 };
 
 // Every open starts in upper case, like the BASIC prompt.
@@ -89,12 +91,33 @@ static inline uint8_t tek_apply(struct tek_state *k, struct text_edit *t,
     bool shift = (mods & 0x22) != 0, ctrl = (mods & 0x11) != 0;
     if (code == 0x39) { k->caps = !k->caps; return TEK_NONE; }   // Caps Lock
     if (code == 0x29) {                                  // ESC
-        if (!t->dirty || k->esc_armed) return TEK_CANCEL;
+        if (k->view || !t->dirty || k->esc_armed) return TEK_CANCEL;
         k->esc_armed = true;
         return TEK_WARN_UNSAVED;
     }
     k->esc_armed = false;
-    if (ctrl) return (code == 0x16) ? TEK_SAVE : TEK_NONE;   // Ctrl-S
+    if (code == 0x3E) {                                  // F5: wrap long lines, or not
+        t->wrap = !t->wrap;
+        t->left = 0;
+        ted_follow(t, TEK_ROWS, TEK_COLS);
+        return TEK_CHANGED;
+    }
+    if (ctrl) return (code == 0x16 && !k->view) ? TEK_SAVE : TEK_NONE;   // Ctrl-S
+    if (k->view) {                                       // PIZERO-309: move only
+        switch (code) {
+        case 0x50: ted_left(t);  break;
+        case 0x4F: ted_right(t); break;
+        case 0x52: ted_vertical(t, -1);        break;
+        case 0x51: ted_vertical(t, +1);        break;
+        case 0x4B: ted_vertical(t, -TEK_ROWS); break;
+        case 0x4E: ted_vertical(t, +TEK_ROWS); break;
+        case 0x4A: ted_home(t);  break;
+        case 0x4D: ted_end(t);   break;
+        default: return TEK_NONE;
+        }
+        ted_follow(t, TEK_ROWS, TEK_COLS);
+        return TEK_CHANGED;
+    }
     switch (code) {
     case 0x28: case 0x58: ted_insert(t, '\n'); break;    // Enter, keypad Enter
     case 0x2A: ted_backspace(t); break;
@@ -132,7 +155,7 @@ static inline uint8_t tek_report(struct tek_state *k, struct text_edit *t,
         uint8_t c = codes[i];
         if (!c || tek_has(k->prev, c)) continue;
         action = tek_apply(k, t, c, mods);
-        k->held = (c == 0x29 || c == 0x39) ? 0 : c;      // ESC and Caps Lock never repeat
+        k->held = (c == 0x29 || c == 0x39 || c == 0x3E) ? 0 : c;   // ESC, Caps Lock, F5 never repeat
         k->held_mods = mods;
         k->next_repeat = frame + TEK_REPEAT_DELAY;
         if (action == TEK_SAVE || action == TEK_CANCEL) k->held = 0;

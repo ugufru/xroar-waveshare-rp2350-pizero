@@ -207,12 +207,83 @@ static void test_caps_lock_held_does_not_repeat(void) {
 static void test_editor_words_fit_and_print(void) {
     const char *all[] = { TEK_HINT, TEK_MSG_SAVED, TEK_MSG_FAILED, TEK_MSG_WARN,
                           TEK_MSG_FULL, TEK_MSG_NEW, TEK_MSG_NOMEM,
-                          TEK_MSG_APPLIED, TEK_MSG_NEXT, TEK_MSG_GAME };
+                          TEK_MSG_APPLIED, TEK_MSG_NEXT, TEK_MSG_GAME, TEK_HINT_VIEW };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++) {
         TEST_ASSERT_TRUE_MESSAGE(strlen(all[i]) <= CARD_COLS, all[i]);
         for (const char *p = all[i]; *p; p++)
             TEST_ASSERT_TRUE_MESSAGE(card_printable(*p), all[i]);
     }
+}
+
+// PIZERO-309: a file on a disk opens read-only: keys move, nothing changes,
+// Ctrl-S does nothing, and one ESC leaves.
+static void test_view_mode_only_moves(void) {
+    load("ab\ncd\n");
+    k.view = true;
+    TEST_ASSERT_EQUAL_UINT8(TEK_NONE, key(0x04));             // 'a' types nothing
+    TEST_ASSERT_EQUAL_UINT8(TEK_NONE, key(0x2A));             // Backspace
+    TEST_ASSERT_EQUAL_UINT8(TEK_NONE, key(0x28));             // Enter
+    TEST_ASSERT_EQUAL_UINT8(TEK_NONE, key(0x16, 0x01));       // Ctrl-S
+    TEST_ASSERT_EQUAL_UINT8(TEK_CHANGED, key(0x51));          // Down moves
+    TEST_ASSERT_EQUAL_INT(3, t.cur);
+    text_is("ab\ncd\n");
+    TEST_ASSERT_FALSE(t.dirty);
+    TEST_ASSERT_EQUAL_UINT8(TEK_CANCEL, key(0x29));           // one ESC leaves
+}
+
+// F5 wraps long lines: they continue on the next row, the window counts
+// screen rows, and a line exactly 32 wide still takes one row.
+static void test_wrap_rows_and_cursor(void) {
+    TEST_ASSERT_EQUAL_INT(1, ted_wrap_rows(0, 32));
+    TEST_ASSERT_EQUAL_INT(1, ted_wrap_rows(32, 32));
+    TEST_ASSERT_EQUAL_INT(2, ted_wrap_rows(33, 32));
+    int r, c;
+    ted_wrap_at(31, 40, 32, &r, &c); TEST_ASSERT_EQUAL_INT(0, r); TEST_ASSERT_EQUAL_INT(31, c);
+    ted_wrap_at(32, 40, 32, &r, &c); TEST_ASSERT_EQUAL_INT(1, r); TEST_ASSERT_EQUAL_INT(0, c);
+    ted_wrap_at(32, 32, 32, &r, &c); TEST_ASSERT_EQUAL_INT(0, r); TEST_ASSERT_EQUAL_INT(31, c);   // end of a full row
+}
+
+static void test_wrap_toggle_and_rows(void) {
+    static char line[100];
+    memset(line, 'x', 70); line[70] = '\n'; line[71] = 'y'; line[72] = 0;
+    load(line);
+    TEST_ASSERT_FALSE(t.wrap);
+    TEST_ASSERT_EQUAL_UINT8(TEK_CHANGED, key(0x3E));           // F5
+    TEST_ASSERT_TRUE(t.wrap);
+    char row[33];
+    TEST_ASSERT_TRUE(ted_wrap_row(&t, 0, 0, 32, row)); TEST_ASSERT_EQUAL_INT(32, (int)strlen(row));
+    TEST_ASSERT_TRUE(ted_wrap_row(&t, 0, 2, 32, row)); TEST_ASSERT_EQUAL_INT(6, (int)strlen(row));
+    TEST_ASSERT_FALSE(ted_wrap_row(&t, 0, 3, 32, row));
+    TEST_ASSERT_TRUE(ted_wrap_row(&t, 1, 0, 32, row)); TEST_ASSERT_EQUAL_STRING("y", row);
+    // The End key on the long line keeps the window at the top and left 0.
+    key(0x4D);
+    TEST_ASSERT_EQUAL_INT(0, t.top);
+    TEST_ASSERT_EQUAL_INT(0, t.left);
+    key(0x3E);                                                  // F5 again: off
+    TEST_ASSERT_FALSE(t.wrap);
+    TEST_ASSERT_TRUE(t.left > 0);                               // scrolled to the cursor again
+    // Works read-only too.
+    k.view = true;
+    TEST_ASSERT_EQUAL_UINT8(TEK_CHANGED, key(0x3E));
+    TEST_ASSERT_TRUE(t.wrap);
+}
+
+static void test_wrap_window_counts_screen_rows(void) {
+    // Ten lines of 70 characters: 3 rows each. With 14 rows, the cursor on
+    // line 5 (rows 15-17 from the top) moves top past the first lines.
+    static char text[1000];
+    int n = 0;
+    for (int l = 0; l < 10; l++) { memset(text + n, 'a' + l, 70); n += 70; text[n++] = '\n'; }
+    text[n] = 0;
+    load(text);
+    key(0x3E);
+    for (int i = 0; i < 5; i++) key(0x51);                      // Down to line 5
+    TEST_ASSERT_EQUAL_INT(5, ted_line_of(&t, t.cur));
+    // Rows from top through the cursor's must fit in 14.
+    int used = 1;
+    for (int l = t.top; l < 5; l++) used += ted_wrap_rows(70, 32);
+    TEST_ASSERT_TRUE(used <= TEK_ROWS);
+    TEST_ASSERT_TRUE(t.top >= 1);
 }
 
 static void all_comments_that_fit(const char *p) {
@@ -255,6 +326,10 @@ int main(void) {
     RUN_TEST(test_letters_start_upper_case_and_caps_lock_toggles);
     RUN_TEST(test_caps_lock_held_does_not_repeat);
     RUN_TEST(test_editor_words_fit_and_print);
+    RUN_TEST(test_view_mode_only_moves);
+    RUN_TEST(test_wrap_rows_and_cursor);
+    RUN_TEST(test_wrap_toggle_and_rows);
+    RUN_TEST(test_wrap_window_counts_screen_rows);
     RUN_TEST(test_autorun_template_is_all_comments_that_fit);
     RUN_TEST(test_game_template_is_all_comments_that_fit);
     return UNITY_END();

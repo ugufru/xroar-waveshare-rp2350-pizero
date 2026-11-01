@@ -33,6 +33,10 @@ extern "C" {
 #include "settings.h"           // PIZERO-145, host-tested
 #include "text_lines.h"         // PIZERO-294: CR, LF or CRLF line ends, host-tested
 #include "decb_files.h"         // PIZERO-289: decb_is_text, host-tested
+#include "rsdos_file.h"         // PIZERO-309: files inside a .DSK, host-tested
+#include "rsdos_dir.h"          // the directory track and sectors
+
+#define COCO_NDRIVE 4           // drives 0-3 (PIZERO-114)
 #include "png_write.h"          // PIZERO-165, host-tested
 #include "hardware/watchdog.h"   // PIZERO-165: fed while a screenshot writes
 #include <time.h>
@@ -297,10 +301,35 @@ extern "C" int coco_boot_rescan(int kind) {
         if (!w) { Serial.print("[files] no memory to scan\r\n"); return 0; }
         int nsub = text_scan_dir(w, "", FILES_SCAN_FOLDERS != 0);
         for (int i = 0; i < nsub; i++) text_scan_dir(w, w->subs[i], false);
-        free(w);
-        Serial.printf("[files] %d text file(s), %d name(s) too long, %d over the cap\r\n",
-                      g_dsk_cat.n, g_dsk_cat.skipped_long, g_dsk_cat.skipped_full);
         dsk_cat_sort(&g_dsk_cat);
+        int on_card = g_dsk_cat.n;
+        // PIZERO-309: then the text files on each mounted disk, in directory
+        // order, after the card's (so appended after the sort). The same
+        // image in two drives is listed once.
+        for (unsigned d = 0; d < COCO_NDRIVE; d++) {
+            const char *p = coco_boot_drive_path(d);
+            bool seen = !p;
+            for (unsigned e = 0; e < d && !seen; e++) {
+                const char *q = coco_boot_drive_path(e);
+                seen = q && !strcasecmp(p, q);
+            }
+            if (seen) continue;
+            for (unsigned s = RSDOS_DIR_FIRST_SEC; s <= RSDOS_DIR_LAST_SEC; s++) {
+                if (coco_boot_disk_read_sector(d, RSDOS_DIR_TRACK, s, w->head) != 0) break;
+                bool end = false;
+                for (int k = 0; k < 8 && !end; k++) {
+                    const uint8_t *ent = w->head + k * 32;
+                    if (ent[0] == 0xFF) { end = true; break; }
+                    char name[16];
+                    if (rsdos_entry_is_ascii(ent) && rsdos_entry_name(ent, d, name, sizeof name))
+                        text_cat_add_disk(&g_dsk_cat, d, name);
+                }
+                if (end) break;
+            }
+        }
+        free(w);
+        Serial.printf("[files] %d text file(s) on the card, %d on disks, %d name(s) too long, %d over the cap\r\n",
+                      on_card, g_dsk_cat.n - on_card, g_dsk_cat.skipped_long, g_dsk_cat.skipped_full);
         return g_dsk_cat.n;
     }
     cat_scan_dir(cat_kind_dir(kind), DSK_DIR_DSK);
@@ -490,6 +519,39 @@ extern "C" int coco_boot_read_text(const char *path, char *buf, uint32_t max, ui
 
 extern "C" bool coco_boot_load_text(const char *path, char *buf, uint32_t max, uint32_t *len) {
     return coco_boot_read_text(path, buf, max, len) == COCO_TEXT_OK;
+}
+
+// PIZERO-309: read the text file `name` ("README.TXT:1", as listed) from the
+// disk in drive d into buf, following its granule chain through the FDC's
+// own sector read. COCO_TEXT_OK, _TOO_BIG (*len the true size), _MISSING or
+// _ERROR. Working memory on the heap: this runs from the USB key handler.
+static int dsk_read_cb(void *ctx, unsigned t, unsigned s, uint8_t out[256]) {
+    return coco_boot_disk_read_sector(*(unsigned *)ctx, t, s, out);
+}
+
+extern "C" int coco_boot_dsk_read_text(unsigned d, const char *name, char *buf, uint32_t max, uint32_t *len) {
+    *len = 0;
+    if (d >= COCO_NDRIVE || !coco_boot_drive_path(d)) return COCO_TEXT_MISSING;
+    struct { uint8_t sec[256]; uint8_t fat[256]; uint8_t entry[32]; } *w = (decltype(w))malloc(sizeof *w);
+    if (!w) return COCO_TEXT_ERROR;
+    int rc = COCO_TEXT_MISSING;
+    if (coco_boot_disk_read_sector(d, RSDOS_FAT_TRACK, RSDOS_FAT_SECTOR, w->fat) != 0) rc = COCO_TEXT_ERROR;
+    for (unsigned s = RSDOS_DIR_FIRST_SEC; s <= RSDOS_DIR_LAST_SEC && rc == COCO_TEXT_MISSING; s++) {
+        if (coco_boot_disk_read_sector(d, RSDOS_DIR_TRACK, s, w->sec) != 0) { rc = COCO_TEXT_ERROR; break; }
+        for (int k = 0; k < 8; k++) {
+            const uint8_t *ent = w->sec + k * 32;
+            if (ent[0] == 0xFF) { s = RSDOS_DIR_LAST_SEC; break; }
+            char n[16];
+            if (!rsdos_entry_name(ent, d, n, sizeof n) || strcmp(n, name)) continue;
+            memcpy(w->entry, ent, 32);
+            unsigned drive = d;
+            int r = rsdos_read_file(dsk_read_cb, &drive, w->fat, w->entry, w->sec, buf, max, len);
+            rc = r == RSDOS_OK ? COCO_TEXT_OK : r == RSDOS_TOO_BIG ? COCO_TEXT_TOO_BIG : COCO_TEXT_ERROR;
+            break;
+        }
+    }
+    free(w);
+    return rc;
 }
 
 // PIZERO-296: can the editor open this file without changing what it does
@@ -839,7 +901,7 @@ extern "C" bool coco_boot_load_autorun(struct coco_autorun *out) {
 // (the image is already full size), so a power cut mid-write can lose one
 // sector but not the filesystem. Mounting and ejecting happen from the F12
 // overlay while the machine is paused, so they never race a transfer.
-#define COCO_NDRIVE 4
+// (COCO_NDRIVE, the four drives, is defined at the top: the FILES scan uses it too.)
 static FIL  g_dsk_file[COCO_NDRIVE];
 static bool g_dsk_open[COCO_NDRIVE];
 // Per-drive flags, one byte each (pizero_wavmeas has no RAM to spare).

@@ -345,6 +345,23 @@ static bool caps_for(const char *name) {
     return ext && (!strcasecmp(ext, ".bas") || !strcasecmp(ext, ".asm"));
 }
 
+// PIZERO-309: a text file inside a mounted disk opens read-only, read through
+// the FDC's own sector path; saving it back into the image is not done here.
+struct disk_file { unsigned drive; const char *name; };
+static int fill_disk_file(void *ctx, char *buf, uint32_t max, uint32_t *len) {
+    const struct disk_file *f = (const struct disk_file *)ctx;
+    return coco_boot_dsk_read_text(f->drive, f->name, buf, max, len);
+}
+
+static void view_disk_file(int d, const char *name, const uint8_t codes[6]) {
+    struct disk_file f = { (unsigned)d, name };
+    int rc = text_editor_open_view(name, fill_disk_file, &f);
+    if (rc == COCO_TEXT_OK) { text_editor_hold(codes); return; }
+    if (rc == COCO_TEXT_TOO_BIG) set_status("TOO BIG TO SHOW: LIMIT 4 KB");
+    else if (rc == COCO_TEXT_MISSING) set_status("NOT ON THE DISK NOW");
+    else set_status("CANNOT READ IT FROM THE DISK");
+}
+
 // PIZERO-146/147: ENTER in FILES opens the editor over the list. A missing
 // file starts from its template: every setting at its default for
 // settings.txt, commented examples for autorun.txt. PIZERO-296: the rest of
@@ -363,8 +380,11 @@ static void edit_file(const uint8_t codes[6]) {
         return;
     }
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+    if (cat->kind != CAT_TEXT) return;
+    int d = dsk_cat_drive(cat, i - OVL_NFILES);
+    if (d >= 0) { view_disk_file(d, cat->e[i - OVL_NFILES].name, codes); return; }   // PIZERO-309
     char path[DSK_NAME_MAX + 16];
-    if (cat->kind != CAT_TEXT || !dsk_cat_path(cat, i - OVL_NFILES, path, sizeof path)) return;
+    if (!dsk_cat_path(cat, i - OVL_NFILES, path, sizeof path)) return;
     if (!editable(path)) return;
     const char *leaf = text_cat_leaf(cat->e[i - OVL_NFILES].name);
     if (text_editor_open(path, leaf, "", false, caps_for(leaf)))

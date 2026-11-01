@@ -103,6 +103,16 @@ static void test_gets_cuts_a_long_line_once(void) {
     TEST_ASSERT_EQUAL_STRING("abcd|next", gets_all("abcdefghij\rnext\r", 3, 5));
 }
 
+// PIZERO-309: CR and CRLF become LF for the read-only view.
+static void test_to_lf(void) {
+    char a[] = "10 PRINT\r20 END\r";
+    int n = tl_to_lf(a, (int)strlen(a)); a[n] = 0;
+    TEST_ASSERT_EQUAL_STRING("10 PRINT\n20 END\n", a);
+    char b[] = "x\r\ny\r\rz\n";
+    n = tl_to_lf(b, (int)strlen(b)); b[n] = 0;
+    TEST_ASSERT_EQUAL_STRING("x\ny\n\nz\n", b);
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_next_splits_every_convention);
@@ -111,5 +121,6 @@ int main(int, char **) {
     RUN_TEST(test_gets_every_convention_any_chunking);
     RUN_TEST(test_gets_last_line_without_an_end);
     RUN_TEST(test_gets_cuts_a_long_line_once);
+    RUN_TEST(test_to_lf);
     return UNITY_END();
 }

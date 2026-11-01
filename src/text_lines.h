@@ -49,6 +49,23 @@ static inline const char *tl_eol(int conv) {
 
 static inline bool tl_is_eol(char c) { return c == '\n' || c == '\r'; }
 
+// Rewrite every line end as LF, in place, and return the new length: CRLF
+// becomes one LF, a lone CR one LF. For showing a file whose lines end in CR
+// (a Disk BASIC ASCII file) in the editor read-only, where nothing is saved
+// back, so the original line ends are never lost (PIZERO-309).
+static inline int tl_to_lf(char *b, int n) {
+    int k = 0;
+    for (int i = 0; i < n; i++) {
+        if (b[i] == '\r') {
+            b[k++] = '\n';
+            if (i + 1 < n && b[i + 1] == '\n') i++;
+        } else {
+            b[k++] = b[i];
+        }
+    }
+    return k;
+}
+
 // ---- Streaming, for files read a line at a time (in place of f_gets) ----
 
 // Fill buf with up to n bytes; return how many (0 at the end of the file).
