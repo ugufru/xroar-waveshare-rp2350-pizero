@@ -1,0 +1,14 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-30 01:58:33 from kept
+=== DATE 2026-10-30
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=0 last=none reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-30
+[01:58:33.000] up=0:00:08 [run] fps=1 cpu=13157us render=0us blit=0us aud=3us | ls=J/FS conn=1 sof=4583 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=-225148us late=1 cmax=13157us wmax=0us
+[01:58:33.000] [aud] fill=799 prod=90/s want=48000/s srv=48000 under=24829/s short=51.7% tone=0/s skips=0 under_total=219992
+[01:59:38.000] up=0:01:13 [run] fps=60 cpu=11794us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=69534 usb=2 rpts=84 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=11 tdrop=0 slack=-401us late=1 cmax=17047us wmax=17068us
+[01:59:38.000] [aud] fill=240 prod=48013/s want=48000/s srv=48056 under=0/s short=0.0% tone=0/s skips=0 under_total=221160
+[02:00:39.000] up=0:02:14 [run] fps=38 cpu=26977us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=129864 usb=2 rpts=222 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=36 tdrop=0 slack=-12086us late=38 cmax=28730us wmax=28755us
+[02:00:39.000] [aud] fill=0 prod=29931/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=221160
+[02:01:41.000] up=0:03:16 [run] fps=60 cpu=11549us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=192501 usb=2 rpts=228 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=78 tdrop=0 slack=-373us late=1 cmax=17015us wmax=17039us
+[02:01:41.000] [aud] fill=705 prod=47997/s want=48000/s srv=48041 under=0/s short=0.0% tone=0/s skips=0 under_total=221160
+[02:02:42.000] up=0:04:17 [run] fps=39 cpu=26143us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=252742 usb=2 rpts=260 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=94 tdrop=0 slack=-11081us late=39 cmax=27729us wmax=27749us
+[02:02:42.000] [aud] fill=8 prod=30630/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=221160

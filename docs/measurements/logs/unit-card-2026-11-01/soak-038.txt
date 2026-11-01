@@ -1,0 +1,14 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-24 23:42:23 from kept
+=== DATE 2026-10-24
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=0 last=none reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-24
+[23:42:24.000] up=0:00:04 [run] fps=1 cpu=13173us render=0us blit=0us aud=3us | ls=J/FS conn=1 sof=670 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=-176158us late=1 cmax=13173us wmax=0us
+[23:42:24.000] [aud] fill=799 prod=161/s want=48000/s srv=48000 under=6500/s short=13.5% tone=0/s skips=0 under_total=32152
+[23:43:24.000] up=0:01:04 [run] fps=60 cpu=8697us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=60692 usb=2 rpts=3434 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=3 tdrop=0 slack=4707us late=0 cmax=11912us wmax=11960us
+[23:43:24.000] [aud] fill=249 prod=48061/s want=48000/s srv=48055 under=0/s short=0.0% tone=0/s skips=0 under_total=44048
+[23:44:24.000] up=0:02:05 [run] fps=60 cpu=17095us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=121061 usb=2 rpts=7146 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=29 tdrop=0 slack=-645us late=18 cmax=17262us wmax=17314us
+[23:44:24.000] [aud] fill=4 prod=47684/s want=48000/s srv=48062 under=323/s short=0.6% tone=0/s skips=0 under_total=79652
+[23:45:24.000] up=0:03:05 [run] fps=60 cpu=9068us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=181275 usb=2 rpts=10920 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=42 tdrop=0 slack=4277us late=0 cmax=12340us wmax=12389us
+[23:45:24.000] [aud] fill=896 prod=48041/s want=48000/s srv=48035 under=0/s short=0.0% tone=0/s skips=0 under_total=115307
+[23:46:25.000] up=0:04:06 [run] fps=50 cpu=20159us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=241800 usb=2 rpts=14085 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=91 tdrop=0 slack=-4641us late=50 cmax=21256us wmax=21309us
+[23:46:25.000] [aud] fill=0 prod=39775/s want=48000/s srv=48064 under=8224/s short=17.1% tone=0/s skips=0 under_total=496536

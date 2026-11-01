@@ -1,0 +1,88 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-29 20:54:37 from kept
+=== DATE 2026-10-29
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=0 last=none reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-29
+[20:54:38.000] up=0:00:07 [run] fps=1 cpu=13175us render=0us blit=0us aud=3us | ls=J/FS conn=1 sof=3250 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=-223610us late=1 cmax=13175us wmax=0us
+[20:54:38.000] [aud] fill=799 prod=106/s want=48000/s srv=48000 under=20727/s short=43.1% tone=0/s skips=0 under_total=155992
+[20:55:38.000] up=0:01:07 [run] fps=60 cpu=12084us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=63477 usb=2 rpts=186 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=4 tdrop=0 slack=-2930us late=3 cmax=19571us wmax=19596us
+[20:55:38.000] [aud] fill=33 prod=47782/s want=48000/s srv=48062 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[20:56:39.000] up=0:02:08 [run] fps=60 cpu=11506us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=123823 usb=2 rpts=276 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=9 tdrop=0 slack=205us late=0 cmax=16322us wmax=16345us
+[20:56:39.000] [aud] fill=343 prod=48060/s want=48000/s srv=48052 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[20:57:39.000] up=0:03:08 [run] fps=49 cpu=21918us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=184222 usb=2 rpts=326 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=58 tdrop=0 slack=-11460us late=49 cmax=28108us wmax=28129us
+[20:57:39.000] [aud] fill=0 prod=38865/s want=48000/s srv=48062 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[20:58:40.000] up=0:04:09 [run] fps=51 cpu=17650us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=244862 usb=2 rpts=326 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=118 tdrop=0 slack=-7873us late=51 cmax=24520us wmax=24541us
+[20:58:40.000] [aud] fill=0 prod=40332/s want=48000/s srv=48064 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[20:59:40.000] up=0:05:09 [run] fps=60 cpu=11800us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=305123 usb=2 rpts=422 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=136 tdrop=0 slack=-517us late=2 cmax=17122us wmax=17147us
+[20:59:40.000] [aud] fill=225 prod=48012/s want=48000/s srv=48056 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:00:40.000] up=0:06:09 [run] fps=60 cpu=12023us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=365196 usb=2 rpts=448 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=136 tdrop=0 slack=111us late=0 cmax=16529us wmax=16556us
+[21:00:40.000] [aud] fill=450 prod=48054/s want=48000/s srv=48049 under=0/s short=0.0% tone=4792/s skips=0 under_total=157160
+[21:01:40.000] up=0:07:09 [run] fps=60 cpu=13621us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=425245 usb=2 rpts=452 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=137 tdrop=0 slack=965us late=0 cmax=15409us wmax=15435us
+[21:01:40.000] [aud] fill=1178 prod=48035/s want=48000/s srv=48026 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:02:40.000] up=0:08:09 [run] fps=60 cpu=11839us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=485315 usb=2 rpts=456 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=139 tdrop=0 slack=-277us late=1 cmax=16919us wmax=16943us
+[21:02:40.000] [aud] fill=191 prod=48013/s want=48000/s srv=48057 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:03:40.000] up=0:09:09 [run] fps=54 cpu=18329us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=545559 usb=2 rpts=500 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=165 tdrop=0 slack=-7258us late=54 cmax=23906us wmax=23925us
+[21:03:40.000] [aud] fill=0 prod=42535/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:04:40.000] up=0:10:09 [run] fps=60 cpu=12040us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=605682 usb=2 rpts=602 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=169 tdrop=0 slack=-387us late=2 cmax=17028us wmax=17053us
+[21:04:40.000] [aud] fill=607 prod=48049/s want=48000/s srv=48044 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:05:41.000] up=0:11:10 [run] fps=53 cpu=18478us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=666243 usb=2 rpts=634 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=220 tdrop=0 slack=-6566us late=53 cmax=23213us wmax=23233us
+[21:05:41.000] [aud] fill=3 prod=42247/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:06:41.000] up=0:12:11 [run] fps=51 cpu=19259us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=726790 usb=2 rpts=640 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=280 tdrop=0 slack=-8514us late=51 cmax=25163us wmax=25183us
+[21:06:41.000] [aud] fill=0 prod=40571/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:07:42.000] up=0:13:11 [run] fps=52 cpu=19278us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=787466 usb=2 rpts=644 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=340 tdrop=0 slack=-7490us late=52 cmax=24137us wmax=24158us
+[21:07:42.000] [aud] fill=0 prod=41082/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:08:43.000] up=0:14:12 [run] fps=53 cpu=18243us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=847894 usb=2 rpts=646 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=400 tdrop=0 slack=-7596us late=53 cmax=24245us wmax=24264us
+[21:08:43.000] [aud] fill=19 prod=42289/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:09:43.000] up=0:15:12 [run] fps=43 cpu=23456us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=908378 usb=2 rpts=648 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=460 tdrop=0 slack=-7651us late=43 cmax=24302us wmax=24320us
+[21:09:43.000] [aud] fill=0 prod=33972/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:10:44.000] up=0:16:13 [run] fps=43 cpu=23325us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=969189 usb=2 rpts=648 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=520 tdrop=0 slack=-7557us late=43 cmax=24207us wmax=24224us
+[21:10:44.000] [aud] fill=0 prod=34005/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:11:44.000] up=0:17:13 [run] fps=51 cpu=20647us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=1029632 usb=2 rpts=652 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=580 tdrop=0 slack=-7817us late=51 cmax=24465us wmax=24485us
+[21:11:44.000] [aud] fill=9 prod=40492/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:12:45.000] up=0:18:14 [run] fps=60 cpu=17987us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=1090029 usb=2 rpts=748 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=603 tdrop=0 slack=-2077us late=5 cmax=18718us wmax=18744us
+[21:12:45.000] [aud] fill=13 prod=47734/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:13:45.000] up=0:19:14 [run] fps=60 cpu=11953us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1150175 usb=2 rpts=758 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=611 tdrop=0 slack=-848us late=1 cmax=17458us wmax=17482us
+[21:13:45.000] [aud] fill=184 prod=48016/s want=48000/s srv=48057 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:14:45.000] up=0:20:14 [run] fps=60 cpu=11680us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1210476 usb=2 rpts=794 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=612 tdrop=0 slack=-2774us late=4 cmax=19419us wmax=19439us
+[21:14:45.000] [aud] fill=19 prod=47640/s want=48000/s srv=48062 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:15:46.000] up=0:21:15 [run] fps=60 cpu=19911us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=1270986 usb=2 rpts=824 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=615 tdrop=0 slack=-4789us late=4 cmax=21430us wmax=21453us
+[21:15:46.000] [aud] fill=0 prod=47546/s want=48000/s srv=48061 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:16:46.000] up=0:22:15 [run] fps=60 cpu=19587us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1331489 usb=2 rpts=824 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=615 tdrop=0 slack=-4157us late=4 cmax=20797us wmax=20821us
+[21:16:46.000] [aud] fill=64 prod=47593/s want=48000/s srv=48062 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:17:47.000] up=0:23:16 [run] fps=60 cpu=16851us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1391996 usb=2 rpts=824 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=615 tdrop=0 slack=-2852us late=4 cmax=19496us wmax=19519us
+[21:17:47.000] [aud] fill=125 prod=47782/s want=48000/s srv=48061 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:18:47.000] up=0:24:16 [run] fps=60 cpu=14385us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=1452504 usb=2 rpts=824 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=615 tdrop=0 slack=-3818us late=4 cmax=20455us wmax=20484us
+[21:18:47.000] [aud] fill=70 prod=47640/s want=48000/s srv=48062 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:19:48.000] up=0:25:17 [run] fps=60 cpu=12519us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1513011 usb=2 rpts=824 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=615 tdrop=0 slack=-3740us late=4 cmax=20385us wmax=20405us
+[21:19:48.000] [aud] fill=25 prod=47499/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:20:48.000] up=0:26:17 [run] fps=60 cpu=11949us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1573529 usb=2 rpts=834 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=615 tdrop=0 slack=-3658us late=4 cmax=20294us wmax=20322us
+[21:20:48.000] [aud] fill=56 prod=47592/s want=48000/s srv=48061 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:21:49.000] up=0:27:18 [run] fps=51 cpu=20532us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1634005 usb=2 rpts=876 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=669 tdrop=0 slack=-4623us late=51 cmax=20940us wmax=21291us
+[21:21:49.000] [aud] fill=9 prod=40452/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:22:49.000] up=0:28:18 [run] fps=56 cpu=18085us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1694509 usb=2 rpts=876 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=729 tdrop=0 slack=-3724us late=56 cmax=20370us wmax=20392us
+[21:22:49.000] [aud] fill=11 prod=44374/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:23:50.000] up=0:29:19 [run] fps=60 cpu=0us render=0us blit=6us aud=0us | ls=J/FS conn=1 sof=1754995 usb=2 rpts=894 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=777 tdrop=0 slack=16328us late=0 cmax=0us wmax=340us
+[21:23:50.000] [aud] fill=0 prod=0/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:24:50.000] up=0:30:19 [run] fps=60 cpu=11537us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1815037 usb=2 rpts=904 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=779 tdrop=0 slack=170us late=0 cmax=16474us wmax=16498us
+[21:24:50.000] [aud] fill=1247 prod=48029/s want=48000/s srv=48024 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:25:50.000] up=0:31:19 [run] fps=60 cpu=11805us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1875066 usb=2 rpts=904 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=779 tdrop=0 slack=-324us late=1 cmax=16966us wmax=16989us
+[21:25:50.000] [aud] fill=1480 prod=48022/s want=48000/s srv=48017 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:26:50.000] up=0:32:19 [run] fps=36 cpu=28367us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1935232 usb=2 rpts=946 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=787 tdrop=0 slack=-12501us late=36 cmax=29145us wmax=29169us
+[21:26:50.000] [aud] fill=0 prod=28811/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:27:51.000] up=0:33:20 [run] fps=36 cpu=28428us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=1996239 usb=2 rpts=946 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=847 tdrop=0 slack=-12898us late=36 cmax=29543us wmax=29567us
+[21:27:51.000] [aud] fill=0 prod=28840/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:28:52.000] up=0:34:21 [run] fps=37 cpu=27893us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=2057078 usb=2 rpts=946 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=907 tdrop=0 slack=-12243us late=37 cmax=28890us wmax=28912us
+[21:28:52.000] [aud] fill=2 prod=28946/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:29:52.000] up=0:35:22 [run] fps=60 cpu=11446us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=2117769 usb=2 rpts=1024 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=953 tdrop=0 slack=-415us late=1 cmax=17059us wmax=17083us
+[21:29:52.000] [aud] fill=365 prod=48056/s want=48000/s srv=48052 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:30:53.000] up=0:36:22 [run] fps=54 cpu=23871us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=2178258 usb=2 rpts=1036 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1010 tdrop=0 slack=-7223us late=54 cmax=23871us wmax=23892us
+[21:30:53.000] [aud] fill=0 prod=43131/s want=48000/s srv=48062 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:31:53.000] up=0:37:23 [run] fps=50 cpu=22528us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=2238806 usb=2 rpts=1036 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1070 tdrop=0 slack=-8249us late=50 cmax=24897us wmax=24917us
+[21:31:53.000] [aud] fill=2 prod=39857/s want=48000/s srv=48063 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:32:54.000] up=0:38:23 [run] fps=60 cpu=14903us render=0us blit=0us aud=2us | ls=J/FS conn=1 sof=2299311 usb=2 rpts=1102 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1095 tdrop=0 slack=-398us late=2 cmax=17039us wmax=17063us
+[21:32:54.000] [aud] fill=259 prod=48015/s want=48000/s srv=48055 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:33:54.000] up=0:39:23 [run] fps=60 cpu=12526us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=2359406 usb=2 rpts=1196 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1096 tdrop=0 slack=-1675us late=2 cmax=18320us wmax=18342us
+[21:33:54.000] [aud] fill=107 prod=47923/s want=48000/s srv=48061 under=0/s short=0.0% tone=0/s skips=0 under_total=157160
+[21:34:55.000] up=0:40:24 [run] fps=45 cpu=21202us render=0us blit=0us aud=0us | ls=J/FS conn=1 sof=2419928 usb=2 rpts=1196 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1131 tdrop=0 slack=-10879us late=45 cmax=27528us wmax=27547us
+[21:34:55.000] [aud] fill=0 prod=35481/s want=48000/s srv=48063 under=0/s short=0.0% tone=14228/s skips=0 under_total=157160
+[21:35:55.000] up=0:41:24 [run] fps=45 cpu=20698us render=0us blit=0us aud=1us | ls=J/FS conn=1 sof=2480435 usb=2 rpts=1196 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1191 tdrop=0 slack=-10649us late=45 cmax=27296us wmax=27317us
+[21:35:55.000] [aud] fill=13 prod=35656/s want=48000/s srv=48063 under=0/s short=0.0% tone=13353/s skips=0 under_total=157160

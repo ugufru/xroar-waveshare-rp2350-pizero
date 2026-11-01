@@ -1,0 +1,6 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-25 00:59:59 from kept
+=== DATE 2026-10-25
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=0 last=none reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-25
+[00:59:59.000] up=0:00:05 [run] fps=1 cpu=13153us render=0us blit=0us aud=4us | ls=J/FS conn=1 sof=950 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=-195446us late=1 cmax=13153us wmax=0us
+[00:59:59.000] [aud] fill=799 prod=152/s want=48000/s srv=48000 under=8724/s short=18.1% tone=0/s skips=0 under_total=45604

@@ -1,0 +1,10 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-25 02:07:42 from kept
+=== DATE 2026-10-25
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=0 last=none reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-25
+[02:07:43.000] up=0:00:05 [run] fps=1 cpu=5819us render=805us blit=847us aud=3us | ls=J/FS conn=1 sof=899 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=-86211us late=1 cmax=5819us wmax=0us
+[02:07:43.000] [aud] fill=799 prod=154/s want=48000/s srv=48000 under=8339/s short=17.3% tone=2/s skips=0 under_total=43164
+[02:08:43.000] up=0:01:05 [run] fps=60 cpu=0us render=0us blit=9us aud=0us | ls=J/FS conn=1 sof=60912 usb=2 rpts=3401 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=2 tdrop=0 slack=16250us late=0 cmax=0us wmax=416us
+[02:08:43.000] [aud] fill=530 prod=0/s want=48000/s srv=47999 under=0/s short=0.0% tone=0/s skips=0 under_total=44123
+[02:09:43.000] up=0:02:05 [run] fps=60 cpu=8062us render=191us blit=886us aud=0us | ls=J/FS conn=1 sof=120951 usb=2 rpts=7130 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=6 tdrop=0 slack=7362us late=0 cmax=8151us wmax=9306us
+[02:09:43.000] [aud] fill=1430 prod=48025/s want=48000/s srv=48018 under=0/s short=0.0% tone=0/s skips=0 under_total=55144

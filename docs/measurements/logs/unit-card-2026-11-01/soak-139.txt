@@ -1,0 +1,14 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-28 22:19:00 from kept
+=== DATE 2026-10-28
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=0 last=none reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-28
+[22:19:01.000] up=0:00:06 [run] fps=1 cpu=5845us render=808us blit=848us aud=3us | ls=J/FS conn=1 sof=2238 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=-256534us late=1 cmax=5845us wmax=0us
+[22:19:01.000] [aud] fill=799 prod=122/s want=48000/s srv=48000 under=16488/s short=34.3% tone=1/s skips=0 under_total=107420
+[22:20:01.000] up=0:01:06 [run] fps=60 cpu=9063us render=482us blit=1131us aud=0us | ls=J/FS conn=1 sof=62239 usb=2 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0 slack=5620us late=0 cmax=9087us wmax=11047us
+[22:20:01.000] [aud] fill=2183 prod=48003/s want=48000/s srv=47996 under=0/s short=0.0% tone=0/s skips=0 under_total=108380
+[22:21:01.000] up=0:02:07 [run] fps=36 cpu=26729us render=399us blit=1128us aud=0us | ls=J/FS conn=1 sof=122831 usb=2 rpts=62 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=22 tdrop=0 slack=-12315us late=36 cmax=26783us wmax=28983us
+[22:21:01.000] [aud] fill=0 prod=28247/s want=48000/s srv=48064 under=0/s short=0.0% tone=0/s skips=0 under_total=108380
+[22:22:02.000] up=0:03:07 [run] fps=60 cpu=9119us render=417us blit=1130us aud=0us | ls=J/FS conn=1 sof=183301 usb=2 rpts=154 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=45 tdrop=0 slack=4974us late=0 cmax=9417us wmax=11693us
+[22:22:02.000] [aud] fill=955 prod=48038/s want=48000/s srv=48033 under=0/s short=0.0% tone=0/s skips=0 under_total=108380
+[22:23:02.000] up=0:04:07 [run] fps=60 cpu=0us render=0us blit=7us aud=0us | ls=J/FS conn=1 sof=243369 usb=2 rpts=265 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=50 tdrop=0 slack=2167us late=0 cmax=0us wmax=14499us
+[22:23:02.000] [aud] fill=0 prod=0/s want=48000/s srv=48020 under=0/s short=0.0% tone=0/s skips=0 under_total=108380

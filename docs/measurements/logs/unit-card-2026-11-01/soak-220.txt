@@ -1,0 +1,10 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-30 01:07:56 from kept
+=== DATE 2026-10-30
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=2 last=USBHost.task reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-30
+[01:07:57.000] up=0:00:08 [run] fps=1 cpu=5850us render=822us blit=851us aud=3us | ls=J/FS conn=1 sof=3878 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=2 last=USBHost.task badfps=1 tdrop=0 slack=9102us late=0 cmax=5850us wmax=0us
+[01:07:57.000] [aud] fill=799 prod=97/s want=48000/s srv=48000 under=22828/s short=47.5% tone=1/s skips=0 under_total=186144
+[01:08:57.000] up=0:01:08 [run] fps=60 cpu=9087us render=706us blit=1130us aud=0us | ls=J/FS conn=1 sof=63879 usb=2 rpts=0 rfail=0 eperr=0 ints=0 | freezes=2 last=USBHost.task badfps=1 tdrop=0 slack=5310us late=0 cmax=9428us wmax=11357us
+[01:08:57.000] [aud] fill=2109 prod=47956/s want=48000/s srv=47998 under=0/s short=0.0% tone=0/s skips=0 under_total=187104
+[01:09:58.000] up=0:02:09 [run] fps=60 cpu=9186us render=196us blit=1158us aud=0us | ls=J/FS conn=1 sof=124816 usb=2 rpts=62 rfail=0 eperr=0 ints=0 | freezes=2 last=USBHost.task badfps=4 tdrop=0 slack=5078us late=0 cmax=9502us wmax=11589us
+[01:09:58.000] [aud] fill=1525 prod=48018/s want=48000/s srv=48015 under=0/s short=0.0% tone=23330/s skips=0 under_total=187104

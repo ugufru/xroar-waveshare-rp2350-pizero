@@ -1,0 +1,16 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-11 17:06:20 from card
+=== DATE 2026-10-11
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-310-gb3f6808 env=pizero_cpu179 boot=power-on freezes=0 last=none reset=software board=C58D06257AE30E85
+=== DATE 2026-10-11
+[17:06:20.000] up=0:00:04 [run] fps=1 cpu=20770us render=891us blit=1524us aud=3us | ls=J/FS conn=1 sof=337 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=1 tdrop=0
+[17:06:20.000] [aud] fill=1600 prod=348/s want=48000/s srv=48000 under=3511/s short=7.3% tone=0/s skips=0 under_total=16116
+[17:07:20.000] up=0:01:05 [run] fps=43 cpu=21376us render=485us blit=1532us aud=0us | ls=J/FS conn=1 sof=60776 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=61 tdrop=0
+[17:07:20.000] [aud] fill=8070 prod=68236/s want=48000/s srv=47936 under=0/s short=0.0% tone=0/s skips=759440 under_total=18054
+[17:08:21.000] up=0:02:05 [run] fps=43 cpu=21368us render=484us blit=1556us aud=0us | ls=J/FS conn=1 sof=121218 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=121 tdrop=0
+[17:08:21.000] [aud] fill=8144 prod=68235/s want=48000/s srv=47936 under=0/s short=0.0% tone=0/s skips=1521390 under_total=18054
+[17:09:21.000] up=0:03:05 [run] fps=43 cpu=21380us render=486us blit=1535us aud=0us | ls=J/FS conn=1 sof=181659 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=181 tdrop=0
+[17:09:21.000] [aud] fill=8070 prod=68235/s want=48000/s srv=47936 under=0/s short=0.0% tone=0/s skips=2283720 under_total=18054
+[17:10:22.000] up=0:04:06 [run] fps=43 cpu=21360us render=496us blit=1543us aud=1us | ls=J/FS conn=1 sof=242101 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=241 tdrop=0
+[17:10:22.000] [aud] fill=8143 prod=68236/s want=48000/s srv=47936 under=0/s short=0.0% tone=0/s skips=3045607 under_total=18054
+[17:11:22.000] up=0:05:06 [run] fps=43 cpu=21380us render=484us blit=1533us aud=1us | ls=J/FS conn=1 sof=302532 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=0 last=none badfps=301 tdrop=0
+[17:11:22.000] [aud] fill=8077 prod=68235/s want=48000/s srv=47936 under=0/s short=0.0% tone=0/s skips=3808448 under_total=18054

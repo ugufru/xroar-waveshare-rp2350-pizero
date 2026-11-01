@@ -1,0 +1,14 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-30 01:43:52 from kept
+=== DATE 2026-10-30
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=3 last=loop-top reset=software board=1D21CC1CBE17D6F6
+=== DATE 2026-10-30
+[01:43:53.000] up=0:00:08 [run] fps=1 cpu=5846us render=807us blit=847us aud=3us | ls=J/FS conn=1 sof=4422 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=3 last=loop-top badfps=1 tdrop=0 slack=-261795us late=1 cmax=5846us wmax=0us
+[01:43:53.000] [aud] fill=799 prod=91/s want=48000/s srv=48000 under=24404/s short=50.8% tone=1/s skips=0 under_total=212248
+[01:44:53.000] up=0:01:08 [run] fps=60 cpu=8772us render=234us blit=1140us aud=0us | ls=J/FS conn=1 sof=64425 usb=2 rpts=209 rfail=0 eperr=0 ints=0 | freezes=3 last=loop-top badfps=1 tdrop=0 slack=4908us late=0 cmax=9994us wmax=11759us
+[01:44:53.000] [aud] fill=2128 prod=48005/s want=48000/s srv=47997 under=0/s short=0.0% tone=1881/s skips=0 under_total=213208
+[01:46:00.000] up=0:02:15 [run] fps=60 cpu=9794us render=195us blit=1130us aud=0us | ls=J/FS conn=1 sof=131462 usb=2 rpts=285 rfail=0 eperr=0 ints=0 | freezes=3 last=loop-top badfps=7 tdrop=0 slack=5195us late=0 cmax=9804us wmax=11472us
+[01:46:00.000] [aud] fill=1408 prod=48026/s want=48000/s srv=48019 under=0/s short=0.0% tone=0/s skips=0 under_total=213208
+[01:47:01.000] up=0:03:16 [run] fps=60 cpu=8625us render=500us blit=1147us aud=0us | ls=J/FS conn=1 sof=192248 usb=2 rpts=429 rfail=0 eperr=0 ints=0 | freezes=3 last=loop-top badfps=9 tdrop=0 slack=5009us late=0 cmax=10024us wmax=11659us
+[01:47:01.000] [aud] fill=1395 prod=48025/s want=48000/s srv=48019 under=0/s short=0.0% tone=1079/s skips=0 under_total=213208
+[01:48:01.000] up=0:04:16 [run] fps=60 cpu=11388us render=509us blit=1152us aud=0us | ls=J/FS conn=1 sof=252274 usb=2 rpts=475 rfail=0 eperr=0 ints=0 | freezes=3 last=loop-top badfps=11 tdrop=0 slack=3271us late=0 cmax=11720us wmax=13395us
+[01:48:01.000] [aud] fill=1536 prod=48021/s want=48000/s srv=48015 under=0/s short=0.0% tone=13252/s skips=0 under_total=213208

@@ -1,0 +1,7 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-11-01 22:11:32 from kept
+=== DATE 2026-11-01
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-463-gf2670f4 env=pizero_stream_60 boot=watchdog-reboot freezes=1 last=USBHost.task reset=software board=1D21CC1CBE17D6F6
+[watchdog] post-mortem: HARD FAULT on core 1 pc=00000013 lr=00000000 in IRQ 240 cfsr=00020000 hfsr=40000000 exc_return=..f0 guest_pc=a7d5 usb=2 up=18833ms
+=== DATE 2026-11-01
+[22:11:32.000] up=0:00:09 [run] fps=1 cpu=5866us render=830us blit=834us aud=3us | ls=J/FS conn=1 sof=5117 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=1 last=USBHost.task badfps=1 tdrop=0 slack=9095us late=0 cmax=5866us wmax=0us
+[22:11:32.000] [aud] fill=799 prod=85/s want=48000/s srv=48000 under=26145/s short=54.4% tone=1/s skips=0 under_total=245612

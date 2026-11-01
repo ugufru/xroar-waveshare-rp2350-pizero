@@ -1,0 +1,13 @@
+=== CoCo Zero soak log, interval 60s, clock 2026-10-25 00:21:45 from kept
+=== DATE 2026-10-25
+XRoar on RP2350-PiZero (soak log) fw=v0.7.2-452-g1f07938-dirty env=pizero_stream_60 boot=watchdog-reboot freezes=1 last=emulate reset=software board=1D21CC1CBE17D6F6
+[watchdog] post-mortem: hang, core 0 at pc=20001b44 lr=20081b43 in TIMER0_IRQ_2; 5 warnings over 800 ms, core 1 running (+23040 lines); active=00000:00000004 pending=00000:02000400 exc_return=..e1; guest_pc=16f5 usb=2 up=323665ms
+=== DATE 2026-10-25
+[00:21:45.000] up=0:00:04 [run] fps=1 cpu=5851us render=807us blit=847us aud=3us | ls=J/FS conn=1 sof=585 usb=0 rpts=0 rfail=0 eperr=0 ints=0 | freezes=1 last=emulate badfps=1 tdrop=0 slack=9121us late=0 cmax=5851us wmax=0us
+[00:21:45.000] [aud] fill=799 prod=164/s want=48000/s srv=48000 under=5772/s short=12.0% tone=2/s skips=0 under_total=28068
+[00:22:45.000] up=0:01:04 [run] fps=60 cpu=6804us render=421us blit=884us aud=0us | ls=J/FS conn=1 sof=60586 usb=2 rpts=3393 rfail=0 eperr=0 ints=0 | freezes=1 last=emulate badfps=1 tdrop=0 slack=8041us late=0 cmax=6852us wmax=8627us
+[00:22:45.000] [aud] fill=2087 prod=48003/s want=48000/s srv=47999 under=0/s short=0.0% tone=0/s skips=0 under_total=29028
+[00:23:45.000] up=0:02:04 [run] fps=60 cpu=6832us render=466us blit=885us aud=0us | ls=J/FS conn=1 sof=120587 usb=2 rpts=7003 rfail=0 eperr=0 ints=0 | freezes=1 last=emulate badfps=1 tdrop=0 slack=8014us late=0 cmax=6855us wmax=8653us
+[00:23:45.000] [aud] fill=2147 prod=48001/s want=48000/s srv=47997 under=0/s short=0.0% tone=0/s skips=0 under_total=29028
+[00:24:45.000] up=0:03:04 [run] fps=60 cpu=6844us render=420us blit=885us aud=0us | ls=J/FS conn=1 sof=180606 usb=2 rpts=10650 rfail=0 eperr=0 ints=0 | freezes=1 last=emulate badfps=3 tdrop=0 slack=8024us late=0 cmax=6859us wmax=8623us
+[00:24:45.000] [aud] fill=559 prod=48051/s want=48000/s srv=48046 under=0/s short=0.0% tone=0/s skips=0 under_total=38735

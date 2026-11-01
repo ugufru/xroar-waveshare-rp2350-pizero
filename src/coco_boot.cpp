@@ -231,58 +231,75 @@ static void cat_scan_dir(const char *dir, uint8_t which) {
     f_closedir(&d);
 }
 
-// PIZERO-296: is this file text, by its first 512 bytes (decb_is_text)?
-static bool file_is_text(const char *path) {
-    FIL f;
-    if (f_open(&f, path, FA_READ) != FR_OK) return false;
+// PIZERO-296: the FILES list's walk of /coco and its folders. Everything it
+// needs is in one heap block, taken only for the scan. It runs inside the USB
+// key handler, already deep on core 0's 4 KB stack, and a FIL (with its
+// 512-byte sector buffer), a FILINFO and a 512-byte sample on the stack
+// overflowed it into core 1's: a hard fault on core 1 at a stack address.
+#define TEXT_SUBS_MAX 16
+// Folders one level down are scanned too only with FILES_SCAN_FOLDERS=1: the
+// walk opens every file it might list, and with a card's log and game folders
+// that made F11 slow to come up (user, 2026-11-01). Kept for later, PIZERO-308.
+#ifndef FILES_SCAN_FOLDERS
+#define FILES_SCAN_FOLDERS 0
+#endif
+struct text_scan_ws {
+    DIR     d;
+    FILINFO fi;
+    FIL     f;
     uint8_t head[512];
+    char    dir[48];
+    char    path[DSK_NAME_MAX + 16];
+    char    subs[TEXT_SUBS_MAX][32];
+};
+
+// Is w->path text, by its first 512 bytes (decb_is_text)?
+static bool file_is_text(struct text_scan_ws *w) {
+    if (f_open(&w->f, w->path, FA_READ) != FR_OK) return false;
     UINT br = 0;
-    bool ok = f_read(&f, head, sizeof head, &br) == FR_OK && decb_is_text(head, (int)br);
-    f_close(&f);
+    bool ok = f_read(&w->f, w->head, sizeof w->head, &br) == FR_OK && decb_is_text(w->head, (int)br);
+    f_close(&w->f);
     return ok;
 }
 
-// PIZERO-296: the FILES list's walk of /coco/<sub>. At the top level the
-// folders found are noted in subs (up to max) for a second pass, so only one
-// directory is ever open at a time. The rules are dsk_catalog.h's.
-#define TEXT_SUBS_MAX 16
-static int text_scan_dir(const char *sub, char subs[][32], int max) {
-    char dir[48];
-    snprintf(dir, sizeof dir, sub[0] ? "0:/coco/%s" : "0:/coco", sub);
-    DIR d;
-    if (f_opendir(&d, dir) != FR_OK) return 0;
-    FILINFO fi;
+// Walk /coco/<sub>. At the top level (top) the folders found are noted in
+// w->subs for a second pass, so only one directory is ever open at a time.
+// The rules are dsk_catalog.h's.
+static int text_scan_dir(struct text_scan_ws *w, const char *sub, bool top) {
+    snprintf(w->dir, sizeof w->dir, sub[0] ? "0:/coco/%s" : "0:/coco", sub);
+    if (f_opendir(&w->d, w->dir) != FR_OK) return 0;
     int nsub = 0;
-    while (f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
-        if (fi.fattrib & (AM_HID | AM_SYS)) continue;
-        if (fi.fattrib & AM_DIR) {
-            if (subs && nsub < max && strlen(fi.fname) < 32 && !text_cat_skip_dir(fi.fname))
-                snprintf(subs[nsub++], 32, "%s", fi.fname);
+    while (f_readdir(&w->d, &w->fi) == FR_OK && w->fi.fname[0]) {
+        const char *name = w->fi.fname;
+        if (w->fi.fattrib & (AM_HID | AM_SYS)) continue;
+        if (w->fi.fattrib & AM_DIR) {
+            if (top && nsub < TEXT_SUBS_MAX && strlen(name) < 32 && !text_cat_skip_dir(name))
+                snprintf(w->subs[nsub++], 32, "%s", name);
             continue;
         }
-        if (text_cat_skip(sub, fi.fname)) continue;
-        if (strlen(sub) + 1 + strlen(fi.fname) >= DSK_NAME_MAX) {   // counted, not opened
-            text_cat_add(&g_dsk_cat, sub, fi.fname);
+        if (text_cat_skip(sub, name)) continue;
+        if (strlen(sub) + 1 + strlen(name) >= DSK_NAME_MAX) {   // counted, not opened
+            text_cat_add(&g_dsk_cat, sub, name);
             continue;
         }
-        char path[DSK_NAME_MAX + 16];
-        snprintf(path, sizeof path, "%s/%s", dir, fi.fname);
-        if (file_is_text(path)) text_cat_add(&g_dsk_cat, sub, fi.fname);
+        snprintf(w->path, sizeof w->path, "%s/%s", w->dir, name);
+        if (file_is_text(w)) text_cat_add(&g_dsk_cat, sub, name);
         watchdog_update();
     }
-    f_closedir(&d);
+    f_closedir(&w->d);
     return nsub;
 }
 
 extern "C" int coco_boot_rescan(int kind) {
     dsk_cat_clear(&g_dsk_cat, kind);
     if (kind == CAT_TEXT) {
-        // On the heap only for the scan: static RAM is what a CoCo 3 runs
-        // short of (CLAUDE.md). Without it, /coco alone is scanned.
-        char (*subs)[32] = (char (*)[32])malloc(TEXT_SUBS_MAX * 32);
-        int nsub = text_scan_dir("", subs, subs ? TEXT_SUBS_MAX : 0);
-        for (int i = 0; i < nsub; i++) text_scan_dir(subs[i], nullptr, 0);
-        free(subs);
+        struct text_scan_ws *w = (struct text_scan_ws *)malloc(sizeof *w);
+        if (!w) { Serial.print("[files] no memory to scan\r\n"); return 0; }
+        int nsub = text_scan_dir(w, "", FILES_SCAN_FOLDERS != 0);
+        for (int i = 0; i < nsub; i++) text_scan_dir(w, w->subs[i], false);
+        free(w);
+        Serial.printf("[files] %d text file(s), %d name(s) too long, %d over the cap\r\n",
+                      g_dsk_cat.n, g_dsk_cat.skipped_long, g_dsk_cat.skipped_full);
         dsk_cat_sort(&g_dsk_cat);
         return g_dsk_cat.n;
     }
@@ -481,19 +498,24 @@ extern "C" bool coco_boot_load_text(const char *path, char *buf, uint32_t max, u
 // when the file exists.
 extern "C" int coco_boot_text_check(const char *path, uint32_t max, uint32_t *size) {
     *size = 0;
-    FIL f;
-    FRESULT fo = f_open(&f, path, FA_READ);
-    if (fo == FR_NO_FILE || fo == FR_NO_PATH) return COCO_TEXT_MISSING;
-    if (fo != FR_OK) return COCO_TEXT_ERROR;
-    *size = (uint32_t)f_size(&f);
-    char head[512];
-    UINT br = 0;
-    FRESULT fr = f_read(&f, head, sizeof head, &br);
-    f_close(&f);
-    if (fr != FR_OK) return COCO_TEXT_ERROR;
-    if (*size > max) return COCO_TEXT_TOO_BIG;
-    if (tl_convention(head, (int)br) == TL_CR) return COCO_TEXT_CR;
-    return COCO_TEXT_OK;
+    // On the heap, not the stack: this runs from the USB key handler too.
+    struct { FIL f; char head[512]; } *w = (decltype(w))malloc(sizeof *w);
+    if (!w) return COCO_TEXT_ERROR;
+    int rc = COCO_TEXT_OK;
+    FRESULT fo = f_open(&w->f, path, FA_READ);
+    if (fo == FR_NO_FILE || fo == FR_NO_PATH) rc = COCO_TEXT_MISSING;
+    else if (fo != FR_OK) rc = COCO_TEXT_ERROR;
+    else {
+        *size = (uint32_t)f_size(&w->f);
+        UINT br = 0;
+        FRESULT fr = f_read(&w->f, w->head, sizeof w->head, &br);
+        f_close(&w->f);
+        if (fr != FR_OK) rc = COCO_TEXT_ERROR;
+        else if (*size > max) rc = COCO_TEXT_TOO_BIG;
+        else if (tl_convention(w->head, (int)br) == TL_CR) rc = COCO_TEXT_CR;
+    }
+    free(w);
+    return rc;
 }
 
 // Save safely: write the whole text to PATH.tmp, then swap it in for PATH.
