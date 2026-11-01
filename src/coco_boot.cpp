@@ -332,6 +332,10 @@ extern "C" int coco_boot_rescan(int kind) {
                       on_card, g_dsk_cat.n - on_card, g_dsk_cat.skipped_long, g_dsk_cat.skipped_full);
         return g_dsk_cat.n;
     }
+    // PIZERO-312: the disks in the drives first, so a full card can never
+    // push a mounted disk out of the list.
+    if (kind == CAT_DSK)
+        for (unsigned d = 0; d < COCO_NDRIVE; d++) dsk_cat_add_path(&g_dsk_cat, coco_boot_drive_path(d));
     cat_scan_dir(cat_kind_dir(kind), DSK_DIR_DSK);
     cat_scan_dir("0:/coco", DSK_DIR_ROOT);
     dsk_cat_sort(&g_dsk_cat);

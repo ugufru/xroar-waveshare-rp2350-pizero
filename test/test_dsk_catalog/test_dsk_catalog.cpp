@@ -81,6 +81,26 @@ static void test_the_cap_counts_what_it_drops(void) {
     TEST_ASSERT_EQUAL_INT(5, cat.skipped_full);
 }
 
+// PIZERO-312: a mounted disk is listed even on a card with more images than
+// the list holds, because it is added before the scan.
+static void test_a_mounted_disk_survives_the_cap(void) {
+    dsk_cat_clear(&cat, CAT_DSK);
+    TEST_ASSERT_TRUE(dsk_cat_add_path(&cat, "0:/coco/dsk/TESTTEXT.DSK"));
+    TEST_ASSERT_TRUE(dsk_cat_add_path(&cat, "0:/coco/ROOTDISK.DSK"));
+    TEST_ASSERT_FALSE(dsk_cat_add_path(&cat, "0:/elsewhere/X.DSK"));      // not listable
+    TEST_ASSERT_FALSE(dsk_cat_add_path(&cat, "0:/coco/dsk/sub/X.DSK"));
+    char name[16];
+    for (int i = 0; i < DSK_CAT_MAX + 10; i++) {
+        snprintf(name, sizeof name, "D%03d.DSK", i);
+        dsk_cat_add(&cat, name, false, DSK_DIR_DSK);
+    }
+    dsk_cat_add(&cat, "TESTTEXT.DSK", false, DSK_DIR_DSK);               // the scan meets it again
+    dsk_cat_sort(&cat);
+    TEST_ASSERT_EQUAL_INT(DSK_CAT_MAX, cat.n);
+    TEST_ASSERT_TRUE(dsk_cat_find_path(&cat, "0:/coco/dsk/testtext.dsk") >= 0);
+    TEST_ASSERT_TRUE(dsk_cat_find_path(&cat, "0:/coco/ROOTDISK.DSK") >= 0);
+}
+
 static void test_paths_round_trip(void) {
     dsk_cat_clear(&cat, CAT_DSK);
     dsk_cat_add(&cat, "IN_DSK.DSK", false, DSK_DIR_DSK);
@@ -205,6 +225,7 @@ int main(void) {
     RUN_TEST(test_a_name_in_both_folders_is_listed_once_from_dsk);
     RUN_TEST(test_long_names_are_counted_not_truncated);
     RUN_TEST(test_the_cap_counts_what_it_drops);
+    RUN_TEST(test_a_mounted_disk_survives_the_cap);
     RUN_TEST(test_paths_round_trip);
     RUN_TEST(test_display_name_drops_the_extension_and_clips);
     RUN_TEST(test_bin_and_cart_lists);

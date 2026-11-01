@@ -62,10 +62,13 @@ static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN,
 // editor starts a missing one from a template (NULL: the settings template,
 // generated from the defaults). `tidy`: a settings file, opened comments
 // first and then sorted by name (PIZERO-181).
-struct ovl_file { const char *name, *path, *tmpl; bool tidy; };
+// `view`: opened read-only (PIZERO-312: drives.txt, which the board rewrites
+// on every mount and eject, so an edit would be lost; editing is PIZERO-293).
+struct ovl_file { const char *name, *path, *tmpl; bool tidy, view; };
 static const struct ovl_file k_files[] = {
-    { "SETTINGS.TXT", "0:/coco/settings.txt", nullptr,          true  },
-    { "AUTORUN.TXT",  "0:/coco/autorun.txt",  AUTORUN_TEMPLATE, false },   // PIZERO-147
+    { "SETTINGS.TXT", "0:/coco/settings.txt", nullptr,          true,  false },
+    { "AUTORUN.TXT",  "0:/coco/autorun.txt",  AUTORUN_TEMPLATE, false, false },   // PIZERO-147
+    { "DRIVES.TXT",   "0:/coco/drives.txt",   nullptr,          false, true  },   // PIZERO-312
 };
 #define OVL_NFILES ((int)(sizeof k_files / sizeof k_files[0]))
 static const char *const k_empty[CAT_KINDS]  = { OVL_EMPTY_DSK,  OVL_EMPTY_BIN,  OVL_EMPTY_CART };
@@ -362,6 +365,18 @@ static void view_disk_file(int d, const char *name, const uint8_t codes[6]) {
     else set_status("CANNOT READ IT FROM THE DISK");
 }
 
+// PIZERO-312: a card file shown read-only through the PIZERO-309 view.
+static int fill_card_file(void *ctx, char *buf, uint32_t max, uint32_t *len) {
+    return coco_boot_read_text((const char *)ctx, buf, max, len);
+}
+
+static void view_card_file(const char *path, const char *title, const uint8_t codes[6]) {
+    int rc = text_editor_open_view(title, fill_card_file, (void *)path);
+    if (rc == COCO_TEXT_OK) { text_editor_hold(codes); return; }
+    set_status(rc == COCO_TEXT_MISSING ? "NOT ON THE CARD YET"
+             : rc == COCO_TEXT_TOO_BIG ? "TOO BIG TO SHOW: LIMIT 4 KB" : "CANNOT READ IT: SD CARD?");
+}
+
 // PIZERO-146/147: ENTER in FILES opens the editor over the list. A missing
 // file starts from its template: every setting at its default for
 // settings.txt, commented examples for autorun.txt. PIZERO-296: the rest of
@@ -370,6 +385,7 @@ static void edit_file(const uint8_t codes[6]) {
     int i = g_ovk.sel;
     if (i < 0 || i >= g_ovk.n) return;
     if (i < OVL_NFILES) {
+        if (k_files[i].view) { view_card_file(k_files[i].path, k_files[i].name, codes); return; }
         if (!editable(k_files[i].path)) return;
         static char gen[1024];               // PIZERO-164: the pad lines made it longer
         const char *tmpl = k_files[i].tmpl;

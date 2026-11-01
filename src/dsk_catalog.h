@@ -129,6 +129,22 @@ static inline int dsk_cat_cmp(int kind, const char *a, const char *b) {
     return strcasecmp(a, b);
 }
 
+// PIZERO-312: add the image a drive holds, by its path, before the folders
+// are scanned, so a mounted disk is always in the list however full the card
+// is. Only paths in the kind's folder or /coco itself can be listed (the
+// list keeps a name and which of those two folders); any other is left out,
+// as before. The scan that follows skips it as a duplicate.
+static inline bool dsk_cat_add_path(struct dsk_catalog *c, const char *path) {
+    if (!path) return false;
+    const char *dir = cat_kind_dir(c->kind);
+    size_t dl = strlen(dir), rl = strlen("0:/coco");
+    if (!strncasecmp(path, dir, dl) && path[dl] == '/' && !strchr(path + dl + 1, '/'))
+        return dsk_cat_add(c, path + dl + 1, false, DSK_DIR_DSK);
+    if (!strncasecmp(path, "0:/coco", rl) && path[rl] == '/' && !strchr(path + rl + 1, '/'))
+        return dsk_cat_add(c, path + rl + 1, false, DSK_DIR_ROOT);
+    return false;
+}
+
 // Insertion sort: the list is at most 128 short names, filled once per scan.
 static inline void dsk_cat_sort(struct dsk_catalog *c) {
     for (int i = 1; i < c->n; i++) {
