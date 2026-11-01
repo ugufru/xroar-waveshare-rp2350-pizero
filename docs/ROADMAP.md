@@ -267,8 +267,10 @@ backend, which is the only part USB changes.
   on the ranked roadmap since 2026-11-01, routed to and from the native USB-C
   port as a USB MIDI device), then `PIZERO-305` (the same chip on the PIO-USB
   host port, which `PIZERO-281` requires). The bit-banger path `PIZERO-61` →
-  `PIZERO-59` and the DIN endpoints in `PIZERO-60` stay deferred. All build-flag gated; `PIZERO-170` (GIME timer reload quirk)
-  sets the tempo of timer music.
+  `PIZERO-59` and the DIN endpoints in `PIZERO-60` stay deferred. The MIDI
+  Pak is the `midi_pak` setting (on for the CoCo Zero), not a build flag;
+  the synth work would be build-flag gated. `PIZERO-170` (GIME timer reload
+  quirk) sets the tempo of timer music.
 - **`PIZERO-128`**: the BOOT button as an overlay key. **`PIZERO-80`**: SDIO.
 
 ## Dependency notes

@@ -54,6 +54,15 @@ void coco_machine_set_joystick_quiet(_Bool on);
 uint32_t coco_machine_joystick_probes(void);
 /* PIZERO-148: the Orchestra-90CC's two DACs at $FF7A/$FF7B, and writes to them. */
 void coco_machine_set_orchestra90(_Bool on);
+
+/* PIZERO-287: the MIDI Pak, a 6850 ACIA at $FF6E-$FF6F (the midi_pak
+ * setting turns it off). tx_pop takes a byte the CoCo sent; rx_push hands it
+ * one, which lands at MIDI's rate. active: software has set the chip up. */
+void  coco_machine_set_midi_pak(_Bool on);
+_Bool coco_machine_midi_tx_pop(uint8_t *b);
+_Bool coco_machine_midi_rx_push(uint8_t b);
+_Bool coco_machine_midi_active(void);
+void  coco_machine_midi_counters(uint32_t *tx_dropped, uint32_t *rx_dropped);
 uint32_t coco_machine_orch_writes(void);
 uint32_t coco_machine_ay_writes(void);           /* AY register writes since reset */
 uint8_t coco_machine_ay_active(void);            /* bit per AY chip in use */

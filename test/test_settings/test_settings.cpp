@@ -281,6 +281,7 @@ static void test_machine_profiles(void) {
         TEST_ASSERT_EQUAL(zero, s.sound_all);           // PIZERO-253
         TEST_ASSERT_EQUAL(zero, s.joystick_quiet);
         TEST_ASSERT_EQUAL(zero, s.orchestra90);         // PIZERO-148
+        TEST_ASSERT_EQUAL(zero, s.midi_pak);            // PIZERO-287
         TEST_ASSERT_EQUAL_UINT8(3, s.volume);
         TEST_ASSERT_EQUAL_UINT16(500, s.key_repeat_delay);
     }
@@ -296,6 +297,8 @@ static void test_machine_profiles(void) {
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("sound_sources = loud"));
     TEST_ASSERT_EQUAL_INT(SET_OK, line("joystick_quiet = on"));  TEST_ASSERT_TRUE(s.joystick_quiet);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("orchestra90 = on"));     TEST_ASSERT_TRUE(s.orchestra90);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("midi_pak = off"));       TEST_ASSERT_FALSE(s.midi_pak);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("midi_pak = on"));        TEST_ASSERT_TRUE(s.midi_pak);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("usb_audio_db = -24"));   TEST_ASSERT_EQUAL_INT(-24, s.usb_audio_db);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("usb_audio_db = 0"));     TEST_ASSERT_EQUAL_INT(0, s.usb_audio_db);
     TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("usb_audio_db = 6"));

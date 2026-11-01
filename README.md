@@ -41,6 +41,9 @@ which it needs, and launching it switches the board to that machine by itself.
   chips and twelve voices, the Symphony-12's in stereo.
 - The two stereo DACs of Tandy's Orchestra-90CC, built in. How to program each sound chip, and
   what it costs: [`docs/sound.md`](docs/sound.md).
+- The MIDI Pak, built in: Lyra and other CoCo MIDI programs play into music software on the
+  computer the board is plugged into, which sees it as a USB MIDI port, and hear what it sends
+  back ([`docs/sound.md`](docs/sound.md)).
 - Every sound source at once, the DAC and the sound cartridges together, where the real CoCo
   switched between them, and joystick reads that make no sound.
 - Sound from a USB headphone DAC plugged in at power-on, in place of the video cable, and the

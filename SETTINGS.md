@@ -71,6 +71,7 @@ machine           = cocozero
 # coco_psg        = on
 # symphony12      = on
 # orchestra90     = on
+# midi_pak        = on
 # gime_palette    = on
 # gime_timer      = on
 # font            = 6847t2
@@ -130,6 +131,7 @@ and `joystick_quiet` route them, are in [`docs/sound.md`](docs/sound.md).
 | `symphony12_stereo` | `on` / `off` | `on` | The Symphony-12's stereo jumper: its first two chips play on the left and the other two on the right, as the card's own output jacks gave them. `off` mixes all four to the middle, as the card's sound came back into the CoCo. A chip that the CoCo PSG or Deluxe CoCo wrote last stays in the middle either way. Every machine has it, as it belongs to the cartridge, and it does nothing while `symphony12` is off. |
 | `usb_audio` | `on` / `off` | `on` | Plays the sound from a USB headphone DAC plugged in at power-on (a USB-C headphone dongle, or a hub's own headphone jack) instead of the video cable. With no DAC, or `off`, the sound stays on the video cable. See [`docs/sound.md`](docs/sound.md). |
 | `usb_audio_db` | `-60`-`0` | `-10` | The USB headphone DAC's own level, in dB, set when it starts: 0 is its loudest. The CoCo Zero's sound is made for a TV, which at a DAC's 0 dB is hot in headphones, so it starts 10 dB down. The volume keys and `volume` work on top of it, for both outputs. |
+| `midi_pak` | `on` / `off` | machine | The MIDI Pak: a 6850 serial chip at `$FF6E`-`$FF6F`, the CoCo's MIDI interface for Lyra, CoCo MIDI and similar programs. The board passes its MIDI to and from the computer it is plugged into, over the USB-C cable, where it shows up as a USB MIDI port. Its interrupt goes to the cartridge line, as on the real pak. On for the CoCo Zero; for the stock machines put `midi_pak = on` in the program's own file. |
 | `orchestra90` | `on` / `off` | machine | Tandy's Orchestra-90CC: two 8-bit DACs, left at `$FF7A` and right at `$FF7B`, played in stereo. Its music program is the cartridge ROM (load it with F10). On for the CoCo Zero; for the stock machines put `orchestra90 = on` in the cartridge's own file. |
 | `sound_sources` | `all` / `switched` | machine (`all` on the CoCo Zero) | `all` plays every sound source at once: the CoCo's DAC, its single-bit output and every sound cartridge. `switched` is the real CoCo: its multiplexer picks one source (the DAC, the cassette or the cartridge's sound line) and its sound enable turns it on and off, so a program hears only what it selects. The stock CoCo 2 and CoCo 3 use `switched`. |
 | `joystick_quiet` | `on` / `off` | machine | Keeps joystick reads out of the sound. A program reads an analog joystick by writing trial values to the DAC, which are heard as a buzz while the sound is on (Double Back does it). `on` takes each trial back out of the sound; the joystick reads exactly the same. `off` hears every trial, as the real CoCo does. On for the CoCo Zero, off for the stock machines. |

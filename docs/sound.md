@@ -16,6 +16,7 @@ mixed sample.
 | 4 x AY-3-8910 (Symphony-12) | 12 tones + 4 noise | `$FF60`-`$FF63` | `symphony12` | on | off | off |
 | AY-3-8913 (Deluxe CoCo) | 3 tones + noise | `$FF38`-`$FF39` | `deluxe_psg` | off | off | off |
 | Orchestra-90CC | 2 DACs, left and right | `$FF7A`-`$FF7B` | `orchestra90` | on | off | off |
+| MIDI Pak (6850 ACIA) | MIDI out and in, to the computer over USB-C | `$FF6E`-`$FF6F` | `midi_pak` | on | off | off |
 
 \* Loading a Games Master Cartridge image (a bank-switched `.ccc`, 32 KB to
 256 KB) brings its SN76489 on any machine, whatever the setting says.
@@ -306,6 +307,52 @@ DACs directly, as [`ay-checks/orch90.bas`](ay-checks/orch90.bas) does.
 Cost: a write is one more check on the bus's slow path. `orch90.bas`'s
 machine-code loop, writing each DAC about 42,000 times a second, took a
 frame to 8.9 ms (6.8 ms at rest), with no underruns.
+
+## MIDI Pak
+
+The MIDI Pak is the CoCo's MIDI interface: a Motorola 6850 serial chip
+(ACIA) at `$FF6E` (control on write, status on read) and `$FF6F` (data). The
+board passes its MIDI to and from the computer it is plugged into: the USB-C
+cable carries a USB MIDI port beside the serial console, which shows up in
+the computer's music software as **CoCo Zero RP2350**. Lyra 2.85 and Lester
+Hands' CoCo MIDI 3 both drive it; the details below come from disassembling
+their code.
+
+- **Set-up.** Software writes `$03` to the control register (master reset),
+  then `$15`: divide by 16, 8 data bits, no parity, 1 stop bit. With the
+  pak's 500 kHz clock that is MIDI's 31,250 baud.
+- **Sending.** Wait for status bit 1 (TDRE), then write the byte to `$FF6F`.
+  The chip sends at MIDI's real rate, a byte every 320 us, with one byte
+  waiting behind the one going out, as the real 6850 does, so software paces
+  itself exactly as it would on the real pak. Bytes leave the board within
+  about 2 ms of being written: the frame runs in 8 slices while the pak is in
+  use.
+- **Receiving.** A byte from the computer sets status bit 0 (RDRF); reading
+  `$FF6F` takes it. Bytes land at no more than one per 320 us. A byte that
+  lands before the last was read is lost and sets bit 5 (OVRN), as on the
+  chip, so software must be quick: a machine-code loop or an interrupt
+  handler is; a BASIC `PEEK` loop is not, and loses the second and third
+  bytes of a message.
+- **Interrupts.** `$95` instead of `$15` turns the receive interrupt on. The
+  chip then pulls the CART line low (PIA1 CB1), which CoCo MIDI 3 takes as a
+  FIRQ, falling edge, as on the real pak. The line is shared with a
+  cartridge's autostart.
+- **To the computer.** The board cuts the byte stream into USB-MIDI packets
+  itself (`src/midi_usb_pack.h`, running status, SysEx and real-time
+  included), so a program that stops mid-message never garbles the next one.
+- **Where it lives.** `$FF6E`-`$FF6F` are free on both machines, so
+  `midi_pak` is on for the CoCo Zero and off for the stock CoCo 2 and CoCo 3
+  (put `midi_pak = on` in a program's own file to use it there). It sits
+  beside Disk BASIC with no Multi-Pak.
+- The serial log shows `[midi] active=1 usb=1 out=N in=N ...` once a program
+  has set the chip up, with any bytes dropped.
+
+Tests, in [`midi-checks/`](midi-checks/): [`midiecho.bas`](midi-checks/midiecho.bas)
+sends middle C on and off from BASIC, then echoes received bytes, slowly
+enough that it shows the overrun above; [`mlecho.bas`](midi-checks/mlecho.bas)
+does the same with [`mlecho.asm`](midi-checks/mlecho.asm), a 22-byte
+machine-code loop that echoes at full rate. A three-note chord sent as one
+burst comes back whole, 3 to 10 ms later.
 
 ## Where the sound comes out
 

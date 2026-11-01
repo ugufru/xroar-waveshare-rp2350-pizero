@@ -37,6 +37,7 @@ extern "C" {
 // we can tell whether the workaround applies on this part.
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
+#include "midi_usb_pack.h"      // PIZERO-287: MIDI bytes <-> USB-MIDI packets, host-tested
 #define HOST_PIN_DP  28
 static Adafruit_USBH_Host USBHost;
 static volatile uint32_t g_usb_devices = 0;
@@ -1560,6 +1561,7 @@ static void settings_apply(void) {
     coco_machine_csg_always(st->sn76489);
     coco_machine_set_ay_carts(st->coco_psg, st->symphony12, st->deluxe_psg, st->symphony12_stereo);   // PIZERO-149/250
     coco_machine_set_orchestra90(st->orchestra90);        // PIZERO-148
+    coco_machine_set_midi_pak(st->midi_pak);              // PIZERO-287
 #ifdef USB_AUDIO
     usb_audio_set_db(st->usb_audio_db);                   // PIZERO-255, before a DAC is set up
     usb_audio_enable(st->usb_audio);                      // PIZERO-255
@@ -1842,7 +1844,80 @@ static const char *reset_reason_name(void) {
     }
 }
 
+// PIZERO-287: the MIDI Pak's other end. The native USB-C port is a USB MIDI
+// device beside the serial console, so the computer it is plugged into sees
+// a MIDI port; bytes the CoCo writes to the pak go out on it, and bytes in
+// land in the pak at MIDI's rate (coco_machine.cpp does the timing).
+static Adafruit_USBD_MIDI g_usb_midi;
+static uint32_t g_midi_out, g_midi_in;     // bytes moved, for the [midi] log line
+static uint32_t g_midi_out_lost;           // packets USB had no room for
+
+// The core starts USB before setup(), and TinyUSBDevice.begin() clears any
+// interface added earlier (so initVariant() is too early). So it is added at
+// the top of setup() and the board then ALWAYS drops off the bus and rejoins,
+// so the host enumerates the finished configuration from scratch. The
+// library's examples rejoin only if mounted(); setup() runs before the host
+// has finished enumerating, so that skipped the rejoin and changed the
+// configuration under the host's feet, which left the Mac with a device and
+// no interfaces at all, no serial console and no flashing without the BOOT
+// button (2026-11-01).
+static void midi_usb_begin(void) {
+    // The name the computer shows for the board (and so for its MIDI port);
+    // the board definition's own is "RP2350 PiZero". Set before the rejoin
+    // below, so the host reads it fresh.
+    TinyUSBDevice.setProductDescriptor("CoCo Zero RP2350");
+    g_usb_midi.setStringDescriptor("CoCo Zero MIDI Pak");
+    g_usb_midi.begin();
+    TinyUSBDevice.detach();
+    delay(50);
+    TinyUSBDevice.attach();
+}
+
+// Move bytes both ways. Called between the slices of a frame while software
+// has the pak set up, and once a frame otherwise.
+static void midi_pump(void) {
+    if (!TinyUSBDevice.mounted()) {
+        uint8_t b;
+        while (coco_machine_midi_tx_pop(&b)) {}      // nobody to hear them
+        return;
+    }
+    // Our own packing both ways (midi_usb_pack.h), straight on TinyUSB's
+    // packet calls: the library's stream parser garbled a message after an
+    // unfinished one, and the fewer third-party layers the better.
+    static struct midi_pack pack = { 0, 0, 0, { 0, 0, 0 }, false };
+    uint8_t b, pk[4];
+    while (coco_machine_midi_tx_pop(&b)) {
+        g_midi_out++;
+        if (midi_pack_byte(&pack, b, pk) && !tud_midi_packet_write(pk)) g_midi_out_lost++;
+    }
+    while (tud_midi_packet_read(pk)) {
+        uint8_t m[3];
+        int n = midi_unpack(pk, m);
+        for (int i = 0; i < n; i++) { coco_machine_midi_rx_push(m[i]); g_midi_in++; }
+    }
+    TinyUSB_Device_Task();
+}
+
+// PIZERO-287: a frame in slices while the pak is in use, so a byte the CoCo
+// writes leaves within about 2 ms instead of in 16 ms bursts.
+#define MIDI_SLICES 8
+static void run_frame(uint32_t cycles) {
+    if (!coco_machine_midi_active()) {
+        coco_machine_run_cycles(cycles);
+        midi_pump();
+        return;
+    }
+    uint32_t done = 0;
+    for (int i = 0; i < MIDI_SLICES; i++) {
+        uint32_t part = (cycles * (uint32_t)(i + 1)) / MIDI_SLICES - done;
+        coco_machine_run_cycles(part);
+        done += part;
+        midi_pump();
+    }
+}
+
 void setup() {
+    midi_usb_begin();                 // PIZERO-287: first, then a clean re-enumeration
     settings_defaults(&g_settings);   // PIZERO-145: in force until settings.txt is read
     Serial.begin(115200);
 #if defined(FDC_TRACE) && defined(FDC_TRACE_UART)
@@ -2555,7 +2630,7 @@ void loop() {
     hid_key_repeat();                  // PIZERO-167
     a = micros();
     wd_phase(WP_EMU);
-    coco_machine_run_cycles(CYCLES_PER_FRAME * CPU_SPEED_MUL);
+    run_frame(CYCLES_PER_FRAME * CPU_SPEED_MUL);   // PIZERO-287: in slices while MIDI is in use
     wd_post_frame(coco_machine_cpu_pc(), g_usb_devices);   // PIZERO-227
     coco_boot_disk_tick();                       // PIZERO-66: sync an idle dirty drive
     b = micros();
@@ -2754,6 +2829,17 @@ void loop() {
         s_late = 0;
         s_cmax = s_wmax = 0;
         tprintf("%s\r\n", g_run_line);
+        // PIZERO-287: the MIDI Pak, when anything has moved or software set it up.
+        { static uint32_t last_out = 0, last_in = 0;
+          if (coco_machine_midi_active() || g_midi_out != last_out || g_midi_in != last_in) {
+              uint32_t txd, rxd;
+              coco_machine_midi_counters(&txd, &rxd);
+              tprintf("[midi] active=%d usb=%d out=%lu in=%lu dropped_out=%lu dropped_in=%lu usb_full=%lu\r\n",
+                      (int)coco_machine_midi_active(), (int)TinyUSBDevice.mounted(),
+                      (unsigned long)g_midi_out, (unsigned long)g_midi_in,
+                      (unsigned long)txd, (unsigned long)rxd, (unsigned long)g_midi_out_lost);
+              last_out = g_midi_out; last_in = g_midi_in;
+          } }
 #ifdef CPU_PROF
         {
             // PIZERO-209: per emulated cycle, in tenths of a host clock.

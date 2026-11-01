@@ -77,6 +77,9 @@
     { id:'orch', name:'Orchestra-90CC (2 DACs)', col:'#aed581', st:'shipped', addr:'$FF7A-$FF7B',
       r:[[0xFF7A,0xFF7A,'use','Orchestra-90 left DAC'],[0xFF7B,0xFF7B,'use','Orchestra-90 right DAC']],
       v:'ok', why:'Coexists: outside the cartridge window.' },
+    { id:'midi', name:'MIDI Pak (6850 ACIA)', col:'#80cbc4', st:'shipped, PIZERO-287', addr:'$FF6E-$FF6F',
+      r:[[0xFF6E,0xFF6E,'use','MIDI Pak 6850: control (write) / status (read)'],[0xFF6F,0xFF6F,'use','MIDI Pak 6850: transmit / receive data']],
+      v:'ok', why:'Coexists: outside the cartridge window. Its interrupt pulls the CART line (PIA1 CB1, FIRQ), shared with a cartridge\'s autostart. MIDI goes to and from the computer on the USB-C cable.' },
     { id:'spk', name:'Speech/Sound Cartridge', col:'#ffd54f', st:'planned, PIZERO-249', addr:'$FF7D-$FF7E',
       r:[[0xFF7D,0xFF7E,'use','Speech/Sound Cartridge microcontroller']],
       v:'ok', why:'Would coexist: outside the cartridge window.' },
@@ -241,9 +244,9 @@
 
   // The verdict, in words, at the foot.
   var key = document.getElementById('key');
-  [ 'Beside Disk BASIC with no switching: the CoCo\'s own DAC, the SN76489, CoCo PSG, Symphony-12, Deluxe PSG, Orchestra-90, and the planned Speech/Sound Cartridge.',
+  [ 'Beside Disk BASIC with no switching: the CoCo\'s own DAC, the SN76489, CoCo PSG, Symphony-12, Deluxe PSG, Orchestra-90, MIDI Pak, and the planned Speech/Sound Cartridge.',
     'The planned OPL3 also fits beside Disk BASIC, but collides with the always-on SN76489 at $FF51 and $FF53. The planned SID cannot: it sits on the disk controller\'s own registers.',
-    'Sources: lib/coco_machine/src/coco_machine.cpp (fdc_io_write, the bus write decode), cart_gmc.h, docs/sound.md; PIZERO-249, 267, 278.' ]
+    'Sources: lib/coco_machine/src/coco_machine.cpp (fdc_io_write, the bus write decode), cart_gmc.h, docs/sound.md; PIZERO-249, 267, 278, 287.' ]
     .forEach(function (s, i) { el('text', { x:40, y:764 + i * 22, 'class':i === 2 ? 'muted small' : 'fg', 'font-size':i === 2 ? 12 : 14 }, key, s); });
 
   drawGrid(); drawLegend(); showIdle();

@@ -14,6 +14,7 @@
 //   symphony12_stereo = on | off              PIZERO-250: its chips 1-2 left, 3-4 right
 //   deluxe_psg        = on | off              PIZERO-149: Deluxe CoCo's AY at $FF38
 //   orchestra90       = on | off              PIZERO-148: Orchestra-90CC's DACs at $FF7A/$FF7B
+//   midi_pak          = on | off              PIZERO-287: the MIDI Pak's 6850 at $FF6E, to USB MIDI
 //   usb_audio         = on | off              PIZERO-255: a USB headphone DAC at boot takes the sound
 //   usb_audio_db      = -60-0                 PIZERO-255: that DAC's own level, set when it starts
 //   sound_sources     = all | switched        PIZERO-253: every source at once, or the multiplexer
@@ -83,6 +84,7 @@ struct coco_settings {
     bool    symphony12_stereo;        // PIZERO-250: the card's stereo jumper
     bool    deluxe_psg;
     bool    orchestra90;              // PIZERO-148
+    bool    midi_pak;                 // PIZERO-287
     bool    usb_audio;                // PIZERO-255
     int8_t  usb_audio_db;             // PIZERO-255: -60 to 0
     bool    sound_all;                // PIZERO-253: sound_sources = all (else switched)
@@ -145,6 +147,7 @@ static inline void settings_profile(struct coco_settings *s, uint8_t machine) {
     s->sound_all = zero;
     s->joystick_quiet = zero;
     s->orchestra90 = zero;
+    s->midi_pak = zero;               // PIZERO-287: a cartridge, so a machine setting
 }
 
 static inline void settings_defaults(struct coco_settings *s) {
@@ -166,6 +169,7 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->key_repeat_delay = 500;
     s->key_repeat_rate = 10;
     s->orchestra90 = true;            // PIZERO-148
+    s->midi_pak = true;               // PIZERO-287: improvements are on by default
     s->usb_audio = true;              // PIZERO-255: plugging a DAC in means wanting it
     s->usb_audio_db = -10;            // PIZERO-255: TV-level sound is hot at a DAC's 0 dB
     s->sound_all = true;              // PIZERO-253: improvements are on by default
@@ -270,6 +274,7 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
         s->usb_audio_db = (int8_t)n;
     }
     else if (!strcmp(name, "orchestra90"))       { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->orchestra90 = b; }
+    else if (!strcmp(name, "midi_pak"))          { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->midi_pak = b; }
     else if (!strcmp(name, "joystick_quiet"))    { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_quiet = b; }
     else if (!strcmp(name, "deluxe_psg"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->deluxe_psg = b; }
     else if (!strcmp(name, "gime_palette")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_palette = b; }
@@ -493,6 +498,7 @@ static inline int settings_template(char *out, size_t n) {
         "# coco_psg = %s\n"
         "# symphony12 = %s\n"
         "# orchestra90 = %s\n"
+        "# midi_pak = %s\n"
         "# gime_palette = %s\n"
         "# gime_timer = %s\n"
         "# font = %s\n"
@@ -519,7 +525,7 @@ static inline int settings_template(char *out, size_t n) {
         "# color_dark_green = #006500\n",
         SETTINGS_MACHINE_NAMES[d.machine],
         d.sn76489 ? "on" : "off", d.coco_psg ? "on" : "off", d.symphony12 ? "on" : "off",
-        d.orchestra90 ? "on" : "off",
+        d.orchestra90 ? "on" : "off", d.midi_pak ? "on" : "off",
         d.gime_palette ? "on" : "off", d.gime_timer ? "on" : "off",
         d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
         d.lowercase ? "on" : "off", d.key_repeat ? "on" : "off",

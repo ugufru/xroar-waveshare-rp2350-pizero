@@ -52,6 +52,7 @@ extern "C" {
 #include "xroar.h"
 #include "cpu_prof.h"        // PIZERO-209: empty unless CPU_PROF
 #include "coco_fastbus.h"     // PIZERO-131: RAM and ROM read by the core itself
+#include "acia6850.h"         // PIZERO-287: the MIDI Pak
 #include "tcc1014/tcc1014.h"   // PIZERO-133: the CoCo 3's GIME
 }
 
@@ -812,6 +813,25 @@ static bool g_orch_on = true;
 static inline bool orch_owns(uint16_t a) { return g_orch_on && (a & 0xFFFE) == 0xFF7A; }
 static void orch_write(uint16_t a, uint8_t d);
 
+// PIZERO-287: the MIDI Pak, a 6850 ACIA at $FF6E (control / status) and
+// $FF6F (data), free on both machines like the Orchestra-90. The chip is
+// acia6850.h; here it gets the bus, an event at the tick it next needs
+// servicing (so received bytes land at MIDI's own rate and raise their
+// interrupt on time), and the CART line. Its IRQ pulls CART low, which is
+// PIA1 CB1: CoCo MIDI 3 takes it as FIRQ, falling edge. The host side moves
+// bytes with coco_machine_midi_tx_pop / _rx_push.
+static struct acia6850 g_acia;
+static bool g_acia_on = true;
+static struct event g_acia_event;
+static bool g_acia_event_ready = false;
+static bool g_cart_line = true;              // what PIA1 CB1 was last given
+static inline bool acia_owns(uint16_t a) { return g_acia_on && (a & 0xFFFE) == 0xFF6E; }
+static void acia_after(void);
+// Out of line and in flash: the bus functions above run from RAM, and an
+// access to $FF6E is rare enough not to need it (inlined, it cost 1.1 KB of RAM).
+static uint8_t __attribute__((noinline)) acia_bus_read(uint16_t A);
+static void    __attribute__((noinline)) acia_bus_write(uint16_t A, uint8_t D);
+
 // Available all the time by default, not only with a GMC in (see
 // csg_on_latch_mirror in cart_gmc.h); the settings page will switch it.
 static bool g_csg_always = true;
@@ -1091,6 +1111,8 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     // Now use SAM->S (set by mem_cycle) to route data on the bus.
     if (RnW && ayb_owns(&g_ayb, A)) {
         g_m.cpu->D = ayb_read(&g_ayb, A);                // PIZERO-149
+    } else if (RnW && acia_owns(A)) {
+        g_m.cpu->D = acia_bus_read(A);                   // PIZERO-287
     } else if (RnW) {
         switch (g_m.sam->S) {
         case 0:  g_m.cpu->D = g_m.ram[A]; break;
@@ -1144,6 +1166,8 @@ extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
             ayb_write(&g_ayb, A, g_m.cpu->D);           // PIZERO-149
         } else if (orch_owns(A)) {
             orch_write(A, g_m.cpu->D);                  // PIZERO-148
+        } else if (acia_owns(A)) {
+            acia_bus_write(A, g_m.cpu->D);              // PIZERO-287
         } else if ((A & 0xFFE0) == 0xFF00) {
             mc6821_write(g_m.pia0, A, g_m.cpu->D);
             if (A & 1) g_m.pia_irq_dirty = true;       // CRA/CRB write may change IRQ enable
@@ -1333,6 +1357,9 @@ static void HOT_FUNC(coco3_cpu_cycle)(void *sptr, int ncycles, bool RnW, uint16_
         else     ayb_write(&g_ayb, A, *D);
     } else if (!RnW && orch_owns(A)) {
         orch_write(A, *D);                              // PIZERO-148
+    } else if (acia_owns(A)) {                          // PIZERO-287
+        if (RnW) *D = acia_bus_read(A);
+        else     acia_bus_write(A, *D);
     } else
     switch (coco3_bus_cycle(&g_c3bus, g_gime3->S, g_gime3->RAS, g_gime3->Z, RnW, A, D)) {
     case C3_BUS_PIA0:
@@ -1433,6 +1460,8 @@ static _Bool coco3_init(const uint8_t *rom) {
     fastbus_sync();
 
     machine_event_list_global = event_list_new();
+    g_acia_event_ready = false;                  // PIZERO-287: its event was on the old list
+    acia_init(&g_acia); g_cart_line = true;
     if (!machine_event_list_global) return 0;
     event_current_tick = 0;
 
@@ -1506,6 +1535,8 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
 
     // Event list MUST exist before any part_create() that uses MACHINE_EVENT_LIST.
     machine_event_list_global = event_list_new();
+    g_acia_event_ready = false;                  // PIZERO-287: its event was on the old list
+    acia_init(&g_acia); g_cart_line = true;
     if (!machine_event_list_global) return 0;
     event_current_tick = 0;
 
@@ -1990,6 +2021,82 @@ static inline void run_cpu_with_audio(uint32_t cycles) {
     audio_catch_up();
 }
 
+// PIZERO-287: the CART line, PIA1 CB1. It is wired-OR on the real machine:
+// a cartridge's autostart square wave and the MIDI Pak's IRQ both pull it
+// low. Only a change is passed to the PIA, so its edge detection sees the
+// same edges a real one would.
+static void cart_line_update(void) {
+    bool level = (g_m.cart_rom && g_m.cart_autostart) ? g_m.cart_cb1_level : true;
+    if (acia_irq(&g_acia)) level = false;
+    if (level != g_cart_line && g_m.pia1) {
+        g_cart_line = level;
+        mc6821_set_cx1(&g_m.pia1->b, level);
+        g_m.pia_irq_dirty = true;
+    }
+}
+
+static void acia_expired(void *) {
+    acia_service(&g_acia, (uint32_t)event_current_tick);
+    acia_after();
+}
+
+// After every access and service: the CART line, and the next event.
+static void acia_after(void) {
+    cart_line_update();
+    if (!g_acia_event_ready) {
+        event_init(&g_acia_event, MACHINE_EVENT_LIST, DELEGATE_AS0(void, acia_expired, NULL));
+        g_acia_event_ready = true;
+    }
+    if (event_queued(&g_acia_event)) event_dequeue(&g_acia_event);
+    uint32_t at;
+    if (acia_next_due(&g_acia, (uint32_t)event_current_tick, &at))
+        event_queue_abs(&g_acia_event, (event_ticks)at);
+}
+
+static uint8_t acia_bus_read(uint16_t A) {
+    uint8_t v = acia_read(&g_acia, A & 1, (uint32_t)event_current_tick);
+    acia_after();
+    return v;
+}
+
+static void acia_bus_write(uint16_t A, uint8_t D) {
+    acia_write(&g_acia, A & 1, D, (uint32_t)event_current_tick);
+    acia_after();
+}
+
+static void acia_power_on(void) {
+    if (g_acia_event_ready && event_queued(&g_acia_event)) event_dequeue(&g_acia_event);
+    acia_init(&g_acia);
+    cart_line_update();
+}
+
+// Settings are applied again whenever they are re-read; only a change resets
+// the chip, since a reset holds TDRE low and a program waiting to send (Lyra
+// polls TDRE) would wait for ever.
+extern "C" void coco_machine_set_midi_pak(bool on) {
+    if (on == g_acia_on) return;
+    g_acia_on = on;
+    acia_power_on();
+}
+
+extern "C" bool coco_machine_midi_tx_pop(uint8_t *b) { return acia_tx_pop(&g_acia, b); }
+
+// A byte from the host for the CoCo; the event takes it from there.
+extern "C" bool coco_machine_midi_rx_push(uint8_t b) {
+    if (!g_acia_on) return false;
+    bool ok = acia_rx_push(&g_acia, b);
+    if (ok && g_m.cpu) acia_after();
+    return ok;
+}
+
+// True once software has set the chip up (out of master reset): the host
+// then runs frames in slices so bytes leave close to when they were written.
+extern "C" bool coco_machine_midi_active(void) { return g_acia_on && !g_acia.in_reset; }
+
+extern "C" void coco_machine_midi_counters(uint32_t *tx_dropped, uint32_t *rx_dropped) {
+    *tx_dropped = g_acia.tx_dropped; *rx_dropped = g_acia.rx_dropped;
+}
+
 extern "C" void coco_machine_run_cycles(uint32_t cycles) {
     if (!g_m.cpu) return;
 
@@ -2001,8 +2108,7 @@ extern "C" void coco_machine_run_cycles(uint32_t cycles) {
         g_m.cart_toggle_remaining -= (int32_t)cycles;
         while (g_m.cart_toggle_remaining <= 0) {
             g_m.cart_cb1_level = !g_m.cart_cb1_level;
-            mc6821_set_cx1(&g_m.pia1->b, g_m.cart_cb1_level);
-            g_m.pia_irq_dirty = true;
+            cart_line_update();                  // PIZERO-287: shared with the MIDI Pak
             g_m.cart_toggle_remaining += 88950;
         }
     }
@@ -2220,6 +2326,7 @@ extern "C" void coco_machine_cold_reset(void) {
         fastbus_sync();
         csg_reset();
         ayb_reset(&g_ayb);                           // PIZERO-149
+        acia_power_on();                             // PIZERO-287
         tcc1014_reset(g_gime3);
         fastbus_sync();                              // PIZERO-213: the map after reset
         g_m.cpu->reset(g_m.cpu);
@@ -2248,6 +2355,7 @@ extern "C" void coco_machine_cold_reset(void) {
     fastbus_sync();                                       // PIZERO-131: TY and the bank
     csg_reset();                                          // PIZERO-143: silent at power-on
     ayb_reset(&g_ayb);                                    // PIZERO-149
+    acia_power_on();                                      // PIZERO-287
     g_m.cpu->reset(g_m.cpu);
 }
 
