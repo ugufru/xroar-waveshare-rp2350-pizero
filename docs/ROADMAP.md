@@ -166,7 +166,7 @@ Good change-of-pace work between CoCo 3 stages. None waits on anything.
   Done 2026-10-22 as `PIZERO-242`'s `machine = coco2`.
 - **`PIZERO-173`**: type `{ } | ~` and paste faster through BASIC's keyboard
   routine. **`PIZERO-197`**: Caps Lock chord for NitrOS-9.
-- **`PIZERO-205`**: the F1 help reader (CoCo-styled Markdown, built-in help,
+- **`PIZERO-205`**: the help reader (CoCo-styled Markdown, built-in help,
   card documents). **`PIZERO-206`**: the rest of the INFO facts.
 - **`PIZERO-57`**: load a `.FNT` from the card (the built-in font choice
   shipped as `PIZERO-166`).
@@ -197,6 +197,11 @@ The chain, bottom to top: `PIZERO-70` (backend interface) → `PIZERO-71` (VFS)
 (DriveWire), `PIZERO-77`, `78` (deferred). `PIZERO-113` (power loss mid-write)
 matters now that the guest writes to the card. `PIZERO-69` (save-states) and
 `PIZERO-68` (DECB maintenance) are deferred.
+
+What BASIC sees may go the other way (`PIZERO-288`, proposed 2026-11-01): an
+unmodified Disk BASIC reading a host directory through an emulated floppy, 8.3
+names only, with the chain above kept for the Forth kernel and OS-9. See
+[`directory-drives-proposal.md`](directory-drives-proposal.md).
 
 ## Fixes and checks still owed (low urgency)
 

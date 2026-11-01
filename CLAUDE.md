@@ -62,6 +62,13 @@ a build flag.
 
 ## Workflow rules
 
+- **Sources of truth, in order.** To plan, or to say how something works, read
+  the canonical docs first (`README.md`, `SETTINGS.md`, `docs/`), then confirm
+  against the source code. The code is what the firmware does: if a doc
+  disagrees with it, correct the doc from the code. `issues.jsonl` is history
+  and intent, not a description of the firmware; never cite an issue's
+  description as how something works today. Any conflict between code, docs
+  and issues gets reported to the user, not quietly resolved.
 - Work requires an issue in `issues.jsonl`. Create one before starting.
 - Don't mark an issue `done` until the user confirms it works on hardware.
 - Ask before any git push.

@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1226" width="1200" height="1226" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<title>Directory drives: three ways to give Disk BASIC a host directory</title>
+<desc>PIZERO-288. Compares option 1 (our own DOS), option 2 (Disk BASIC with an extension) and option 3 (an emulated floppy built from a host directory, 8.3 names only) on nine criteria, then lists short-term work that pays off for all three. The same content is in docs/directory-drives-proposal.md as tables. Hover a cell for its full text.</desc>
+<style>
+  svg { --bg:#fcfcfb; --fg:#0b0b0b; --muted:#52514e; --line:#e1e0d9;
+        --r1:#86b6ef; --r2:#3987e5; --r3:#184f95; --t1:#0b0b0b; --t2:#0b0b0b; --t3:#ffffff; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#1a1a19; --fg:#f0efec; --muted:#c3c2b7; --line:#2c2c2a;
+          --r1:#184f95; --r2:#3987e5; --r3:#9ec5f4; --t1:#ffffff; --t2:#0b0b0b; --t3:#0b0b0b; }
+  }
+  .bg { fill:var(--bg); } .fg { fill:var(--fg); } .muted { fill:var(--muted); }
+  .h1 { font-size:24px; font-weight:650; fill:var(--fg); }
+  .h2 { font-size:13px; font-weight:600; fill:var(--muted); letter-spacing:.05em; text-transform:uppercase; }
+  .colh { font-size:15px; font-weight:650; fill:var(--fg); }
+  .crit { font-size:14px; font-weight:600; fill:var(--fg); }
+  .sub { font-size:12px; fill:var(--muted); }
+  .r1 { fill:var(--r1); } .r2 { fill:var(--r2); } .r3 { fill:var(--r3); }
+  .t1 { fill:var(--t1); } .t2 { fill:var(--t2); } .t3 { fill:var(--t3); }
+  .word { font-size:13px; font-weight:700; } .note { font-size:12px; }
+  .rule { stroke:var(--line); stroke-width:1; }
+  .cell:hover rect { stroke:var(--fg); stroke-width:2; }
+</style>
+<rect class="bg" width="1200" height="1226"/>
+<text class="h1" x="40" y="48">Directory drives: three ways to put a USB directory behind Disk BASIC</text>
+<text class="sub" x="40" y="72">PIZERO-288, docs/directory-drives-proposal.md. How each option does on what matters, and the short-term work that pays off whichever wins.</text>
+<text class="h2" x="40" y="110">How they compare</text>
+<text class="colh" x="352" y="132">1  Our own DOS</text>
+<text class="sub" x="352" y="148">replace the ROM, DECB-like syntax</text>
+<text class="colh" x="632" y="132">2  Extended DECB</text>
+<text class="sub" x="632" y="148">DECB plus an extension</text>
+<text class="colh" x="912" y="132">3  Virtual floppy</text>
+<text class="sub" x="912" y="148">unmodified DECB, 8.3 rule</text>
+<text class="crit" x="40" y="182">Existing BASIC programs</text>
+<text class="sub" x="40" y="200">LOAD, SAVE, OPEN, RUN as written</text>
+<g class="cell"><title>Our own DOS, Existing BASIC programs: Partial. only as far as the syntax matches</title>
+<rect class="r2" x="342" y="160" width="276" height="52" rx="4"/>
+<text class="word t2" x="354" y="182">Partial</text>
+<text class="note t2" x="354" y="200">only as far as the syntax matches</text></g>
+<g class="cell"><title>Extended DECB, Existing BASIC programs: Strong. DECB is still there</title>
+<rect class="r3" x="622" y="160" width="276" height="52" rx="4"/>
+<text class="word t3" x="634" y="182">Strong</text>
+<text class="note t3" x="634" y="200">DECB is still there</text></g>
+<g class="cell"><title>Virtual floppy, Existing BASIC programs: Strong. DECB is not touched</title>
+<rect class="r3" x="902" y="160" width="276" height="52" rx="4"/>
+<text class="word t3" x="914" y="182">Strong</text>
+<text class="note t3" x="914" y="200">DECB is not touched</text></g>
+<text class="crit" x="40" y="238">Sector-level software</text>
+<text class="sub" x="40" y="256">DSKCON, DSKI$, DSKO$, sector editors</text>
+<g class="cell"><title>Our own DOS, Sector-level software: Weak. needs option 3 underneath</title>
+<rect class="r1" x="342" y="216" width="276" height="52" rx="4"/>
+<text class="word t1" x="354" y="238">Weak</text>
+<text class="note t1" x="354" y="256">needs option 3 underneath</text></g>
+<g class="cell"><title>Extended DECB, Sector-level software: Partial. .DSK yes; directories need 3</title>
+<rect class="r2" x="622" y="216" width="276" height="52" rx="4"/>
+<text class="word t2" x="634" y="238">Partial</text>
+<text class="note t2" x="634" y="256">.DSK yes; directories need 3</text></g>
+<g class="cell"><title>Virtual floppy, Sector-level software: Strong. sectors are what it serves</title>
+<rect class="r3" x="902" y="216" width="276" height="52" rx="4"/>
+<text class="word t3" x="914" y="238">Strong</text>
+<text class="note t3" x="914" y="256">sectors are what it serves</text></g>
+<text class="crit" x="40" y="302">Long file names</text>
+<g class="cell"><title>Our own DOS, Long file names: Strong. native</title>
+<rect class="r3" x="342" y="272" width="276" height="52" rx="4"/>
+<text class="word t3" x="354" y="294">Strong</text>
+<text class="note t3" x="354" y="312">native</text></g>
+<g class="cell"><title>Extended DECB, Long file names: Strong. through the extension</title>
+<rect class="r3" x="622" y="272" width="276" height="52" rx="4"/>
+<text class="word t3" x="634" y="294">Strong</text>
+<text class="note t3" x="634" y="312">through the extension</text></g>
+<g class="cell"><title>Virtual floppy, Long file names: Weak. 8.3 only, by design</title>
+<rect class="r1" x="902" y="272" width="276" height="52" rx="4"/>
+<text class="word t1" x="914" y="294">Weak</text>
+<text class="note t1" x="914" y="312">8.3 only, by design</text></g>
+<text class="crit" x="40" y="350">A host directory just works</text>
+<text class="sub" x="40" y="368">no conversion, no sidecar files</text>
+<g class="cell"><title>Our own DOS, A host directory just works: Strong. every file</title>
+<rect class="r3" x="342" y="328" width="276" height="52" rx="4"/>
+<text class="word t3" x="354" y="350">Strong</text>
+<text class="note t3" x="354" y="368">every file</text></g>
+<g class="cell"><title>Extended DECB, A host directory just works: Strong. every file, extended commands</title>
+<rect class="r3" x="622" y="328" width="276" height="52" rx="4"/>
+<text class="word t3" x="634" y="350">Strong</text>
+<text class="note t3" x="634" y="368">every file, extended commands</text></g>
+<g class="cell"><title>Virtual floppy, A host directory just works: Strong. 8.3 files, byte for byte</title>
+<rect class="r3" x="902" y="328" width="276" height="52" rx="4"/>
+<text class="word t3" x="914" y="350">Strong</text>
+<text class="note t3" x="914" y="368">8.3 files, byte for byte</text></g>
+<text class="crit" x="40" y="406">Capacity</text>
+<text class="sub" x="40" y="424">files per drive, size per file</text>
+<g class="cell"><title>Our own DOS, Capacity: Strong. host limits</title>
+<rect class="r3" x="342" y="384" width="276" height="52" rx="4"/>
+<text class="word t3" x="354" y="406">Strong</text>
+<text class="note t3" x="354" y="424">host limits</text></g>
+<g class="cell"><title>Extended DECB, Capacity: Partial. DECB limits on plain commands</title>
+<rect class="r2" x="622" y="384" width="276" height="52" rx="4"/>
+<text class="word t2" x="634" y="406">Partial</text>
+<text class="note t2" x="634" y="424">DECB limits on plain commands</text></g>
+<g class="cell"><title>Virtual floppy, Capacity: Partial. 156K a file, 72 a view, no disk full</title>
+<rect class="r2" x="902" y="384" width="276" height="52" rx="4"/>
+<text class="word t2" x="914" y="406">Partial</text>
+<text class="note t2" x="914" y="424">156K a file, 72 a view, no disk full</text></g>
+<text class="crit" x="40" y="470">6809 ROM space needed</text>
+<g class="cell"><title>Our own DOS, 6809 ROM space needed: Partial. a new 8K ROM, assembler in build</title>
+<rect class="r2" x="342" y="440" width="276" height="52" rx="4"/>
+<text class="word t2" x="354" y="462">Partial</text>
+<text class="note t2" x="354" y="480">a new 8K ROM, assembler in build</text></g>
+<g class="cell"><title>Extended DECB, 6809 ROM space needed: Weak. DECB is full; CoCo 3 room unknown</title>
+<rect class="r1" x="622" y="440" width="276" height="52" rx="4"/>
+<text class="word t1" x="634" y="462">Weak</text>
+<text class="note t1" x="634" y="480">DECB is full; CoCo 3 room unknown</text></g>
+<g class="cell"><title>Virtual floppy, 6809 ROM space needed: Strong. none</title>
+<rect class="r3" x="902" y="440" width="276" height="52" rx="4"/>
+<text class="word t3" x="914" y="462">Strong</text>
+<text class="note t3" x="914" y="480">none</text></g>
+<text class="crit" x="40" y="526">Same on CoCo 1, 2 and 3</text>
+<g class="cell"><title>Our own DOS, Same on CoCo 1, 2 and 3: Partial. must survive CoCo 3 patching</title>
+<rect class="r2" x="342" y="496" width="276" height="52" rx="4"/>
+<text class="word t2" x="354" y="518">Partial</text>
+<text class="note t2" x="354" y="536">must survive CoCo 3 patching</text></g>
+<g class="cell"><title>Extended DECB, Same on CoCo 1, 2 and 3: Partial. CoCo 3 room unverified</title>
+<rect class="r2" x="622" y="496" width="276" height="52" rx="4"/>
+<text class="word t2" x="634" y="518">Partial</text>
+<text class="note t2" x="634" y="536">CoCo 3 room unverified</text></g>
+<g class="cell"><title>Virtual floppy, Same on CoCo 1, 2 and 3: Strong. it sits below the ROM</title>
+<rect class="r3" x="902" y="496" width="276" height="52" rx="4"/>
+<text class="word t3" x="914" y="518">Strong</text>
+<text class="note t3" x="914" y="536">it sits below the ROM</text></g>
+<text class="crit" x="40" y="574">Build effort</text>
+<text class="sub" x="40" y="592">what the hard part is</text>
+<g class="cell"><title>Our own DOS, Build effort: Weak. a DOS&#x27;s BASIC side, from scratch</title>
+<rect class="r1" x="342" y="552" width="276" height="52" rx="4"/>
+<text class="word t1" x="354" y="574">Weak</text>
+<text class="note t1" x="354" y="592">a DOS&#x27;s BASIC side, from scratch</text></g>
+<g class="cell"><title>Extended DECB, Build effort: Partial. hooks inside a full 8K ROM</title>
+<rect class="r2" x="622" y="552" width="276" height="52" rx="4"/>
+<text class="word t2" x="634" y="574">Partial</text>
+<text class="note t2" x="634" y="592">hooks inside a full 8K ROM</text></g>
+<g class="cell"><title>Virtual floppy, Build effort: Partial. write inference, refresh rule</title>
+<rect class="r2" x="902" y="552" width="276" height="52" rx="4"/>
+<text class="word t2" x="914" y="574">Partial</text>
+<text class="note t2" x="914" y="592">write inference, refresh rule</text></g>
+<text class="crit" x="40" y="630">Shares work with native/Forth</text>
+<text class="sub" x="40" y="648">the PIZERO-72 hypercall</text>
+<g class="cell"><title>Our own DOS, Shares work with native/Forth: Strong. same hypercall</title>
+<rect class="r3" x="342" y="608" width="276" height="52" rx="4"/>
+<text class="word t3" x="354" y="630">Strong</text>
+<text class="note t3" x="354" y="648">same hypercall</text></g>
+<g class="cell"><title>Extended DECB, Shares work with native/Forth: Strong. same hypercall</title>
+<rect class="r3" x="622" y="608" width="276" height="52" rx="4"/>
+<text class="word t3" x="634" y="630">Strong</text>
+<text class="note t3" x="634" y="648">same hypercall</text></g>
+<g class="cell"><title>Virtual floppy, Shares work with native/Forth: Partial. shares the storage backend only</title>
+<rect class="r2" x="902" y="608" width="276" height="52" rx="4"/>
+<text class="word t2" x="914" y="630">Partial</text>
+<text class="note t2" x="914" y="648">shares the storage backend only</text></g>
+<rect class="r3" x="340" y="678" width="16" height="16" rx="3"/>
+<text class="sub" x="364" y="691" style="fill:var(--fg)">Strong</text>
+<rect class="r2" x="470" y="678" width="16" height="16" rx="3"/>
+<text class="sub" x="494" y="691" style="fill:var(--fg)">Partial</text>
+<rect class="r1" x="600" y="678" width="16" height="16" rx="3"/>
+<text class="sub" x="624" y="691" style="fill:var(--fg)">Weak</text>
+<text class="sub" x="740" y="691">The word in each cell carries the rating, not the color.</text>
+<text class="h2" x="40" y="774">Short-term wins that pay off for all three</text>
+<text class="colh" x="352" y="814">1  Our own DOS</text>
+<text class="colh" x="632" y="814">2  Extended DECB</text>
+<text class="colh" x="912" y="814">3  Virtual floppy</text>
+<line class="rule" x1="40" x2="1180" y1="830" y2="830"/>
+<text class="crit" x="40" y="850">Host-file storage on the SD card now, USB later</text>
+<text class="sub" x="40" y="867">PIZERO-70 backend; USB is PIZERO-78</text>
+<g class="cell"><title>Host-file storage on the SD card now, USB later: core for Our own DOS</title>
+<rect class="r3" x="342" y="838" width="120" height="30" rx="4"/>
+<text class="word t3" x="354" y="858">Core piece</text></g>
+<g class="cell"><title>Host-file storage on the SD card now, USB later: core for Extended DECB</title>
+<rect class="r3" x="622" y="838" width="120" height="30" rx="4"/>
+<text class="word t3" x="634" y="858">Core piece</text></g>
+<g class="cell"><title>Host-file storage on the SD card now, USB later: core for Virtual floppy</title>
+<rect class="r3" x="902" y="838" width="120" height="30" rx="4"/>
+<text class="word t3" x="914" y="858">Core piece</text></g>
+<line class="rule" x1="40" x2="1180" y1="876" y2="876"/>
+<text class="crit" x="40" y="896">DECB file rules, host-tested</text>
+<text class="sub" x="40" y="913">8.3 filter, type and ASCII sniffing, extensions</text>
+<g class="cell"><title>DECB file rules, host-tested: helps for Our own DOS</title>
+<rect class="r2" x="342" y="884" width="120" height="30" rx="4"/>
+<text class="word t2" x="354" y="904">Helps</text></g>
+<g class="cell"><title>DECB file rules, host-tested: core for Extended DECB</title>
+<rect class="r3" x="622" y="884" width="120" height="30" rx="4"/>
+<text class="word t3" x="634" y="904">Core piece</text></g>
+<g class="cell"><title>DECB file rules, host-tested: core for Virtual floppy</title>
+<rect class="r3" x="902" y="884" width="120" height="30" rx="4"/>
+<text class="word t3" x="914" y="904">Core piece</text></g>
+<line class="rule" x1="40" x2="1180" y1="922" y2="922"/>
+<text class="crit" x="40" y="942">Editor reads any line ending</text>
+<text class="sub" x="40" y="959">reads CR, LF, CRLF; new files CR</text>
+<g class="cell"><title>Editor reads any line ending: helps for Our own DOS</title>
+<rect class="r2" x="342" y="930" width="120" height="30" rx="4"/>
+<text class="word t2" x="354" y="950">Helps</text></g>
+<g class="cell"><title>Editor reads any line ending: helps for Extended DECB</title>
+<rect class="r2" x="622" y="930" width="120" height="30" rx="4"/>
+<text class="word t2" x="634" y="950">Helps</text></g>
+<g class="cell"><title>Editor reads any line ending: helps for Virtual floppy</title>
+<rect class="r2" x="902" y="930" width="120" height="30" rx="4"/>
+<text class="word t2" x="914" y="950">Helps</text></g>
+<line class="rule" x1="40" x2="1180" y1="968" y2="968"/>
+<text class="crit" x="40" y="988">Unpack GAME.DSK into GAME/, pack it back</text>
+<text class="sub" x="40" y="1005">the same mapping option 3 runs on</text>
+<g class="cell"><title>Unpack GAME.DSK into GAME/, pack it back: helps for Our own DOS</title>
+<rect class="r2" x="342" y="976" width="120" height="30" rx="4"/>
+<text class="word t2" x="354" y="996">Helps</text></g>
+<g class="cell"><title>Unpack GAME.DSK into GAME/, pack it back: helps for Extended DECB</title>
+<rect class="r2" x="622" y="976" width="120" height="30" rx="4"/>
+<text class="word t2" x="634" y="996">Helps</text></g>
+<g class="cell"><title>Unpack GAME.DSK into GAME/, pack it back: core for Virtual floppy</title>
+<rect class="r3" x="902" y="976" width="120" height="30" rx="4"/>
+<text class="word t3" x="914" y="996">Core piece</text></g>
+<line class="rule" x1="40" x2="1180" y1="1014" y2="1014"/>
+<text class="crit" x="40" y="1034">ZIP import</text>
+<text class="sub" x="40" y="1051">open the zipped .DSK files most archives ship</text>
+<g class="cell"><title>ZIP import: helps for Our own DOS</title>
+<rect class="r2" x="342" y="1022" width="120" height="30" rx="4"/>
+<text class="word t2" x="354" y="1042">Helps</text></g>
+<g class="cell"><title>ZIP import: helps for Extended DECB</title>
+<rect class="r2" x="622" y="1022" width="120" height="30" rx="4"/>
+<text class="word t2" x="634" y="1042">Helps</text></g>
+<g class="cell"><title>ZIP import: helps for Virtual floppy</title>
+<rect class="r2" x="902" y="1022" width="120" height="30" rx="4"/>
+<text class="word t2" x="914" y="1042">Helps</text></g>
+<line class="rule" x1="40" x2="1180" y1="1060" y2="1060"/>
+<text class="crit" x="40" y="1080">Check the DECB facts in the disassembly</text>
+<text class="sub" x="40" y="1097">filename parser, FAT re-read, CoCo 3 room</text>
+<g class="cell"><title>Check the DECB facts in the disassembly: helps for Our own DOS</title>
+<rect class="r2" x="342" y="1068" width="120" height="30" rx="4"/>
+<text class="word t2" x="354" y="1088">Helps</text></g>
+<g class="cell"><title>Check the DECB facts in the disassembly: core for Extended DECB</title>
+<rect class="r3" x="622" y="1068" width="120" height="30" rx="4"/>
+<text class="word t3" x="634" y="1088">Core piece</text></g>
+<g class="cell"><title>Check the DECB facts in the disassembly: core for Virtual floppy</title>
+<rect class="r3" x="902" y="1068" width="120" height="30" rx="4"/>
+<text class="word t3" x="914" y="1088">Core piece</text></g>
+<line class="rule" x1="40" x2="1180" y1="1106" y2="1106"/>
+<text class="crit" x="40" y="1126">Overlay conveniences</text>
+<text class="sub" x="40" y="1143">text files, Markdown, boot flag, DIR popup, hex editor</text>
+<g class="cell"><title>Overlay conveniences: helps for Our own DOS</title>
+<rect class="r2" x="342" y="1114" width="120" height="30" rx="4"/>
+<text class="word t2" x="354" y="1134">Helps</text></g>
+<g class="cell"><title>Overlay conveniences: helps for Extended DECB</title>
+<rect class="r2" x="622" y="1114" width="120" height="30" rx="4"/>
+<text class="word t2" x="634" y="1134">Helps</text></g>
+<g class="cell"><title>Overlay conveniences: helps for Virtual floppy</title>
+<rect class="r2" x="902" y="1114" width="120" height="30" rx="4"/>
+<text class="word t2" x="914" y="1134">Helps</text></g>
+<text class="sub" x="40" y="1178">Core piece: the option is partly built out of this work. Helps: the option benefits, or users do whichever option ships.</text>
+</svg>

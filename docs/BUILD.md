@@ -249,7 +249,7 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   the timestamps stay in sequence. The clock is the RP2350's always-on timer, seeded
   at power-on from the newest file time on the card (the Mac wrote those with
   real time), so dates are right to within when the card was last touched;
-  F1 INFO shows it and where it came from. The `badfps` field on the `[run]`
+  the INFO page (F12, then Left) shows it and where it came from. The `badfps` field on the `[run]`
   line counts every second off 60 fps since boot, so the minute sampling
   loses no video-fault windows. `slack` (PIZERO-219) is the least time any
   frame that second had left before its slot, and `late` how many frames
