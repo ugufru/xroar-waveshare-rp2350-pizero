@@ -7,9 +7,9 @@ ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`). The short ranked
 list of what to pick up next is `roadmap.jsonl` (shown at the top of
 `issues.html`).
 
-_Last updated: 2026-10-21 (the CoCo 3 track done, `PIZERO-135`; machine
-profiles `cocozero`, `coco2`, `coco3` waiting on a hardware check, `PIZERO-242`;
-the PSRAM board and a board of our own proposed, `PIZERO-243`, `244`)._
+_Last updated: 2026-11-01 (directory drives agreed and sequenced,
+`PIZERO-288` to `304`; earlier: the CoCo 3 track done, `PIZERO-135`; the
+PSRAM board and a board of our own proposed, `PIZERO-243`, `244`)._
 
 ## Where things stand
 
@@ -198,10 +198,32 @@ The chain, bottom to top: `PIZERO-70` (backend interface) → `PIZERO-71` (VFS)
 matters now that the guest writes to the card. `PIZERO-69` (save-states) and
 `PIZERO-68` (DECB maintenance) are deferred.
 
-What BASIC sees may go the other way (`PIZERO-288`, proposed 2026-11-01): an
-unmodified Disk BASIC reading a host directory through an emulated floppy, 8.3
-names only, with the chain above kept for the Forth kernel and OS-9. See
+### Directory drives (agreed 2026-11-01)
+
+What BASIC sees goes the other way (`PIZERO-288`, done): an unmodified Disk
+BASIC reading a host directory through the emulated floppy, 8.3 names only,
+with the chain above kept for the Forth kernel and OS-9. The design and the
+ROM facts it rests on are in
 [`directory-drives-proposal.md`](directory-drives-proposal.md).
+
+In order:
+
+1. `PIZERO-294`: the board's parsers accept CR, LF and CRLF (a bug fix that
+   gates the CR rule for new files).
+2. `PIZERO-289`: Disk BASIC file rules as a host-tested library (8.3 filter,
+   type from content). Beside it, `PIZERO-291`: trace Disk BASIC's write
+   order on hardware, the spec for writes.
+3. `PIZERO-290`: read-only directory drives on the SD card.
+4. `PIZERO-292`: writable directory drives.
+5. `PIZERO-293` (assign a directory in `drives.txt` on the board),
+   `PIZERO-295` (editor line endings), `PIZERO-297` (unpack and pack a
+   `.DSK`), `PIZERO-296` (FILES lists every text file).
+6. Low priority, any order: `PIZERO-299` (boot flag), `300` (DIR listing),
+   `303` (delete, copy, info), `304` (`.DSK` check), `301` (hex editor),
+   `302` (detokenized listing), `298` (ZIP import).
+
+USB mass storage stays `PIZERO-78` (deferred): the SD card proves the
+backend, which is the only part USB changes.
 
 ## Fixes and checks still owed (low urgency)
 
@@ -234,9 +256,10 @@ names only, with the chain above kept for the Forth kernel and OS-9. See
 - **Synth and MIDI**: `PIZERO-58` (voice-budget bench) → `PIZERO-17`
   (wavetable synth device). MIDI goes first through `PIZERO-287` (the MIDI
   Pak, a 6850 at `$FF6E`, which Lyra, UltiMusE III and CoCo MIDI Pro use,
-  wired to USB MIDI on both ports; open, for `PIZERO-281`); the bit-banger
-  path `PIZERO-61` → `PIZERO-59` and the DIN endpoints in `PIZERO-60` stay
-  deferred behind it. All build-flag gated; `PIZERO-170` (GIME timer reload quirk)
+  on the ranked roadmap since 2026-11-01, routed to and from the native USB-C
+  port as a USB MIDI device), then `PIZERO-305` (the same chip on the PIO-USB
+  host port, which `PIZERO-281` requires). The bit-banger path `PIZERO-61` →
+  `PIZERO-59` and the DIN endpoints in `PIZERO-60` stay deferred. All build-flag gated; `PIZERO-170` (GIME timer reload quirk)
   sets the tempo of timer music.
 - **`PIZERO-128`**: the BOOT button as an overlay key. **`PIZERO-80`**: SDIO.
 
@@ -247,7 +270,9 @@ names only, with the chain above kept for the Forth kernel and OS-9. See
   `179`/`216`/`217` remain. A 512 KB CoCo 3 waits on PSRAM (`PIZERO-244`). `PIZERO-142`'s banked carts allocate on the
   heap only while installed, so they do not take the RAM 133 needs.
 - **Storage**: `PIZERO-70` → `71` → `72` → `73` → `74`; `PIZERO-79` needs 73
-  for the default cart. `PIZERO-62`'s GIME timer occupies `$FF90-$FF95`, so
+  for the default cart. Directory drives: `PIZERO-289` → `290` → `292`, with
+  `291` → `292`; `290` → `293`; `289` → `297`; `294` → `295`; `299` → `303`;
+  `304` before `297`'s reports; `296` uses `205` for `.md`. `PIZERO-62`'s GIME timer occupies `$FF90-$FF95`, so
   `PIZERO-72`'s hypercall registers must go elsewhere.
 - **Joystick**: the injection API from `PIZERO-13` is the shared root;
   `PIZERO-50` reuses it.
