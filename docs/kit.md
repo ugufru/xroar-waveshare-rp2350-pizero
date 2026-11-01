@@ -154,7 +154,8 @@ These points account for essentially every question you will be asked.
 > copyright, so dump or source your own.
 >
 > **5. F12 disks, F9 programs, F10 cartridges, F11 files** (`settings.txt`,
-> `autorun.txt`). Put disks (`.dsk`) in `/coco/dsk/`, programs (`.bin`) in
+> `autorun.txt`, `drives.txt` and the other text files on the card and on the
+> disks in the drives). Put disks (`.dsk`) in `/coco/dsk/`, programs (`.bin`) in
 > `/coco/bin/` and cartridges (`.ccc`) in `/coco/cart/`. The key shows its
 > list, ENTER starts the highlighted one, and ESC (or the same key) goes back
 > to what was running.

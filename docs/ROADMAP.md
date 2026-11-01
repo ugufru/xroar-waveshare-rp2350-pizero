@@ -8,7 +8,8 @@ list of what to pick up next is `roadmap.jsonl` (shown at the top of
 `issues.html`).
 
 _Last updated: 2026-11-01 (directory drives agreed and sequenced,
-`PIZERO-288` to `304`; earlier: the CoCo 3 track done, `PIZERO-135`; the
+`PIZERO-288` to `304`; the FILES list and line endings done, `PIZERO-289`,
+`294` to `296`, `309` to `313`; earlier: the CoCo 3 track done, `PIZERO-135`; the
 PSRAM board and a board of our own proposed, `PIZERO-243`, `244`)._
 
 ## Where things stand
@@ -66,6 +67,12 @@ the machine became three profiles (`PIZERO-242`): the CoCo Zero
   (`PIZERO-81`, `114`, `153`); INFO page (`PIZERO-156`; on F1 until PIZERO-215 gave F1 to the CoCo 3); per-game `NAME.TXT`
   (`PIZERO-154`); `settings.txt` and `autorun.txt` edited on screen
   (`PIZERO-145`, `146`, `147`); the pad drives the overlay (`PIZERO-169`).
+  F11 lists every text file in `/coco` and the ASCII files on mounted disks
+  (read-only, `NAME.EXT:N`), edits `drives.txt` too, and refuses files over
+  4 KB (`PIZERO-296`, `309`, `312`, `313`); F5 wraps lines (`PIZERO-310`);
+  CR, LF and CRLF read everywhere and a file keeps its own line ends when
+  saved, new ones CR (`PIZERO-294`, `295`); mounted disks always in F12
+  (`PIZERO-312`). Disk BASIC file rules library (`PIZERO-289`).
 - **Cartridges** of 2 to 16 KB (`PIZERO-139`); bank-switched carts over 16 KB
   are built and host-tested (`PIZERO-142`); a hardware test waits on a tester with an image (`PIZERO-226`).
 - **Input**: USB keyboard that types what the keycaps say, keypad, auto-repeat
@@ -208,16 +215,17 @@ ROM facts it rests on are in
 
 In order:
 
-1. `PIZERO-294`: the board's parsers accept CR, LF and CRLF (a bug fix that
-   gates the CR rule for new files).
-2. `PIZERO-289`: Disk BASIC file rules as a host-tested library (8.3 filter,
-   type from content). Beside it, `PIZERO-291`: trace Disk BASIC's write
-   order on hardware, the spec for writes.
-3. `PIZERO-290`: read-only directory drives on the SD card.
-4. `PIZERO-292`: writable directory drives.
-5. `PIZERO-293` (assign a directory in `drives.txt` on the board),
-   `PIZERO-295` (editor line endings), `PIZERO-297` (unpack and pack a
-   `.DSK`), `PIZERO-296` (FILES lists every text file).
+Done 2026-11-01: `PIZERO-294` (parsers read CR, LF and CRLF), `289` (Disk
+BASIC file rules), `295` (editor line endings), `296` (FILES lists text
+files), with `309`, `310`, `312`, `313` beside them.
+
+1. `PIZERO-291`: trace Disk BASIC's write order on hardware, the spec for
+   writes.
+2. `PIZERO-290`: read-only directory drives on the SD card.
+3. `PIZERO-292`: writable directory drives.
+4. `PIZERO-293` (a directory path in `drives.txt` mounts as a directory
+   drive; `drives.txt` itself is already editable, `PIZERO-313`),
+   `PIZERO-297` (unpack and pack a `.DSK`).
 6. Low priority, any order: `PIZERO-299` (boot flag), `300` (DIR listing),
    `303` (delete, copy, info), `304` (`.DSK` check), `301` (hex editor),
    `302` (detokenized listing), `298` (ZIP import).

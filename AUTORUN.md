@@ -29,8 +29,15 @@ CoCo 3, then autoruns as usual.
 
 Whatever you last put there. The disks you put in drives 0 to 3 from the F12
 list are remembered after power-off (the board keeps them in
-`/coco/drives.txt`). On a new card, drive 0 gets the first disk in
+`/coco/drives.txt`, one line per drive: `0 = 0:/coco/dsk/GAME.DSK`, or
+`1 ro = ...` for a locked drive). On a new card, drive 0 gets the first disk in
 `/coco/dsk/`, alphabetically.
+
+`drives.txt` is a text file you can also edit, with **F11** (FILES) on the
+board or on a computer. It is read at power-on, so an edit takes effect at the
+next boot; saving it changes nothing straight away. Mounting, ejecting or
+locking a disk in F12 rewrites it from the drives, so make hand edits after
+your last change in F12, or redo them.
 
 ## autorun.txt
 

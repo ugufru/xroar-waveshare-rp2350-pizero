@@ -62,13 +62,13 @@ static const char *const k_legend[OVL_LISTS] = { OVL_LEGEND_DSK, OVL_LEGEND_BIN,
 // editor starts a missing one from a template (NULL: the settings template,
 // generated from the defaults). `tidy`: a settings file, opened comments
 // first and then sorted by name (PIZERO-181).
-// `view`: opened read-only (PIZERO-312: drives.txt, which the board rewrites
-// on every mount and eject, so an edit would be lost; editing is PIZERO-293).
+// `view`: opened read-only. PIZERO-313: drives.txt is edited like any text
+// file; it is read at boot, and a mount, eject or lock in F12 rewrites it.
 struct ovl_file { const char *name, *path, *tmpl; bool tidy, view; };
 static const struct ovl_file k_files[] = {
     { "SETTINGS.TXT", "0:/coco/settings.txt", nullptr,          true,  false },
     { "AUTORUN.TXT",  "0:/coco/autorun.txt",  AUTORUN_TEMPLATE, false, false },   // PIZERO-147
-    { "DRIVES.TXT",   "0:/coco/drives.txt",   nullptr,          false, true  },   // PIZERO-312
+    { "DRIVES.TXT",   "0:/coco/drives.txt",   "",               false, false },   // PIZERO-312/313: read at boot
 };
 #define OVL_NFILES ((int)(sizeof k_files / sizeof k_files[0]))
 static const char *const k_empty[CAT_KINDS]  = { OVL_EMPTY_DSK,  OVL_EMPTY_BIN,  OVL_EMPTY_CART };

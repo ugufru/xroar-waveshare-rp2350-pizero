@@ -161,7 +161,7 @@ fitted is the plan; see [`docs/coco-zero-2-proposal.md`](docs/coco-zero-2-propos
 | Start the highlighted game | **ENTER** | **A** |
 | Go back, close | **ESC** (or the list's own F key) | **B** (or Home) |
 | Edit that game's settings | **TAB** | **X** |
-| Edit a text file: **F11** lists `SETTINGS.TXT`, `AUTORUN.TXT` and `DRIVES.TXT` (read-only: the board rewrites it on every mount), then every text file in `/coco` itself (a `README.md`, a `LICENSE`, ASCII BASIC), then the ASCII files on each disk in a drive, named as Disk BASIC names them (`README.TXT:1`). Files on a disk open read-only. A game's own settings file is still **TAB** in its list. Files over 4 KB are listed but not opened, and the bottom row says why. A file keeps its own line endings when saved (CR, LF or CRLF), and a new one is written with the CoCo's CR | **ENTER** in **F11** | |
+| Edit a text file: **F11** lists `SETTINGS.TXT`, `AUTORUN.TXT` and `DRIVES.TXT` (read at power-on; a mount, eject or lock in F12 rewrites it), then every text file in `/coco` itself (a `README.md`, a `LICENSE`, ASCII BASIC), then the ASCII files on each disk in a drive, named as Disk BASIC names them (`README.TXT:1`). Files on a disk open read-only. A game's own settings file is still **TAB** in its list. Files over 4 KB are listed but not opened, and the bottom row says why. A file keeps its own line endings when saved (CR, LF or CRLF), and a new one is written with the CoCo's CR | **ENTER** in **F11** | |
 | Put a disk in drive 0 to 3 | **0** to **3** | |
 | Lock the highlighted disk's drive read-only (and unlock it) | **W** | |
 | Make a new blank, formatted disk: type its name, then Enter | **N** | |
