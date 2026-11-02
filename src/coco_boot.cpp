@@ -107,16 +107,25 @@ static const uint16_t g_vdg_rgb565[16] = {
 };
 #undef BS
 
+// PIZERO-319: the FIL (about 600 bytes) is on the heap, not the stack: a
+// machine switch reads the ROMs from loop(), and with this on the stack core
+// 0 reached 3,880 of its 4,096 bytes, 216 short of core 1's stack below it.
 static size_t read_rom_file(const char *path, uint8_t *out, size_t want) {
-    FIL f;
-    FRESULT fr = f_open(&f, path, FA_READ);
+    FIL *f = (FIL *)malloc(sizeof *f);
+    if (!f) {
+        Serial.printf("[rom] %s: no memory to open it\n", path);
+        return 0;
+    }
+    FRESULT fr = f_open(f, path, FA_READ);
     if (fr != FR_OK) {
+        free(f);
         Serial.printf("[rom] open %s failed: %s (%d)\n", path, FRESULT_str(fr), fr);
         return 0;
     }
     UINT br = 0;
-    fr = f_read(&f, out, want, &br);
-    f_close(&f);
+    fr = f_read(f, out, want, &br);
+    f_close(f);
+    free(f);
     if (fr != FR_OK) {
         Serial.printf("[rom] read %s failed: %s (%d)\n", path, FRESULT_str(fr), fr);
         return 0;
@@ -361,23 +370,31 @@ static int fil_read(void *ctx, char *buf, int n) {
     return f_read((FIL *)ctx, buf, (UINT)n, &br) == FR_OK ? (int)br : 0;
 }
 
+// PIZERO-319: working memory on the heap (about 900 bytes), as
+// read_rom_file: a save in F11 runs this from the USB key handler.
 static bool apply_settings_file(const char *path, struct coco_settings *out, bool quiet) {
-    FIL f;
-    if (f_open(&f, path, FA_READ) != FR_OK) return false;
-    char line[96], name[32];
+    struct { FIL f; struct tl_reader rd; char line[96], name[32]; } *w = (decltype(w))malloc(sizeof *w);
+    if (!w) {
+        Serial.printf("[settings] %s: no memory to read it\r\n", path);
+        return false;
+    }
+    FIL &f = w->f;
+    char *line = w->line, *name = w->name;
+    if (f_open(&f, path, FA_READ) != FR_OK) { free(w); return false; }
     int n = 0;
-    struct tl_reader rd;
+    struct tl_reader &rd = w->rd;
     tl_reader_init(&rd, fil_read, &f);
-    while (tl_gets(&rd, line, sizeof line)) {
+    while (tl_gets(&rd, line, sizeof w->line)) {
         n++;
         name[0] = '\0';
-        int r = settings_parse_line(out, line, name, sizeof name);
+        int r = settings_parse_line(out, line, name, sizeof w->name);
         if (quiet) continue;
         if (r == SET_UNKNOWN)   Serial.printf("[settings] %s line %d: unknown setting '%s', ignored\r\n", path, n, name);
         if (r == SET_BAD_VALUE) Serial.printf("[settings] %s line %d: bad value for '%s', ignored\r\n", path, n, name);
         if (r == SET_SYNTAX)    Serial.printf("[settings] %s line %d: expected 'name = value', ignored\r\n", path, n);
     }
     f_close(&f);
+    free(w);
     return true;
 }
 

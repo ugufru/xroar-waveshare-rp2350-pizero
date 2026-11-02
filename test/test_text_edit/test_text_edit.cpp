@@ -207,7 +207,7 @@ static void test_caps_lock_held_does_not_repeat(void) {
 static void test_editor_words_fit_and_print(void) {
     const char *all[] = { TEK_HINT, TEK_MSG_SAVED, TEK_MSG_FAILED, TEK_MSG_WARN,
                           TEK_MSG_FULL, TEK_MSG_NEW, TEK_MSG_NOMEM,
-                          TEK_MSG_APPLIED, TEK_MSG_NEXT, TEK_MSG_GAME, TEK_HINT_VIEW };
+                          TEK_MSG_APPLIED, TEK_MSG_NEXT, TEK_MSG_GAME, TEK_MSG_SWITCH, TEK_HINT_VIEW };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++) {
         TEST_ASSERT_TRUE_MESSAGE(strlen(all[i]) <= CARD_COLS, all[i]);
         for (const char *p = all[i]; *p; p++)

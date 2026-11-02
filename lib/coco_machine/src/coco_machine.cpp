@@ -1445,12 +1445,32 @@ extern "C" void coco_machine_video_invalidate(void) {
 
 extern "C" _Bool coco_machine_is_coco3(void) { return g_c3; }
 
+#ifdef COCO3
+// PIZERO-319: one 64 KB block, taken from the heap at the first machine
+// and kept for good, so switching machine never needs the heap to have
+// 64 KB in one piece (a booted CoCo 2 leaves it split). The CoCo 3 uses it
+// as its second 64 KB; a CoCo 2 keeps its VDG buffer at the start and lends
+// the rest to a bank-switched cartridge (coco_machine_cart_room).
+#define ARENA_BYTES (64u * 1024u)
+static uint8_t *g_arena = nullptr;
+static uint8_t *arena(void) {
+    if (!g_arena) g_arena = (uint8_t *)malloc(ARENA_BYTES);
+    return g_arena;
+}
+extern "C" uint8_t *coco_machine_cart_room(uint32_t *len) {
+    *len = 0;
+    if (g_c3 || !g_arena || !g_m.cpu) return nullptr;
+    *len = ARENA_BYTES - COCO_VDG_BUF_BYTES;
+    return g_arena + COCO_VDG_BUF_BYTES;
+}
+#endif
+
 static _Bool coco3_init(const uint8_t *rom) {
     g_m.rom = rom;
     g_m.rom_len = COCO3_ROM_SIZE;
     // 128 KB: the 64 KB pool the CoCo 2 uses, and 64 KB more from the heap.
     uint8_t *lo = (uint8_t *)rp_mem_malloc(64 * 1024);
-    uint8_t *hi = (uint8_t *)malloc(64 * 1024);
+    uint8_t *hi = arena();                           // PIZERO-319
     if (!lo || !hi) return 0;
     memset(lo, 0, 64 * 1024);
     memset(hi, 0, 64 * 1024);
@@ -1511,6 +1531,7 @@ static _Bool coco3_init(const uint8_t *rom) {
 extern "C" void coco_machine_set_framebuffer(void *fb) { (void)fb; }
 extern "C" void coco_machine_video_invalidate(void) {}
 extern "C" _Bool coco_machine_is_coco3(void) { return 0; }
+extern "C" uint8_t *coco_machine_cart_room(uint32_t *len) { *len = 0; return nullptr; }   // PIZERO-319
 #endif
 
 // - - - init / run ------------------------------------------------
@@ -1527,7 +1548,7 @@ extern "C" _Bool coco_machine_init(const uint8_t *rom, size_t rom_len) {
     if (!g_m.ram) return 0;
     memset(g_m.ram, 0, 64 * 1024);
 #ifdef COCO3
-    g_m.vdg_buffer = (uint8_t *)malloc(COCO_VDG_BUF_BYTES);   // malloc is 8-aligned
+    g_m.vdg_buffer = arena();                 // PIZERO-319: the start of the 64 KB block
     if (!g_m.vdg_buffer) return 0;
 #endif
     memset(g_m.vdg_buffer, 0, COCO_VDG_BUF_BYTES);
@@ -2387,12 +2408,9 @@ extern "C" void coco_machine_shutdown(void) {
     free(machine_event_list_global);
     machine_event_list_global = nullptr;
 #ifdef COCO3
-    if (g_c3) {
-        free(g_c3bus.ram_hi);
+    if (g_c3) {                     // PIZERO-319: its second 64 KB is the kept block
         g_c3bus = (struct coco3_bus){};
         g_c3 = false;
-    } else {
-        free(g_m.vdg_buffer);
     }
 #endif
     rp_mem_free(g_m.ram);

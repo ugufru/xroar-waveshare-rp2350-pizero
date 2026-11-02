@@ -205,8 +205,8 @@ Starcast and Galactus play (PIZERO-228); NitrOS-9 Level 2 boots to its shell (PI
 Its limits:
 
 - **128 KB only.** 512 KB software does not run, and cannot on this board (see above).
-- **Less free memory.** A CoCo 3 leaves about 17 KB free, so a bank-switched cartridge (32 KB and
-  up) does not fit while the board is a CoCo 3.
+- **Less free memory.** A CoCo 3 leaves about 8 KB free, so a bank-switched cartridge (32 KB and
+  up) does not fit while the board is a CoCo 3. As a CoCo 2 the board keeps 40 KB aside for one.
 - **Slower screenshots.** A screenshot is 640x480 and pauses the machine for about a second
   (PIZERO-237).
 

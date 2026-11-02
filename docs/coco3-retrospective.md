@@ -213,17 +213,29 @@ broken" to comparing the file with a good copy.
 **Lesson:** check what a file is, not just how big it is. A hash check on
 the ROMs is filed (PIZERO-264).
 
-### 10. A restart that was not needed (PIZERO-135, 314)
+### 10. A restart that was not needed, and a measurement that was too narrow (PIZERO-135, 314, 319)
 
 PIZERO-135 switched machine by restarting the board, because the two lay
 out RAM differently and nothing could take a machine down. The plan for
 switching in place (PIZERO-314) set aside a fixed 64 KB arena, in case the
-heap came back fragmented. Measured first, it came back whole every time
-(77,872 bytes with no machine, ten round trips), so the arena was never
-built, and the switch takes 80 ms instead of 2 s and keeps USB up.
+heap came back fragmented. Measured with Ctrl-T from a CoCo 3 boot, it came
+back whole every time, so the arena was dropped. The switch took 80 ms
+instead of 2 s and kept USB up.
+
+Then the user switched from F11 (PIZERO-319). From a board that had booted
+as a CoCo 2, the heap was split (the soak log's file buffer and the editor's
+sat in the middle) and the CoCo 3 fell back to a restart; the switch to the
+CoCo 2 ran inside the USB keyboard callback and crashed in the USB timer
+interrupt. The arena went in after all, the switch moved to the main loop,
+and saves stopped crashing once a 4 KB boot buffer left at the bottom of the
+heap was gone. A stack watch added on the way showed core 0 at 3,880 of its
+4,096 bytes on one path, with core 1's stack directly below; the big frames
+came off the stack and the worst is now about 2,900.
 
 **Lesson:** revisit a workaround when its reason is looked at again, and
-measure the feared problem before building around it.
+measure the feared problem, but measure it the way the user will meet it:
+every starting state and every way in, not the one that is easiest to
+script.
 
 ## Still open
 
@@ -267,4 +279,7 @@ measure the feared problem before building around it.
 - **Say what was checked.** "Not yet tried" is a fine thing to write.
 - **Boot as a CoCo 3 after any change that adds RAM,** and read the heap.
 - **Check a ROM's content, not just its size.**
-- **Measure the problem a workaround guards against** before building it.
+- **Measure the problem a workaround guards against** before building it,
+  from every starting state and every way in.
+- **Keep heavy work out of USB callbacks;** do it from the main loop.
+- **Watch the stacks,** not just the heap: core 1's sits right below core 0's.

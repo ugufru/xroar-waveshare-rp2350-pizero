@@ -29,6 +29,11 @@ _Bool coco_machine_init(const uint8_t *rom, size_t rom_len);
  * cartridge and the disk callbacks must be installed again. */
 void coco_machine_shutdown(void);
 
+/* PIZERO-319: on a CoCo 2 (in a build that can be either machine), the part
+ * of the kept 64 KB block the VDG buffer does not use, for a bank-switched
+ * cartridge image: *len bytes, or NULL on a CoCo 3. */
+uint8_t *coco_machine_cart_room(uint32_t *len);
+
 /* Install an 8 KB cartridge ROM at $C000-$DFFF (mirror to $E000-$FDFF).
  * Pass NULL to remove. Setting a cart also schedules the periodic CART
  * FIRQ pulse so autobooting carts (DECB) jump to $C000 on next reset. */

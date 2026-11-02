@@ -279,8 +279,9 @@ backend, which is the only part USB changes.
 
 - **CoCo 3**: `PIZERO-129` → `130` → `131` → `133` → `213` → `218` → `219` →
   `220` → `214`, `215`, `134`, `135` (all done) → `242` (profiles);
-  `179`/`216`/`217` remain. A 512 KB CoCo 3 waits on PSRAM (`PIZERO-244`). `PIZERO-142`'s banked carts allocate on the
-  heap only while installed, so they do not take the RAM 133 needs.
+  `179`/`216`/`217` remain. A 512 KB CoCo 3 waits on PSRAM (`PIZERO-244`). Since `PIZERO-319` one 64 KB block is
+  kept for the machine from the first boot: the CoCo 3's second 64 KB, or a CoCo 2's VDG buffer and
+  up to 40 KB of a `PIZERO-142` banked cart, so switching machine never needs the heap whole.
 - **Storage**: `PIZERO-70` → `71` → `72` → `73` → `74`; `PIZERO-79` needs 73
   for the default cart. Directory drives: `PIZERO-289` → `290` → `292`, with
   `291` → `292`; `290` → `293`; `289` → `297`; `294` → `295`; `299` → `303`;

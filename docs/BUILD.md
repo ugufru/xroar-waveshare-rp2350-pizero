@@ -230,8 +230,13 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   in place, with `settings.txt` left as it is. Each switch prints
   `[mem] free heap N bytes with no machine` and `[machine] now a CoCo 3, built
   in place in N ms; free heap N bytes`; the numbers must come back the same on
-  every round trip (2026-11-01: 77,872 with none, 51,240 as a CoCo 2, 8,384 as
-  a CoCo 3, the same as a cold boot), or the switch is leaking.
+  every round trip, or the switch is leaking. Since PIZERO-319 the machine keeps
+  one 64 KB block for good, so the heap reads 12,192 with no machine, 10,144 as
+  a CoCo 2 (its spare 40 KB is kept for a bank-switched cart) and 8,248 as a
+  CoCo 3 (2026-11-01). The boot also prints `[stack] core 0 deepest N of 4096
+  bytes, core 1 N of 2048`, again whenever it grows and when a monitor opens
+  the port: core 0 past 3,584 says `*** NEAR THE END ***`, since core 1's
+  stack sits right below core 0's.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.
 - **6809 correctness (PIZERO-129):** `pio test -e native -f test_mc6809_lockstep`
   runs the frozen reference core (`test/mc6809_reference/`) and the live core

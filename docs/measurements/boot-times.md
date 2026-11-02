@@ -57,6 +57,19 @@ The serial wait is gone from that boot (`monitor` is 7 ms after `card`: just
 reading `settings.txt`). The rest is as below. `debug = on` keeps the
 behaviour measured below, not measured again yet.
 
+## 2026-11-01: power-on, RUN and the CoCo 2, with `debug = on`
+
+The user's own power cycle and RUN presses, the Mac listening (so each
+includes about 0.5 s of waiting for it to open the port):
+
+| Boot | CoCo 3 | CoCo 2 (`coco2+`) |
+|---|---|---|
+| Power-on | 2.02 s | not measured |
+| RUN | 1.81 s | 2.65 s |
+
+The CoCo 2 is slower to `OK` because its BASIC takes about 1.3 s from the
+first frame to print it, against 0.45 s on the CoCo 3. Not yet looked into.
+
 ## 2026-11-01, before PIZERO-316: the CoCo 3 (`machine = cocozero`)
 
 In these runs the serial wait came first, as `serial`, right after `start`;
