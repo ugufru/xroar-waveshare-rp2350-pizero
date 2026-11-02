@@ -7,10 +7,11 @@ ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`). The short ranked
 list of what to pick up next is `roadmap.jsonl` (shown at the top of
 `issues.html`).
 
-_Last updated: 2026-11-01 (directory drives agreed and sequenced,
-`PIZERO-288` to `304`; the FILES list and line endings done, `PIZERO-289`,
-`294` to `296`, `309` to `313`; earlier: the CoCo 3 track done, `PIZERO-135`; the
-PSRAM board and a board of our own proposed, `PIZERO-243`, `244`)._
+_Last updated: 2026-11-01, evening (the CoCo Zero is a CoCo 3, `PIZERO-280`;
+switching machine in place, `314`, `319`; boot times and the `debug` setting,
+`315`, `316`; the MIDI Pak, `287`; a DAC-off soak for `203` running. Earlier the
+same day: directory drives agreed and sequenced, `PIZERO-288` to `304`; the
+FILES list and line endings, `289`, `294` to `296`, `309` to `313`)._
 
 ## Where things stand
 
@@ -49,8 +50,21 @@ with them stayed as `coco2+` (`PIZERO-280`).
 - **CoCo 3 extras on the CoCo 2**: the GIME palette at `$FFB0-$FFBF`
   (`PIZERO-85`, `55`) and the GIME timer at `$FF90-$FF95` (`PIZERO-62`), on in
   the `coco2+` machine and off in the stock `coco2` (`PIZERO-242`, `PIZERO-280`).
-- **A 128 KB CoCo 3**, in the product firmware (`machine = coco3`, or a
-  game's own file switches to it, `PIZERO-135`; loads `/coco/roms/coco3.rom`): the vendored GIME is the bus (`PIZERO-133`), the
+- **Four machines** (`PIZERO-242`, `280`): `cocozero`, the default, a CoCo 3 with
+  the extras; `coco2+`, a CoCo 2 with them; stock `coco2` and `coco3`. Switching
+  between a CoCo 2 and a CoCo 3, from `settings.txt` or a game's own file,
+  rebuilds the machine in place in under 0.1 s, with USB and the drives kept up
+  (`PIZERO-314`, `319`: one 64 KB block kept for the machine from the first
+  boot). Only a game autorun starts at power-on still restarts (`PIZERO-317`).
+- **Boot**: reset to the BASIC `OK` in about 1.25 s with no computer attached;
+  every boot is timed phase by phase (`PIZERO-315`,
+  `docs/measurements/boot-times.md`). `debug = on` makes the boot wait for a
+  serial monitor and log its times to the card (`PIZERO-316`).
+- **MIDI Pak** (`PIZERO-287`): a 6850 at `$FF6E`, the CoCo's MIDI port, seen by
+  the computer on the native USB-C port as "CoCo Zero MIDI Pak", on both
+  machines. Real software next (`PIZERO-318`).
+- **A 128 KB CoCo 3**, in the product firmware (the default `cocozero`, or
+  `coco3`; loads `/coco/roms/coco3.rom`): the vendored GIME is the bus (`PIZERO-133`), the
   6809 reads and writes MMU pages directly (`PIZERO-213`), and a port-side GIME
   renderer draws each changed scanline straight into the framebuffer
   (`PIZERO-218`). 60 fps at 0.89 and 1.79 MHz, HSCREEN 2 drawn; a full-screen
@@ -83,11 +97,13 @@ with them stayed as `coco2+` (`PIZERO-280`).
   (`PIZERO-54`). A device straight into the board must be attached at power-on
   (`PIZERO-51`). Lessons: `docs/usb-retrospective.md`.
 - **Stability**: watchdog auto-recovery with phase, sub-phase and reset reason
-  carried across the reset (`PIZERO-33`, `203`). The 26.7 h laptop-free soak
+  carried across the reset (`PIZERO-33`, `203`), and a post-mortem of where
+  core 0 was (`PIZERO-227`). Both cores' stacks are watched and their deepest
+  use printed (`PIZERO-319`). The 26.7 h laptop-free soak
   (`PIZERO-168`, logged to the card by `PIZERO-201`) measured **0.075
   freezes/h**, against 0.46/h in September (`PIZERO-98`). Figures in the
   README's "Stability, measured".
-- **Trust tooling**: 254 host tests in about 15 s (`pio test -e native`,
+- **Trust tooling**: 338 host tests in about 15 s (`pio test -e native`,
   `PIZERO-109`), including a 6809 lockstep harness that runs the live core
   against a frozen reference (`PIZERO-129`). `scripts/soak.py` records and
   analyses soaks; `scripts/qc_flash.py` flashes and logs a batch of boards
@@ -102,10 +118,12 @@ with them stayed as `coco2+` (`PIZERO-280`).
 These need the board or the user rather than more code (`PIZERO-199`, NitrOS-9
 on the board, passed 2026-10-12):
 
-- **`PIZERO-203`: the frame-pace recoveries.** The one live stability bug. A
-  re-soak with deliberate overlay use is running; the serial-stall theory is
-  tested and ruled out. Keep it soaking on one board while features are built
-  on the other.
+- **`PIZERO-203`: the USB timer-interrupt hang.** The one live stability bug:
+  every post-mortem since 2026-10-25 is core 0 stuck in PIO-USB's timer
+  interrupt, about one every 3 h. A soak with `usb_audio = off` started
+  2026-11-01 on `575c5a4`, to test the DAC stream, the first suspect. Pull the
+  card and analyse when it has run long enough to compare.
+- **`PIZERO-318`**: Lyra 2.85 and CoCo MIDI 3 through the MIDI Pak, on `coco2+`.
 
 ## Done: the CoCo 3 track
 
@@ -264,10 +282,10 @@ backend, which is the only part USB changes.
 - **`PIZERO-56`**: higher-fidelity NTSC artifacts (the current path is a
   deliberate 2-bit LUT, not composite decoding).
 - **Synth and MIDI**: `PIZERO-58` (voice-budget bench) → `PIZERO-17`
-  (wavetable synth device). MIDI goes first through `PIZERO-287` (the MIDI
+  (wavetable synth device). MIDI went first through `PIZERO-287` (the MIDI
   Pak, a 6850 at `$FF6E`, which Lyra, UltiMusE III and CoCo MIDI Pro use,
-  on the ranked roadmap since 2026-11-01, routed to and from the native USB-C
-  port as a USB MIDI device), then `PIZERO-305` (the same chip on the PIO-USB
+  routed to and from the native USB-C port as a USB MIDI device; done
+  2026-11-01, real software is `PIZERO-318`), then `PIZERO-305` (the same chip on the PIO-USB
   host port, which `PIZERO-281` requires). The bit-banger path `PIZERO-61` →
   `PIZERO-59` and the DIN endpoints in `PIZERO-60` stay deferred. The MIDI
   Pak is the `midi_pak` setting (on for the CoCo Zero), not a build flag;
