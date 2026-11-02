@@ -260,13 +260,14 @@ static void test_the_template_parses_back_to_the_defaults(void) {
 }
 
 static void test_machine_profiles(void) {
-    // PIZERO-242/247: cocozero turns the extras on; the stock machines are
-    // as Tandy shipped them, auto-repeat included. The rest is untouched.
-    for (int m = MACH_COCOZERO; m <= MACH_COCO3; m++) {
+    // PIZERO-242/247/280: cocozero and coco2+ turn the extras on; the stock
+    // machines are as Tandy shipped them, auto-repeat included. The rest is
+    // untouched.
+    for (int m = 0; m < MACH_N; m++) {
         settings_defaults(&s);
         s.volume = 3;
         settings_profile(&s, (uint8_t)m);
-        bool zero = m == MACH_COCOZERO;
+        bool zero = m == MACH_COCOZERO || m == MACH_COCO2PLUS;
         TEST_ASSERT_EQUAL_UINT8(m, s.machine);
         TEST_ASSERT_EQUAL(zero, s.sn76489);
         TEST_ASSERT_EQUAL(zero, s.gime_palette);
@@ -285,6 +286,25 @@ static void test_machine_profiles(void) {
         TEST_ASSERT_EQUAL_UINT8(3, s.volume);
         TEST_ASSERT_EQUAL_UINT16(500, s.key_repeat_delay);
     }
+    // PIZERO-280: which machines are a CoCo 3, and the names that pick them.
+    const struct { const char *name; uint8_t m; bool c3; } mach[] = {
+        { "cocozero", MACH_COCOZERO, true }, { "coco2+", MACH_COCO2PLUS, false },
+        { "coco2", MACH_COCO2, false },      { "coco3", MACH_COCO3, true },
+    };
+    for (unsigned i = 0; i < sizeof mach / sizeof mach[0]; i++) {
+        settings_defaults(&s);
+        char l[32]; snprintf(l, sizeof l, "machine = %s", mach[i].name);
+        TEST_ASSERT_EQUAL_INT(SET_OK, line(l));
+        TEST_ASSERT_EQUAL_UINT8(mach[i].m, s.machine);
+        TEST_ASSERT_EQUAL(mach[i].c3, settings_is_coco3(&s));
+    }
+    TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("machine = coco4"));
+    // PIZERO-316: debug, off by default.
+    settings_defaults(&s);
+    TEST_ASSERT_FALSE(s.debug);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("debug = on"));  TEST_ASSERT_TRUE(s.debug);
+    TEST_ASSERT_EQUAL_INT(SET_OK, line("debug = off")); TEST_ASSERT_FALSE(s.debug);
+    TEST_ASSERT_EQUAL_INT(SET_BAD_VALUE, line("debug = loud"));
     // A line after the profile still wins.
     settings_profile(&s, MACH_COCO2);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("key_repeat = on"));

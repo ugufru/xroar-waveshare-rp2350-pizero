@@ -133,6 +133,23 @@ static void test_ticks_past_the_halfway_wrap(void) {
     TEST_ASSERT_TRUE(acia_tx_pop(&a, &b)); TEST_ASSERT_EQUAL_HEX8(0x82, b);
 }
 
+// A status poll that finds nothing new reports no change, so the host can
+// skip its event queue; anything that lands or is sent does.
+static void test_status_polls_are_not_changes(void) {
+    boot(0x15);
+    acia_take_changed(&a);
+    for (int i = 0; i < 100; i++) acia_read(&a, 0, now + i);
+    TEST_ASSERT_FALSE(acia_take_changed(&a));
+    acia_rx_push(&a, 0x90);
+    TEST_ASSERT_TRUE(acia_take_changed(&a));
+    acia_read(&a, 0, now + 200);                 // the byte lands during this poll
+    TEST_ASSERT_TRUE(acia_take_changed(&a));
+    acia_read(&a, 1, now + 200);
+    TEST_ASSERT_TRUE(acia_take_changed(&a));
+    acia_write(&a, 1, 0x40, now + 300);
+    TEST_ASSERT_TRUE(acia_take_changed(&a));
+}
+
 int main(int, char **) {
     UNITY_BEGIN();
     RUN_TEST(test_byte_time_is_midi_rate);
@@ -143,5 +160,6 @@ int main(int, char **) {
     RUN_TEST(test_receive_interrupt);
     RUN_TEST(test_master_reset_drops_pending_input);
     RUN_TEST(test_ticks_past_the_halfway_wrap);
+    RUN_TEST(test_status_polls_are_not_changes);
     return UNITY_END();
 }

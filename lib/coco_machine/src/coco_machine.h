@@ -24,6 +24,11 @@ extern "C" {
  * rom_len must be 16384. Returns true on success. */
 _Bool coco_machine_init(const uint8_t *rom, size_t rom_len);
 
+/* PIZERO-314: free the machine (parts, event list, RAM) so coco_machine_init
+ * can build the other one in place. Settings held here are kept; the
+ * cartridge and the disk callbacks must be installed again. */
+void coco_machine_shutdown(void);
+
 /* Install an 8 KB cartridge ROM at $C000-$DFFF (mirror to $E000-$FDFF).
  * Pass NULL to remove. Setting a cart also schedules the periodic CART
  * FIRQ pulse so autobooting carts (DECB) jump to $C000 on next reset. */
@@ -215,7 +220,7 @@ void coco_machine_video_invalidate(void);
 uint16_t coco_machine_get_pc(void);
 uint32_t coco_machine_get_total_mem_cycles(void);
 uint32_t coco_machine_get_render_lines(void);
-const uint8_t *coco_machine_peek_ram(uint16_t addr);
+const uint8_t *coco_machine_peek_ram(uint16_t addr);   /* as BASIC maps it at power-on */
 
 /* Keyboard injection: press/release simulated keys by DSCAN_* code
  * (see lib/xroar_core/src/dkbd.h). The PIA0 port A pre-read hook resolves

@@ -61,6 +61,7 @@ struct acia6850 {
     uint8_t  rxq[ACIA_RXQ];
     uint16_t rxh, rxt;
     uint32_t tx_dropped, rx_dropped;
+    bool     changed;       // state moved since the host last looked (acia_take_changed)
 };
 
 static inline int32_t acia_delta(uint32_t a, uint32_t b) { return (int32_t)(a - b); }
@@ -107,6 +108,7 @@ static inline bool acia_rx_push(struct acia6850 *a, uint8_t b) {
     uint16_t n = (uint16_t)((a->rxt + 1) % ACIA_RXQ);
     if (a->in_reset || n == a->rxh) { a->rx_dropped++; return false; }
     a->rxq[a->rxt] = b; a->rxt = n;
+    a->changed = true;
     return true;
 }
 
@@ -124,12 +126,14 @@ static inline void acia_service(struct acia6850 *a, uint32_t now) {
         } else {
             a->shifting = false;
         }
+        a->changed = true;
     }
     if (!a->in_reset && acia_rx_waiting(a) && acia_delta(now, acia_due(a->rx_next, now, a->tpb)) >= 0) {
         uint8_t b = a->rxq[a->rxh]; a->rxh = (uint16_t)((a->rxh + 1) % ACIA_RXQ);
         if (a->rdrf) a->ovrn = true;          // the new byte is lost
         else { a->rdr = b; a->rdrf = true; }
         a->rx_next = now + a->tpb;
+        a->changed = true;
     }
 }
 
@@ -145,6 +149,15 @@ static inline bool acia_next_due(const struct acia6850 *a, uint32_t now, uint32_
     }
     *at = t;
     return any;
+}
+
+// True once after anything that can move the IRQ line or the next due time,
+// so a program polling the status register (Lyra and CoCo MIDI 3 spin on it)
+// does not make the host touch its event queue on every read.
+static inline bool acia_take_changed(struct acia6850 *a) {
+    bool c = a->changed;
+    a->changed = false;
+    return c;
 }
 
 // The chip's IRQ output (active: the line to the CART pin is pulled low).
@@ -167,14 +180,16 @@ static inline uint8_t acia_status(const struct acia6850 *a) {
 // reg 0 = $FF6E, reg 1 = $FF6F.
 static inline uint8_t acia_read(struct acia6850 *a, unsigned reg, uint32_t now) {
     acia_service(a, now);
-    if (!(reg & 1)) return acia_status(a);
+    if (!(reg & 1)) return acia_status(a);    // a status read changes nothing itself
     a->rdrf = false;                          // reading the data clears RDRF and OVRN
     a->ovrn = false;
+    a->changed = true;
     return a->rdr;
 }
 
 static inline void acia_write(struct acia6850 *a, unsigned reg, uint8_t v, uint32_t now) {
     acia_service(a, now);
+    a->changed = true;
     if (!(reg & 1)) {
         if ((v & 3) == 3) {                   // master reset
             a->in_reset = true;

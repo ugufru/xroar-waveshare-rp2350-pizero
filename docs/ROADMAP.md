@@ -22,7 +22,9 @@ the background. From 2026-10-12 to 2026-10-13 the CoCo 3 track went from a
 benchmark to a 128 KB CoCo 3 running at 60 fps at both 0.89 and 1.79 MHz,
 and on 2026-10-20 it joined the CoCo 2 in one firmware (`PIZERO-135`). Then
 the machine became three profiles (`PIZERO-242`): the CoCo Zero
-(the CoCo 2 with our extras, the default) and a stock CoCo 2 and CoCo 3.
+(then a CoCo 2 with our extras, the default) and a stock CoCo 2 and CoCo 3.
+On 2026-11-01 the CoCo Zero became a CoCo 3 with the extras, and the CoCo 2
+with them stayed as `coco2+` (`PIZERO-280`).
 
 ## Shipped / working
 
@@ -46,7 +48,7 @@ the machine became three profiles (`PIZERO-242`): the CoCo Zero
   full sound; normal speed by default and after reset (`docs/cpu-speed.md`).
 - **CoCo 3 extras on the CoCo 2**: the GIME palette at `$FFB0-$FFBF`
   (`PIZERO-85`, `55`) and the GIME timer at `$FF90-$FF95` (`PIZERO-62`), on in
-  the default `cocozero` machine and off in the stock `coco2` (`PIZERO-242`).
+  the `coco2+` machine and off in the stock `coco2` (`PIZERO-242`, `PIZERO-280`).
 - **A 128 KB CoCo 3**, in the product firmware (`machine = coco3`, or a
   game's own file switches to it, `PIZERO-135`; loads `/coco/roms/coco3.rom`): the vendored GIME is the bus (`PIZERO-133`), the
   6809 reads and writes MMU pages directly (`PIZERO-213`), and a port-side GIME

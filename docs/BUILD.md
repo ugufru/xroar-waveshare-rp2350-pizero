@@ -214,9 +214,24 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   envs (`pizero_stream_60`, `pizero_stream` and the diagnostics built on them)
   **~75%**. Since PIZERO-131 every env is single-buffered and between 73% and 77%;
   check the report of each env a change touches.
+- **Seeing the boot (PIZERO-316):** put `debug = on` in `/coco/settings.txt`.
+  The board then waits up to 4 s at boot for a monitor to open the serial
+  port, so the boot's own lines (the reset reason, the watchdog post-mortem,
+  `[mem] free heap N bytes with the CoCo 3's 128 KB`) reach it. With
+  `debug = off`, the default, the boot does not wait and those lines are lost
+  unless a monitor already has the port open; the `[boot] times ms:` line is
+  printed again when one opens it, and Ctrl-T's `[machine] now a CoCo 3 ...
+  free heap N bytes` gives the heap after Disk BASIC without a reboot.
 - **Serial telemetry:** `pio device monitor` (115200). The running emulator prints
   `[run] fps cpu render blit aud …`. Confirm `fps≈60` on `pizero_stream_60`
   (`≈52` on the `pizero_stream` fallback), frame time under budget.
+- **Switching machine (PIZERO-314):** Ctrl-T sent on USB serial switches the
+  running board to the other machine (CoCo 2 or CoCo 3) at its BASIC prompt,
+  in place, with `settings.txt` left as it is. Each switch prints
+  `[mem] free heap N bytes with no machine` and `[machine] now a CoCo 3, built
+  in place in N ms; free heap N bytes`; the numbers must come back the same on
+  every round trip (2026-11-01: 77,872 with none, 51,240 as a CoCo 2, 8,384 as
+  a CoCo 3, the same as a cold boot), or the switch is leaking.
 - **RAM placement** of hot functions: see the `nm` snippet in §4a.
 - **6809 correctness (PIZERO-129):** `pio test -e native -f test_mc6809_lockstep`
   runs the frozen reference core (`test/mc6809_reference/`) and the live core

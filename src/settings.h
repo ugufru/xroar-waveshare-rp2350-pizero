@@ -28,6 +28,7 @@
 //   reset_button      = basic | autorun       RUN (reset) skips autorun, or not
 //   serial_keyboard   = on | off              type into the CoCo over USB serial
 //   soak_log          = on | off              PIZERO-201: telemetry to /coco/log every minute
+//   debug             = on | off              PIZERO-316: wait for a serial monitor, log boot times
 //   joystick_swap     = on | off              pad's right stick drives JOYSTK(0)/(1)
 //   font              = classic | 6847t1 | 6847t2   text font set (6847t2 default)
 //   lowercase         = on | off              6847t2: true lower case always
@@ -42,7 +43,7 @@
 //                       keys: a-z 0-9 @ : ; , - . / space enter clear
 //                             break shift up down left right
 //   video_encoder     = hardware | software   RP2350 TMDS encoder, or libdvi's tables
-//   machine           = cocozero | coco2 | coco3   PIZERO-135/242: which CoCo the board is
+//   machine           = cocozero | coco2+ | coco2 | coco3   PIZERO-135/242/280: which CoCo the board is
 //   color_green       = #RRGGBB               override one palette color
 //
 // There is one color_ setting per 6847 color: green, yellow, blue, red,
@@ -70,10 +71,12 @@
 #include "text_lines.h"     // PIZERO-294: CR, LF or CRLF line ends
 
 enum { ART_OFF = 0, ART_ON = 1, ART_SWAPPED = 2 };
-// PIZERO-242: the machine profiles. cocozero, the default, is a CoCo 2 with
-// this project's extras; coco2 and coco3 are the stock machines.
-enum { MACH_COCOZERO = 0, MACH_COCO2 = 1, MACH_COCO3 = 2 };
-static const char *const SETTINGS_MACHINE_NAMES[3] = { "cocozero", "coco2", "coco3" };
+// PIZERO-242: the machine profiles. cocozero, the default, is a 128 KB CoCo 3
+// with this project's extras (PIZERO-280, as the CoCo Zero standard says);
+// coco2+ is a CoCo 2 with the same extras; coco2 and coco3 are the stock
+// machines. Without coco3.rom a cocozero runs as a coco2+.
+enum { MACH_COCOZERO = 0, MACH_COCO2 = 1, MACH_COCO3 = 2, MACH_COCO2PLUS = 3, MACH_N = 4 };
+static const char *const SETTINGS_MACHINE_NAMES[MACH_N] = { "cocozero", "coco2", "coco3", "coco2+" };
 // PIZERO-166: font sets, the same numbers as VDG_FONT_* in vdg_pack.h.
 enum { FONT_CLASSIC = 0, FONT_6847T1 = 1, FONT_6847T2 = 2 };
 
@@ -98,6 +101,7 @@ struct coco_settings {
     bool    reset_to_basic;           // PIZERO-182: reset_button = basic
     bool    serial_keyboard;
     bool    soak_log;                 // PIZERO-201: write telemetry to the card
+    bool    debug;                    // PIZERO-316: boot waits for a monitor, boot times to the card
     bool    joystick_swap;            // PIZERO-160: pad sticks to the other ports
     uint8_t font;                     // PIZERO-166: FONT_*
     bool    lowercase;                // PIZERO-166: 6847t2 holds true lower case on
@@ -117,12 +121,14 @@ static const char *const SETTINGS_COLOR_NAMES[12] = {
     "black", "dark_green", "dark_orange", "bright_orange"
 };
 
+// PIZERO-280: cocozero and coco3 are a CoCo 3, coco2 and coco2+ a CoCo 2.
+// A switch within a pair applies at once; across them the board restarts.
 static inline bool settings_is_coco3(const struct coco_settings *s) {
-    return s->machine == MACH_COCO3;
+    return s->machine == MACH_COCOZERO || s->machine == MACH_COCO3;
 }
 
 // PIZERO-242: a profile's starting point for the settings that describe the
-// emulated hardware. Only cocozero adds anything: the GIME-style palette and
+// emulated hardware. Only cocozero and coco2+ add anything: the GIME-style palette and
 // timer, the SN76489 without a cartridge (a Games Master cartridge brings it
 // on any machine), the AY cartridges' chips (PIZERO-149: the CoCo PSG and
 // the Symphony-12; the Deluxe CoCo's stays off, its addresses being PIA1's
@@ -134,7 +140,7 @@ static inline bool settings_is_coco3(const struct coco_settings *s) {
 // settings.txt, then a game's own file, go on top, so any of it can be
 // changed.
 static inline void settings_profile(struct coco_settings *s, uint8_t machine) {
-    bool zero = machine == MACH_COCOZERO;
+    bool zero = machine == MACH_COCOZERO || machine == MACH_COCO2PLUS;
     s->machine = machine;
     s->sn76489 = zero;
     s->coco_psg = zero;
@@ -163,6 +169,7 @@ static inline void settings_defaults(struct coco_settings *s) {
     s->reset_to_basic = true;
     s->serial_keyboard = true;
     s->soak_log = false;              // a diagnostic, so off
+    s->debug = false;                 // PIZERO-316: a diagnostic, so off
     s->font = FONT_6847T2;
     s->lowercase = true;              // improvements are on by default
     s->key_repeat = true;
@@ -287,6 +294,7 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     }
     else if (!strcmp(name, "serial_keyboard"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->serial_keyboard = b; }
     else if (!strcmp(name, "soak_log"))          { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->soak_log = b; }
+    else if (!strcmp(name, "debug"))             { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->debug = b; }
     else if (!strcmp(name, "joystick_swap"))     { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_swap = b; }
     else if (!strcmp(name, "lowercase"))         { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->lowercase = b; }
     else if (!strcmp(name, "key_repeat"))        { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->key_repeat = b; }
@@ -334,9 +342,9 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
         if (!strcmp(v, "hardware"))      s->video_hw_encode = true;
         else if (!strcmp(v, "software")) s->video_hw_encode = false;
         else return SET_BAD_VALUE;
-    } else if (!strcmp(name, "machine")) {                       // PIZERO-135/242
+    } else if (!strcmp(name, "machine")) {                       // PIZERO-135/242/280
         int m = -1;
-        for (int i = 0; i < 3; i++) if (!strcmp(v, SETTINGS_MACHINE_NAMES[i])) m = i;
+        for (int i = 0; i < MACH_N; i++) if (!strcmp(v, SETTINGS_MACHINE_NAMES[i])) m = i;
         if (m < 0) return SET_BAD_VALUE;
         s->machine = (uint8_t)m;
     } else if (!strcmp(name, "artifact_colors")) {
@@ -521,6 +529,7 @@ static inline int settings_template(char *out, size_t n) {
         "key_repeat_rate = %u\n"
         "video_encoder = %s\n"
         "soak_log = %s\n"
+        "debug = %s\n"
         "# color_green = #00FF00\n"
         "# color_dark_green = #006500\n",
         SETTINGS_MACHINE_NAMES[d.machine],
@@ -535,7 +544,7 @@ static inline int settings_template(char *out, size_t n) {
         d.autorun ? "on" : "off", d.reset_to_basic ? "basic" : "autorun", d.serial_keyboard ? "on" : "off",
         d.joystick_swap ? "on" : "off",
         (unsigned)d.key_repeat_delay, (unsigned)d.key_repeat_rate,
-        d.video_hw_encode ? "hardware" : "software", d.soak_log ? "on" : "off");
+        d.video_hw_encode ? "hardware" : "software", d.soak_log ? "on" : "off", d.debug ? "on" : "off");
     if (k < 0 || k >= (int)n) return (k < 0) ? 0 : (int)n - 1;
     // PIZERO-164: the pad, every button at its default.
     k += snprintf(out + k, n - (size_t)k, "dpad = %s\n", d.pad.dpad_arrows ? "arrows" : "joystick");

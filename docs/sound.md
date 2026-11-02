@@ -7,7 +7,7 @@ mixed sample.
 
 ## At a glance
 
-| Source | Voices | Addresses | Setting | `cocozero` | `coco2` | `coco3` |
+| Source | Voices | Addresses | Setting | `cocozero`, `coco2+` | `coco2` | `coco3` |
 |---|---|---|---|---|---|---|
 | The CoCo's 6-bit DAC | 1 | `$FF20` bits 2-7 | always on | on | on | on |
 | Single-bit output | 1 | `$FF22` bit 1 | always on | on | on | on |
@@ -143,7 +143,7 @@ Two are never switched off by the multiplexer:
 
 ### On the CoCo Zero
 
-Under `sound_sources = all` (the `cocozero` default) every source is heard at
+Under `sound_sources = all` (the `cocozero` and `coco2+` default) every source is heard at
 once:
 
 - **Heard together:** the DAC, the single-bit output, and every sound
@@ -170,7 +170,7 @@ real behaviour back with `sound_sources = switched` in its own file.
 | `sound_sources` | What is heard | Default on |
 |---|---|---|
 | `switched` | As the real CoCo: the source the multiplexer picks, while the enable is on, and the single-bit output. | `coco2`, `coco3` |
-| `all` | Everything at once, whatever the multiplexer and the enable say. | `cocozero` |
+| `all` | Everything at once, whatever the multiplexer and the enable say. | `cocozero`, `coco2+` |
 
 ## Joystick reads: `joystick_quiet`
 
@@ -181,7 +181,7 @@ joystick is read: Double Back does this, and so does a real CoCo running it.
 Color BASIC's `JOYSTK` turns the sound off first, so on a real CoCo it is
 quiet; under `sound_sources = all` the DAC is always heard, so it would not be.
 
-With `joystick_quiet = on` (the default on `cocozero`), a DAC write that is
+With `joystick_quiet = on` (the default on `cocozero` and `coco2+`), a DAC write that is
 followed within 16 CPU cycles by a read of PIA0 port A is taken to be a
 trial, and its sound is taken back from the moment of the write, as if it
 had never been heard. The comparator still sees the value written, so the

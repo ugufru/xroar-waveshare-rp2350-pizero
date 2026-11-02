@@ -2037,7 +2037,8 @@ static void cart_line_update(void) {
 
 static void acia_expired(void *) {
     acia_service(&g_acia, (uint32_t)event_current_tick);
-    acia_after();
+    acia_take_changed(&g_acia);
+    acia_after();                         // always: this event has just been used up
 }
 
 // After every access and service: the CART line, and the next event.
@@ -2055,7 +2056,7 @@ static void acia_after(void) {
 
 static uint8_t acia_bus_read(uint16_t A) {
     uint8_t v = acia_read(&g_acia, A & 1, (uint32_t)event_current_tick);
-    acia_after();
+    if (acia_take_changed(&g_acia)) acia_after();   // a status poll that found nothing new is free
     return v;
 }
 
@@ -2359,6 +2360,52 @@ extern "C" void coco_machine_cold_reset(void) {
     g_m.cpu->reset(g_m.cpu);
 }
 
+// PIZERO-314: take the machine down, so coco_machine_init can build the
+// other one without restarting the board. Every part is freed (each takes
+// its own events off the list), then the list, then the RAM, so the heap
+// gets back the CoCo 3's 64 KB or the CoCo 2's VDG buffer in one piece.
+// The settings this file holds (font, palette, sound chips, MIDI Pak and
+// the rest) are kept: the caller applies its settings again after init.
+// The cartridge and the disk callbacks are dropped; the caller installs
+// them again, as at boot.
+extern "C" void coco_machine_shutdown(void) {
+    if (!g_m.cpu) return;
+    coco_machine_release_all_keys();
+#ifdef GIME_TIMER
+    if (g_gime_event_ready && event_queued(&g_gime_event)) event_dequeue(&g_gime_event);
+    g_gime_event_ready = false;
+    gime_timer_reset(&g_gime);
+#endif
+    if (g_acia_event_ready && event_queued(&g_acia_event)) event_dequeue(&g_acia_event);
+    g_acia_event_ready = false;
+    if (g_gime3) { part_free(&g_gime3->part); g_gime3 = nullptr; }
+    if (g_m.vdg) part_free(&g_m.vdg->part);
+    if (g_m.sam) part_free(&g_m.sam->part);
+    part_free(&g_m.pia1->part);
+    part_free(&g_m.pia0->part);
+    part_free(&g_m.cpu->debug_cpu.part);
+    free(machine_event_list_global);
+    machine_event_list_global = nullptr;
+#ifdef COCO3
+    if (g_c3) {
+        free(g_c3bus.ram_hi);
+        g_c3bus = (struct coco3_bus){};
+        g_c3 = false;
+    } else {
+        free(g_m.vdg_buffer);
+    }
+#endif
+    rp_mem_free(g_m.ram);
+    g_m = CocoMachine{};
+#ifdef COCO3
+    g_m.vdg_buffer = nullptr;
+#endif
+    csg_reset();
+    ayb_reset(&g_ayb);
+    acia_init(&g_acia);
+    g_cart_line = true;
+}
+
 extern "C" const uint8_t *coco_machine_get_vdg_buffer(void) {
     return g_m.vdg_buffer;
 }
@@ -2605,6 +2652,12 @@ extern "C" uint32_t coco_machine_get_render_lines(void) {
     return g_m.render_lines;
 }
 
+// PIZERO-315: as BASIC sees it at power-on. On a CoCo 3 that is the MMU's
+// task 0 at reset, blocks $38-$3F, physical $70000 up (in 128 KB, its upper
+// 64 KB), where the 32-column screen at $0400 lives.
 extern "C" const uint8_t *coco_machine_peek_ram(uint16_t addr) {
+#ifdef COCO3
+    if (g_c3) return coco3_ram_at(&g_c3bus, 0x70000u + addr);
+#endif
     return &g_m.ram[addr];
 }

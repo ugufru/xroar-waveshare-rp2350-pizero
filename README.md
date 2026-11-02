@@ -15,8 +15,9 @@ size of a Raspberry Pi Zero.
 
 ## What it does
 
-**Three machines in one firmware.** The board is the **CoCo Zero**, a CoCo 2 with some extras
-(the default); a stock **CoCo 2**; or a stock 128 KB **CoCo 3**. A game's own settings file can say
+**Four machines in one firmware.** The board is the **CoCo Zero**, a 128 KB CoCo 3 with some
+extras (the default); the **CoCo 2+**, a CoCo 2 with the same extras; a stock **CoCo 2**; or a stock
+128 KB **CoCo 3**. A game's own settings file can say
 which it needs, and launching it switches the board to that machine by itself.
 
 **As a CoCo 3:**
@@ -125,29 +126,32 @@ The board starts as the machine `settings.txt` names:
 
 | `machine =` | What you get |
 |---|---|
-| `cocozero` (the default) | A CoCo 2 with the extras above: the sound chips, the CoCo 3 palette and timer, true lower case, auto-repeat. |
+| `cocozero` (the default) | A 128 KB CoCo 3 with the extras: the sound chips, the MIDI Pak, auto-repeat. Without `coco3.rom` on the card it runs as a `coco2+`. |
+| `coco2+` | A CoCo 2 with the extras: the sound chips, the MIDI Pak, the CoCo 3 palette and timer, true lower case, auto-repeat. |
 | `coco2` | A stock CoCo 2, as Tandy shipped it: no extras, the original font, no auto-repeat. |
 | `coco3` | A stock 128 KB CoCo 3, no auto-repeat. |
 
 The machine only sets the starting point for those extras. Any of them can still be turned on or
 off on its own in `settings.txt` or a game's file (see [`SETTINGS.md`](SETTINGS.md)), and a Games
 Master Cartridge brings its sound chip on any machine. Change the machine on the board with
-**F11**, `SETTINGS.TXT`, and Ctrl-S. Between the CoCo 2s it changes straight away; to or from the
-CoCo 3 the board restarts.
+**F11**, `SETTINGS.TXT`, and Ctrl-S. Between `cocozero` and `coco3`, or between `coco2+` and
+`coco2`, it changes straight away. Between a CoCo 3 and a CoCo 2 the machine is rebuilt as the
+other one, at its BASIC prompt, in under a tenth of a second; the board does not restart, so USB
+devices, the mounted drives and the picture carry on.
 
-The easier way is to mark the CoCo 3 games. In the list, highlight a CoCo 3 game, press **TAB** to
-make its own settings file, add the line `machine = coco3` and save. That file sits next to the
-game, `STARCAST.TXT` beside `STARCAST.DSK`:
+The easier way is to mark the games that want a CoCo 2. In the list, highlight one, press **TAB**
+to make its own settings file, add the line `machine = coco2+` (or `coco2`) and save. That file
+sits next to the game, `MYGAME.TXT` beside `MYGAME.DSK`:
 
 ```
-# /coco/dsk/STARCAST.TXT
-machine = coco3
+# /coco/dsk/MYGAME.TXT
+machine = coco2+
 ```
 
-From then on, launching that game restarts the board as a CoCo 3, which takes about two seconds,
-and starts it. Launching a game without that line goes back to the machine `settings.txt` names,
-the same way. RUN and power-on always start that machine. Without `coco3.rom` on the card, a page
-says so and the board stays a CoCo 2.
+From then on, launching that game switches the board to a CoCo 2 and starts it. Launching a game
+without that line goes back to the machine `settings.txt` names, the same way. RUN and power-on
+always start that machine. Without `coco3.rom` on the card, a page says so and the board stays a
+CoCo 2.
 
 The CoCo 3 is the 128 KB model. Software that needs 512 KB does not run: a program that checks says
 so, and one that does not crashes or hangs, as it would on a real 128 KB CoCo 3. As sold, the board

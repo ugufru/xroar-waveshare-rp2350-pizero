@@ -145,6 +145,52 @@ extern "C" {
 #ifdef VIDEO_640
 #include "coco_palette.h"   // PIZERO-134: GIME colours for the scanout palette
 #endif
+
+// PIZERO-316: USB serial drops what is printed while no monitor has the port
+// open. From reset until settings.txt has said whether to wait for one, the
+// output is also kept here, on the heap, and printed as soon as a monitor
+// opens the port; release() frees it before the machine needs the memory.
+// Otherwise everything passes straight through to the USB serial port.
+static decltype(Serial) &g_usb_serial = Serial;
+class HeldSerial : public Stream {
+public:
+    void hold(size_t cap) { buf_ = (char *)malloc(cap); cap_ = buf_ ? cap : 0; n_ = 0; lost_ = 0; }
+    void release(void) { send_held(); free(buf_); buf_ = nullptr; cap_ = n_ = 0; }
+    size_t held(void) const { return n_; }
+    size_t write(uint8_t c) override { return write(&c, 1); }
+    size_t write(const uint8_t *b, size_t len) override {
+        if (buf_) {
+            if (!g_usb_serial) {
+                size_t k = len < cap_ - n_ ? len : cap_ - n_;
+                memcpy(buf_ + n_, b, k);
+                n_ += k;
+                lost_ += len - k;
+                return len;
+            }
+            send_held();
+        }
+        g_usb_serial.write(b, len);
+        return len;
+    }
+    int available(void) override { return g_usb_serial.available(); }
+    int read(void) override { return g_usb_serial.read(); }
+    int peek(void) override { return g_usb_serial.peek(); }
+    int availableForWrite(void) override { return g_usb_serial.availableForWrite(); }
+    void flush(void) override { g_usb_serial.flush(); }
+    void begin(unsigned long baud) { g_usb_serial.begin(baud); }
+    explicit operator bool() { return (bool)g_usb_serial; }
+private:
+    void send_held(void) {
+        if (!buf_ || !n_ || !g_usb_serial) return;
+        g_usb_serial.write((const uint8_t *)buf_, n_);
+        if (lost_) g_usb_serial.printf("[boot] (%u bytes of the boot's output were lost before a monitor opened)\r\n", (unsigned)lost_);
+        n_ = lost_ = 0;
+    }
+    char  *buf_ = nullptr;
+    size_t cap_ = 0, n_ = 0, lost_ = 0;
+};
+static HeldSerial g_held_serial;
+#define Serial g_held_serial
 }
 
 extern "C" void coco_machine_loadm_write(uint16_t addr, const uint8_t *src, uint16_t len);
@@ -277,6 +323,7 @@ static struct coco_settings g_settings;     // settings_defaults() at the top of
 // PIZERO-165: a screenshot asked for (Print Screen, the pad's M button, or
 // Ctrl-P over serial), taken by loop() after the next frame is drawn.
 static volatile bool g_shot_request = false;
+static bool g_switch_request = false;     // PIZERO-314: Ctrl-T on serial
 
 static int info_lines(char lines[][33], int max);   // PIZERO-156, at the end of this file
 
@@ -528,6 +575,7 @@ static void pump_keyboard() {
     int c = next_keychar();
     if (c < 0) return;
     if (c == 0x10) { g_shot_request = true; return; }   // PIZERO-165: Ctrl-P, a screenshot
+    if (c == 0x14) { g_switch_request = true; return; } // PIZERO-314: Ctrl-T, the other machine
     uint8_t dscan, shift;
     if (!kt_chord((char)c, &dscan, &shift)) return;
     if (shift == KT_SHIFT_ON) coco_machine_press_key_src(COCO_KEYS_TYPED, K_SHIFT);
@@ -1404,9 +1452,59 @@ static bool machine_available(bool coco3) {
     return true;
 }
 
-// Restart as the other machine, then do `what`. Returns only if the record
-// cannot be written, and then nothing changes.
+#ifdef COCO3
+static bool install_cart_file(const char *path);
+static void release_big_cart(void);
+
+// PIZERO-314: build the other machine in place, with no restart: USB, the
+// card and the display carry on, and the drives stay mounted. The machine
+// is taken down (coco_machine_shutdown), its ROM loaded and the new one
+// built and set up as setup() does: settings, then Disk BASIC with the
+// drives, at its power-on. Returns false if the ROM or the memory is not
+// there; the old machine is gone by then, so the caller restarts instead.
+static bool machine_rebuild(bool coco3) {
+    uint32_t t0 = millis();
+    coco_boot_flush_drives();                      // a written disk reaches the card first
+    g_machine_running = false;
+    g_audio_paused = true;
+    coco_machine_install_cart(nullptr);
+    release_big_cart();
+    coco_machine_shutdown();
+    Serial.printf("[mem] free heap %d bytes with no machine\r\n", rp2040.getFreeHeap());
+    bool rom = coco3 ? coco_boot_load_coco3_rom(g_coco_rom) : coco_boot_load_rom_from_sd(g_coco_rom);
+    if (!rom || !coco_machine_init(g_coco_rom, coco3 ? 32768 : 16384)) {
+        Serial.printf("[machine] cannot build the %s in place (%s, free heap %d bytes)\r\n",
+                      coco3 ? "CoCo 3" : "CoCo 2", rom ? "no memory" : "no ROM", rp2040.getFreeHeap());
+        return false;
+    }
+    g_coco3_mode = coco3;
+    if (coco3) coco_machine_set_framebuffer(g_fb);
+    settings_apply();
+    char cart[80];
+    if (coco_boot_resolve_cart("disk11.rom", cart, sizeof cart) && install_cart_file(cart)) {
+        coco_machine_install_disk_reader(coco_boot_disk_read_sector);
+        coco_machine_install_disk_writer(coco_boot_disk_write_sector);
+        coco_machine_install_disk_idle(coco_boot_flush_drives);
+    }
+    g_kt.coco3 = coco3;                            // PIZERO-215
+    coco_machine_video_invalidate();
+    g_audio_paused = disk_overlay_is_open();
+    g_machine_running = true;
+    Serial.printf("[machine] now a %s, built in place in %lu ms; free heap %d bytes\r\n",
+                  coco3 ? "CoCo 3" : "CoCo 2", (unsigned long)(millis() - t0), rp2040.getFreeHeap());
+    return true;
+}
+#endif
+
+// Become the other machine, then do `what`. PIZERO-314: in place when it
+// can (HO_BASIC and HO_LAUNCH return, and the caller carries on with the
+// new machine); otherwise, and for HO_NORMAL, whose boot is not finished,
+// restart as it. Returns without a change only if the restart's record
+// cannot be written.
 static void switch_machine(bool coco3, uint8_t what, int kind, const char *path) {
+#ifdef COCO3
+    if (what != HO_NORMAL && machine_rebuild(coco3)) return;
+#endif
     Serial.printf("[machine] switching to %s, restarting\r\n", coco3 ? "CoCo 3" : "CoCo 2");
     coco_boot_flush_drives();                      // a written disk reaches the card first
     char line[160];
@@ -1577,10 +1675,10 @@ static void settings_apply(void) {
     coco_machine_set_lowercase(st->lowercase);
     coco_machine_palette_set_default(st->color_set ? st->color : nullptr, st->color_set);
     dvi_sio_tmds_encode = st->video_hw_encode;   // PIZERO-175: from the next scanline
-    Serial.printf("[settings] machine=%s sn76489=%s coco_psg=%s symphony12=%s deluxe_psg=%s orchestra90=%s usb_audio=%s/%ddB sound_sources=%s joystick_quiet=%s volume=%u audio_lowpass=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
+    Serial.printf("[settings] machine=%s sn76489=%s coco_psg=%s symphony12=%s deluxe_psg=%s orchestra90=%s midi_pak=%s usb_audio=%s/%ddB sound_sources=%s joystick_quiet=%s volume=%u audio_lowpass=%u artifact_colors=%s gime_palette=%s gime_timer=%s "
                   "autorun=%s reset_button=%s serial_keyboard=%s joystick_swap=%s font=%s lowercase=%s key_repeat=%s/%ums/%u video_encoder=%s soak_log=%s colors_overridden=%04x\r\n",
                   SETTINGS_MACHINE_NAMES[st->machine], st->sn76489 ? "on" : "off",
-                  st->coco_psg ? "on" : "off", st->symphony12 ? (st->symphony12_stereo ? "stereo" : "mono") : "off", st->deluxe_psg ? "on" : "off", st->orchestra90 ? "on" : "off", st->usb_audio ? "on" : "off", (int)st->usb_audio_db,
+                  st->coco_psg ? "on" : "off", st->symphony12 ? (st->symphony12_stereo ? "stereo" : "mono") : "off", st->deluxe_psg ? "on" : "off", st->orchestra90 ? "on" : "off", st->midi_pak ? "on" : "off", st->usb_audio ? "on" : "off", (int)st->usb_audio_db,
                   st->sound_all ? "all" : "switched", st->joystick_quiet ? "on" : "off", st->volume, (unsigned)st->lowpass_hz,
                   st->artifact == ART_OFF ? "off" : st->artifact == ART_SWAPPED ? "swapped" : "on",
                   st->gime_palette ? "on" : "off", st->gime_timer ? "on" : "off",
@@ -1612,6 +1710,8 @@ static void present_card(void) {
 // Runs before loop(), so it services the USB host itself; a byte on the
 // serial console counts as a key too. The timeout keeps a board with no
 // keyboard from waiting forever.
+static uint32_t g_bt_pages = 0;          // PIZERO-315: ms the boot spent on pages
+
 static void boot_wait(uint32_t max_ms) {
     g_boot_key = false;
     uint32_t t0 = millis();
@@ -1620,6 +1720,7 @@ static void boot_wait(uint32_t max_ms) {
         if (Serial.available()) { while (Serial.available()) Serial.read(); break; }
         delay(2);
     }
+    g_bt_pages += millis() - t0;
 }
 
 static void boot_page(const char *title, const char *body, const char *detail) {
@@ -1768,8 +1869,9 @@ static void perform_launch(void) {
 #ifdef COCO3
     // PIZERO-135: a game for the other machine restarts the board as it.
     bool want = machine_wanted(g_launch_path);
+    if (want != IS_COCO3() && machine_available(want))
+        switch_machine(want, HO_LAUNCH, kind, g_launch_path);   // PIZERO-314: returns as it
     if (want != IS_COCO3()) {
-        if (machine_available(want)) switch_machine(want, HO_LAUNCH, kind, g_launch_path);
         Serial.printf("[machine] %s wants the %s, which the card cannot start: running it here\r\n",
                       g_launch_path, want ? "CoCo 3" : "CoCo 2");
     }
@@ -1916,18 +2018,102 @@ static void run_frame(uint32_t cycles) {
     }
 }
 
+// PIZERO-315: boot time, phase by phase, in ms since reset. Each mark is
+// when that phase ended. 'basic' is the first frame a text-screen row
+// starts with OK; a program started without BASIC never shows one, and the
+// boot is logged without it after BT_GIVE_UP_MS. Boot pages wait for a
+// person, so the time they were up is kept apart (pages).
+enum { BT_START, BT_USB_VIDEO, BT_CARD, BT_MONITOR, BT_ROM, BT_BUILT, BT_SETTINGS,
+       BT_CATALOG, BT_LISTED, BT_RUNNING, BT_FRAME, BT_BASIC, BT_N };
+static const char *const BT_NAMES[BT_N] = {
+    "start", "usb_video", "card", "monitor", "rom", "built", "settings",
+    "catalog", "listed", "running", "frame", "basic" };
+#define BT_GIVE_UP_MS 30000u
+static uint32_t g_bt[BT_N];
+static bool     g_bt_host = false;       // a computer answered on USB serial
+static bool     g_bt_done = false;
+static char     g_bt_clock[24];          // when the boot finished, for printing it again
+static inline void bt_mark(int i) {
+    if (!g_bt[i]) { uint32_t t = (uint32_t)(time_us_64() / 1000u); g_bt[i] = t ? t : 1; }
+}
+
+// The OK BASIC prints at the start of a row, as screen codes ('O' 'K', then
+// a space or the end of the row), on the 32-column screen at $0400.
+static bool bt_basic_ready(void) {
+    const uint8_t *scr = coco_machine_peek_ram(0x0400);
+    for (int r = 0; r < 16; r++) {
+        const uint8_t *row = scr + r * 32;
+        if (row[0] == 0x4F && row[1] == 0x4B && row[2] == 0x60) return true;
+    }
+    return false;
+}
+
+// Once per frame until the boot is logged: one serial line, and the same
+// line added to /coco/log/boottime.txt.
+static int bt_format(char *line, size_t cap);
+
+static void bt_frame(void) {
+    if (g_bt_done) return;
+    bt_mark(BT_FRAME);
+    uint32_t now = (uint32_t)(time_us_64() / 1000u);
+    if (bt_basic_ready()) bt_mark(BT_BASIC);
+    else if (now < BT_GIVE_UP_MS) return;
+    g_bt_done = true;
+    char src[24];
+    coco_boot_clock_text(g_bt_clock, sizeof g_bt_clock, src, sizeof src);
+    char line[300];
+    int n = bt_format(line, sizeof line);
+    if (n <= 0) return;
+    Serial.printf("[boot] times ms: %s", line);
+    if (!g_settings.debug) return;             // PIZERO-316: the card log only when debugging
+    FRESULT fr = f_mkdir("0:/coco/log");
+    FIL f;
+    if ((fr == FR_OK || fr == FR_EXIST) && f_open(&f, "0:/coco/log/boottime.txt", FA_WRITE | FA_OPEN_APPEND) == FR_OK) {
+        UINT bw = 0;
+        f_write(&f, line, (UINT)n, &bw);
+        f_close(&f);
+    }
+}
+
+// The boot's line, built from the marks (on the stack: nothing kept but
+// the marks). Returns its length, or 0 if it did not fit.
+static int bt_format(char *line, size_t cap) {
+    int n = snprintf(line, cap, "%s fw=%s machine=%s reset=%s host=%s", g_bt_clock, FW_VERSION,
+                     IS_COCO3() ? "coco3" : "coco2", reset_reason_name(), g_bt_host ? "yes" : "no");
+    for (int i = 0; i < BT_N && n > 0 && n < (int)cap; i++) {
+        if (g_bt[i]) n += snprintf(line + n, cap - n, " %s=%lu", BT_NAMES[i], (unsigned long)g_bt[i]);
+        else n += snprintf(line + n, cap - n, " %s=none", BT_NAMES[i]);
+    }
+    if (n > 0 && n < (int)cap)
+        n += snprintf(line + n, cap - n, " pages=%lu\r\n", (unsigned long)g_bt_pages);
+    return (n > 0 && n < (int)cap) ? n : 0;
+}
+
+// PIZERO-316: with debug = on, wait up to 4 s for a monitor to open the
+// serial port, so it sees the whole boot. Either way the held output goes
+// out now if a monitor is there, and its buffer is freed.
+static void boot_monitor_wait(bool wait) {
+    if (wait) {
+        uint32_t t0 = millis();
+        while (!Serial && (millis() - t0) < 4000) delay(50);
+        if (Serial) delay(200);            // a little room after the host attaches
+    }
+    g_bt_host = (bool)Serial;              // PIZERO-315
+    Serial.release();
+}
+
 void setup() {
+    bt_mark(BT_START);
     midi_usb_begin();                 // PIZERO-287: first, then a clean re-enumeration
     settings_defaults(&g_settings);   // PIZERO-145: in force until settings.txt is read
     Serial.begin(115200);
 #if defined(FDC_TRACE) && defined(FDC_TRACE_UART)
     Serial1.begin(115200);            // PIZERO-191: trace on UART0 for the emulator
 #endif
-    // Bump wait + slow ramp so a freshly-reconnected USB-CDC monitor catches
-    // boot banners. (loop() also repeats a recap for the first ~5 s.)
-    uint32_t t0 = millis();
-    while (!Serial && (millis() - t0) < 4000) delay(50);
-    delay(200);  // a little extra room after the host attaches
+    // PIZERO-316: no wait here. What the boot prints is held until a monitor
+    // opens the port, or until settings.txt says debug = on and the boot
+    // waits for one (boot_monitor_wait, once the card is read).
+    Serial.hold(4096);
     Serial.print("\r\nXRoar on RP2350-PiZero (PIZERO-09)\r\n");
     // PIZERO-116: RUN is a hardware reset, so the press itself is invisible;
     // POWMAN records it as the cause of THIS reset (HAD_RUN_LOW, read-only,
@@ -2264,21 +2450,30 @@ void setup() {
 #ifdef VIDEO_BENCH
     video_bench_run();                     // PIZERO-175: core 1 is scanning out now
 #endif
+    bt_mark(BT_USB_VIDEO);                 // PIZERO-315
 
     if (!mount_sd()) {
+        boot_monitor_wait(true);               // PIZERO-316: no card to say; someone is looking
         Serial.print("SD mount FAILED: no ROMs, idle.\r\n");
         boot_page(MSG_NOSD_TITLE, MSG_NOSD_BODY, MSG_NOSD_DETAIL);
         return;
     }
     coco_boot_clock_init();                    // PIZERO-201: before anything writes a file
-#ifdef COCO3
-    // PIZERO-135: which machine, from settings.txt, before its ROMs load.
-    // The full settings are read again once the machine exists.
+    bt_mark(BT_CARD);                          // PIZERO-315
     {
+        // PIZERO-135: which machine, from settings.txt, before its ROMs load;
+        // PIZERO-316: and whether to wait for a monitor. The full settings
+        // are read again once the machine exists.
         static struct coco_settings pre;
         coco_boot_load_settings(&pre);
+        g_settings.debug = pre.debug;
+        boot_monitor_wait(pre.debug);
+        bt_mark(BT_MONITOR);
+#ifdef COCO3
         g_coco3_mode = settings_is_coco3(&pre);
+#endif
     }
+#ifdef COCO3
     // A switch (switch_machine) chose the machine and what to do next.
     handoff_read();
     if (g_boot_handoff.valid) {
@@ -2325,6 +2520,7 @@ void setup() {
         }
         return;
     }
+    bt_mark(BT_ROM);                           // PIZERO-315
     Serial.printf("[mem] free heap %d bytes before the machine\r\n", rp2040.getFreeHeap());
     if (!coco_machine_init(g_coco_rom, IS_COCO3() ? 32768 : 16384)) {
         // PIZERO-262: the CoCo 3 takes 64 KB of its RAM from the heap.
@@ -2345,9 +2541,11 @@ void setup() {
     // PIZERO-145: settings from the card, now that the machine exists to
     // take them and before AUTORUN, which reset_button governs.
     coco_boot_recover_text("0:/coco/settings.txt");   // PIZERO-146: finish a cut-off save
+    bt_mark(BT_BUILT);                         // PIZERO-315
     if (!coco_boot_load_settings(&g_settings))
         Serial.print("[settings] no /coco/settings.txt: defaults\r\n");
     settings_apply();
+    bt_mark(BT_SETTINGS);
     Serial.printf("[boot] reset reason: %s\r\n", reset_reason_name());   // PIZERO-203
     soak_log_note_board(FW_VERSION);           // PIZERO-208
     if (g_settings.soak_log)                 // PIZERO-201
@@ -2371,6 +2569,7 @@ void setup() {
     // can be checked over serial before anything is drawn.
     {
         int n = coco_boot_rescan(CAT_DSK);
+        bt_mark(BT_CATALOG);                   // PIZERO-315
         const struct dsk_catalog *cat = coco_boot_dsk_catalog();
         Serial.printf("[dsk] %d image(s)", n);
         if (cat->skipped_long) Serial.printf(", %d skipped (name too long)", cat->skipped_long);
@@ -2379,6 +2578,7 @@ void setup() {
         char p[96];
         for (int i = 0; i < n; i++)
             if (dsk_cat_path(cat, i, p, sizeof p)) Serial.printf("[dsk]   %s\r\n", p);
+        bt_mark(BT_LISTED);
     }
 
     // Boot strategy from /coco/autorun.txt (see AUTORUN.md); default = Disk BASIC.
@@ -2499,6 +2699,7 @@ void setup() {
         snprintf(g_launch_path, sizeof g_launch_path, "%s", g_boot_handoff.path);
     }
     g_machine_running = true;
+    bt_mark(BT_RUNNING);                         // PIZERO-315
     Serial.print("[main] coco_machine running\r\n");
     Serial.printf("[mem] free heap %d bytes (bank-switched carts need their size + %d)\r\n",
                   rp2040.getFreeHeap(), CART_HEAP_MARGIN);
@@ -2623,6 +2824,14 @@ void loop() {
         d = micros();
     } else {
     if (g_launch_kind >= 0) perform_launch();     // PIZERO-81d: chosen in the overlay
+#ifdef COCO3
+    // PIZERO-314: a test of the switch from the serial link: the other
+    // machine at its BASIC prompt, settings.txt left as it is.
+    if (g_switch_request) {
+        g_switch_request = false;
+        if (machine_available(!IS_COCO3())) switch_machine(!IS_COCO3(), HO_BASIC, -1, nullptr);
+    }
+#endif
     bin_settle_tick();
     wd_phase(WP_KBD);
     pump_keyboard();
@@ -2633,6 +2842,16 @@ void loop() {
     run_frame(CYCLES_PER_FRAME * CPU_SPEED_MUL);   // PIZERO-287: in slices while MIDI is in use
     wd_post_frame(coco_machine_cpu_pc(), g_usb_devices);   // PIZERO-227
     coco_boot_disk_tick();                       // PIZERO-66: sync an idle dirty drive
+    bt_frame();                                  // PIZERO-315: until the boot is logged
+    {
+        // PIZERO-315: a computer that opens the serial port after the boot
+        // is told how the boot went.
+        static bool host_was = true;
+        bool host = (bool)Serial;
+        char line[300];
+        if (host && !host_was && g_bt_done && bt_format(line, sizeof line)) Serial.printf("[boot] times ms: %s", line);
+        host_was = host;
+    }
     b = micros();
     if (IS_COCO3()) {
     // PIZERO-133: the GIME drew each scanline into g_fb as it went.

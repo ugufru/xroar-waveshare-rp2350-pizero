@@ -1,0 +1,18 @@
+# PIZERO-315: [boot] times lines from the board, 2026-11-01 (the board's clock read 2026-11-02, see boot-times.md)
+# pizero_stream_60, fw v0.7.2-472-ga90be9f-dirty, machine = cocozero (a CoCo 3), drives: LYRA285.DSK, COCOMID3.DSK
+# Each boot is a flash (reset=software). host=yes: the Mac had the port open from the start; host=no: opened 15-20 s later.
+[boot] times ms: 2026-11-02 04:53:49 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=yes start=32 serial=782 usb_video=794 card=941 rom=1014 built=1016 settings=1024 running=1416 frame=1429 basic=1879 pages=0
+[boot] times ms: 2026-11-02 04:54:31 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=34 serial=4284 usb_video=4296 card=4442 rom=4515 built=4517 settings=4524 running=4920 frame=4934 basic=5383 pages=0
+[boot] times ms: 2026-11-02 04:56:01 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=yes start=34 serial=834 usb_video=846 card=993 rom=1066 built=1068 settings=1076 running=1482 frame=1495 basic=1945 pages=0
+[boot] times ms: 2026-11-02 04:56:27 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=yes start=34 serial=784 usb_video=796 card=943 rom=1016 built=1018 settings=1026 running=1438 frame=1452 basic=1902 pages=0
+[boot] times ms: 2026-11-02 04:56:56 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=34 serial=4284 usb_video=4296 card=4442 rom=4515 built=4517 settings=4525 running=4942 frame=4956 basic=5405 pages=0
+[boot] times ms: 2026-11-02 04:57:26 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=35 serial=4285 usb_video=4296 card=4443 rom=4516 built=4518 settings=4526 running=4956 frame=4970 basic=5422 pages=0
+[boot] times ms: 2026-11-02 04:58:15 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=yes start=33 serial=784 usb_video=796 card=943 rom=1016 built=1018 settings=1026 catalog=1344 listed=1349 running=1459 frame=1473 basic=1923 pages=0
+[boot] times ms: 2026-11-02 04:58:44 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=35 serial=4285 usb_video=4297 card=4444 rom=4517 built=4519 settings=4526 catalog=4853 listed=4855 running=4965 frame=4979 basic=5428 pages=0
+# PIZERO-314 in-place switches (Ctrl-T), same session: 10 round trips
+[machine] now a CoCo 2, built in place in 80 ms; free heap 51240 bytes
+[machine] now a CoCo 3, built in place in 87 ms; free heap 8384 bytes
+# PIZERO-316: serial wait behind debug = on; debug off here
+[boot] times ms: 2026-11-02 05:09:46 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=33 usb_video=95 card=238 monitor=245 rom=311 built=313 settings=320 catalog=653 listed=655 running=763 frame=777 basic=1230 pages=0
+[boot] times ms: 2026-11-02 05:10:24 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=35 usb_video=96 card=238 monitor=245 rom=311 built=313 settings=320 catalog=675 listed=680 running=789 frame=804 basic=1252 pages=0
+[boot] times ms: 2026-11-02 05:11:44 fw=v0.7.2-472-ga90be9f-dirty machine=coco3 reset=software host=no start=33 usb_video=95 card=241 monitor=248 rom=314 built=316 settings=323 catalog=674 listed=675 running=784 frame=798 basic=1246 pages=0

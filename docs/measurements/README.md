@@ -37,6 +37,10 @@ is the freeze signature. It flushes line by line, so killing it is safe.
 "device reports readiness to read but returned no data", which reads exactly
 like a board fault and has cost a session before now.
 
+Put `debug = on` in `/coco/settings.txt` first (PIZERO-316): without it the
+board does not wait for the monitor at boot, and the logger misses each
+boot's reset reason and post-mortem lines.
+
 Start from a **cold power-on** for stability runs: a dev-tool reboot can leave
 `freezes=1` residue from a previous session (PIZERO-33).
 
@@ -49,6 +53,13 @@ files as it reads serial logs: the first line names the format and the
 sampling interval, `=== DATE` lines carry the date, and the `badfps` counter
 on the `[run]` line stands in for the per-second fps windows a sampled log
 cannot see. Copy the file into `logs/` with the others; it is evidence too.
+
+## Boot times (PIZERO-315)
+
+Every boot prints one line on serial, and with `debug = on` (PIZERO-316)
+appends it to `/coco/log/boottime.txt` on the card: milliseconds since reset at the end of each boot
+phase, up to the BASIC `OK`. What the marks mean, and the figures so far,
+are in [`boot-times.md`](boot-times.md).
 
 ## Turning a log into a record
 
