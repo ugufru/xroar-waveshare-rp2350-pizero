@@ -3,7 +3,9 @@
 A record of how the CoCo Zero went from "a CoCo 3 is out of reach" to a
 128 KB CoCo 3 in the product firmware, beside the CoCo 2: what worked, what
 cost time, and what we now do differently because of it. It covers PIZERO-111
-through PIZERO-241, 2026-09-17 to 2026-10-20.
+through PIZERO-241, 2026-09-17 to 2026-10-20, and was brought up to date on
+2026-11-01, when the CoCo 3 became the default machine (PIZERO-242, 261 to
+263, 280, 287, 314 to 316).
 
 How to use the CoCo 3 is in [README.md](../README.md) and
 [SETTINGS.md](../SETTINGS.md); the plan and the numbers behind it are in
@@ -21,11 +23,15 @@ about the process and the failures, so the same mistakes are not made twice.
 | Checked on the board | WIDTH 40 and 80, ATTR, PALETTE, HSCREEN 1 and 2, the GIME timer, sound at both speeds. PIZERO-214, 134. |
 | Input | CTRL, ALT, F1, F2 from the USB keyboard; both buttons of each joystick on the gamepad. PIZERO-215. |
 | Software | Space Raid, Starcast and Galactus play. Three 512 KB titles do not, as expected. NitrOS-9 Level 2 boots from a floppy the script builds. PIZERO-228, 236. |
-| One firmware | The product build is either machine: `machine = coco2 \| coco3`, and a game's own settings file switches by restarting the board. PIZERO-135. |
+| One firmware | The product build is four machines: `cocozero` (the default since PIZERO-280: a 128 KB CoCo 3 with the sound chips, the MIDI Pak and auto-repeat), `coco2+` (a CoCo 2 with the extras), and the stock `coco2` and `coco3`. PIZERO-135, 242, 280. |
+| Switching | In place, without restarting the board: about 80 ms to a CoCo 2 and 87 ms to a CoCo 3, from a settings change or a game's own file. Only a game autorun starts at power-on still restarts. PIZERO-314. |
+| Boot | Reset to the BASIC `OK` in about 1.25 s with no computer attached; 450 ms of it is Super Extended and Disk BASIC starting. PIZERO-315, 316. |
+| Memory | About 8.3 KB of heap free with the CoCo 3 running and Disk BASIC in. Every change that adds RAM is checked by booting as a CoCo 3 (CLAUDE.md, since PIZERO-262). |
+| Extras on the CoCo 3 | The SN76489, the AY cartridges, the Orchestra-90 and the MIDI Pak are all on its bus (`coco3_cpu_cycle`). The MIDI Pak's echo test has run on both machines and the AY's cost was measured on it (PIZERO-248, 287); the others have not been checked by ear on a CoCo 3 yet. |
 | Not possible | 512 KB. The board's PSRAM is not fitted and SRAM is full. |
 | Not yet tried | HSCREEN 3 and 4, the 640-wide graphics modes, on the board. |
 
-Host tests: 261, including the 6809 lockstep harness (`test_mc6809_lockstep`) and
+Host tests: 338 (2026-11-01), including the 6809 lockstep harness (`test_mc6809_lockstep`) and
 the CoCo 3 boot, typing and port-renderer checks (`test_coco3_boot`).
 
 ## Timeline
@@ -48,6 +54,14 @@ the CoCo 3 boot, typing and port-renderer checks (`test_coco3_boot`).
 | 10-20 | PIZERO-215 | CTRL, ALT, F1, F2 and the second fire buttons. A gamepad's stray R2 bit found and fixed on the way. |
 | 10-20 | PIZERO-135 | One firmware, either machine, with per-game switching. Three restart mechanisms failed before the fourth worked. |
 | 10-20 | PIZERO-239, 241 | Documentation sweep; this retrospective. |
+| 10-20 | PIZERO-242 | Machine profiles: `cocozero` (then a CoCo 2 with extras), stock `coco2` and `coco3`. |
+| 10-23 | PIZERO-261 | A game set to the CoCo 3 ran on the CoCo 2 with no reason given: `coco3.rom` had gone from the card. The launch now refuses and says which ROM is missing. |
+| 10-23 | PIZERO-262 | The CoCo 3 stopped starting: a day of RAM growth elsewhere left too little heap for its second 64 KB. |
+| 10-23 | PIZERO-263 | A black screen at the prompt: a `coco3.rom` with 801 bytes changed, the right size. |
+| 10-26 | PIZERO-280 | The CoCo Zero standard says a CoCo Zero is a CoCo 3; filed. |
+| 11-01 | PIZERO-287 | The MIDI Pak, tested on both machines. |
+| 11-01 | PIZERO-280, 314 | `cocozero` becomes the CoCo 3 with extras, `coco2+` keeps the CoCo 2 with them, and switching machine no longer restarts the board. |
+| 11-01 | PIZERO-315, 316 | Boot timed phase by phase; the 4 s wait for a serial monitor moved behind `debug`. |
 
 ## What worked
 
@@ -179,6 +193,38 @@ The documentation sweep first said every GIME mode shows whole. HSCREEN 3 and
 **Lesson:** a feature list says what was checked, and says "not yet tried"
 about the rest.
 
+### 8. RAM added elsewhere stopped the CoCo 3 (PIZERO-262)
+
+The CoCo 3 takes its second 64 KB from the heap. A day of unrelated work
+(a bigger stereo ring, USB audio, HID maps) grew static RAM to 85.7%, and the
+CoCo 3 no longer started: "EMULATOR DID NOT START". Nothing had checked the
+CoCo 3 after any of those changes, because none of them was about the CoCo 3.
+
+**Lesson:** a budget shared by two machines needs a check on the tighter one
+after every change. Booting as a CoCo 3 and reading `[mem] free heap` is now
+a rule before committing RAM.
+
+### 9. A size check passed a damaged ROM (PIZERO-263)
+
+`coco3.rom` was the right 32,768 bytes, with 801 bytes changed. The machine
+drew a black screen, and it took a session to get from "the video is
+broken" to comparing the file with a good copy.
+
+**Lesson:** check what a file is, not just how big it is. A hash check on
+the ROMs is filed (PIZERO-264).
+
+### 10. A restart that was not needed (PIZERO-135, 314)
+
+PIZERO-135 switched machine by restarting the board, because the two lay
+out RAM differently and nothing could take a machine down. The plan for
+switching in place (PIZERO-314) set aside a fixed 64 KB arena, in case the
+heap came back fragmented. Measured first, it came back whole every time
+(77,872 bytes with no machine, ten round trips), so the arena was never
+built, and the switch takes 80 ms instead of 2 s and keeps USB up.
+
+**Lesson:** revisit a workaround when its reason is looked at again, and
+measure the feared problem before building around it.
+
 ## Still open
 
 - **PIZERO-216:** LOADM under a non-default MMU map.
@@ -189,6 +235,11 @@ about the rest.
 - **PIZERO-237:** 640x480 screenshots take about a second; no host test of the 640-wide path yet.
 - **PIZERO-238:** read the text screen back over serial.
 - **PIZERO-240:** retire or restore `video_encoder`.
+- **PIZERO-264, 265:** hash-check the ROMs; "Press R to retry" on the boot pages.
+- **PIZERO-314's remainder:** a game autorun starts at power-on that wants the
+  other machine still restarts the board.
+- **RAM:** PIZERO-268 (a 4-bit framebuffer), 270 (ROMs from flash) and 272
+  (225 lines) would each give the CoCo 3 headroom.
 - **HSCREEN 3 and 4** on the board.
 - **The user's `nos9l2.dsk`** to be restored on the card from the Mac's copy, and
   the Level 2 floppy renamed `L2BOOT.DSK`.
@@ -214,3 +265,6 @@ about the rest.
   known traps when found.
 - **When a path is replaced, settle every setting that steered the old one.**
 - **Say what was checked.** "Not yet tried" is a fine thing to write.
+- **Boot as a CoCo 3 after any change that adds RAM,** and read the heap.
+- **Check a ROM's content, not just its size.**
+- **Measure the problem a workaround guards against** before building it.

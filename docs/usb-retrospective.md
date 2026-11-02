@@ -2,9 +2,16 @@
 
 A record of how USB input got from nothing to a keyboard and a gamepad
 working together through a hub, a keyboard that types what its keycaps say,
-and the screen fonts that go with it: what went wrong along the way, and what
-we now do differently because of it. It covers PIZERO-11 through PIZERO-167,
-2026-05-27 to 2026-09-28.
+and the screen fonts that go with it, then to sound out of a USB DAC and the
+board appearing to a computer as a MIDI interface: what went wrong along the
+way, and what we now do differently because of it. It covers PIZERO-11
+through PIZERO-167, 2026-05-27 to 2026-09-28, and was brought up to date on
+2026-11-01 (PIZERO-203, 215, 227, 255, 287, 316).
+
+The board has two USB ports with different jobs. The **host port** (PIO-USB)
+takes keyboards, pads, hubs and now a headphone DAC. The **native USB-C
+port** is a USB device: a computer sees it as a serial port and, since
+PIZERO-287, a MIDI interface.
 
 How to use the keyboard and pad is in [README.md](../README.md) and
 [SETTINGS.md](../SETTINGS.md); the build flags are in [BUILD.md](BUILD.md).
@@ -16,18 +23,22 @@ not made twice.
 | Area | State |
 |---|---|
 | USB host | Pico-PIO-USB (software USB on PIO 1, D+ GPIO 28, D- 29) under Adafruit TinyUSB 3.7.7. Full speed (12 Mbit/s) only. Done, PIZERO-11. |
-| Keyboard | Types what the keycaps say (US layout): `= + : ' " _ [ ] \` where they are printed, Caps Lock is the case toggle, Home is CLEAR, and the numeric keypad works. `{ } \| ~` and backtick do nothing: the CoCo has no such keys. Built, awaiting confirmation (PIZERO-163, 49). Replaced the positional mapping of PIZERO-12. |
+| Keyboard | Types what the keycaps say (US layout): `= + : ' " _ [ ] \` where they are printed, Caps Lock is the case toggle, Home is CLEAR, and the numeric keypad works. `{ } \| ~` and backtick do nothing: the CoCo has no such keys. Done (PIZERO-163, 49). Replaced the positional mapping of PIZERO-12. On a CoCo 3, CTRL, ALT, F1 and F2 too (PIZERO-215). |
 | Auto-repeat | Held keys repeat, on by default; delay and rate configurable, per game too. Done, PIZERO-167. |
-| Screen text | The machine's font is a setting: `classic`, `6847t1`, or our `6847t2` (default), which has a real caret and underscore, plus true lower case and `{ \| } ~` with `lowercase` (on by default). The firmware's own screens draw them too. Built, awaiting confirmation (PIZERO-162, 166). |
-| Gamepad | Works as both CoCo joysticks, two fire buttons. Confirmed on hardware with a GameSir Tegenaria Lite in two of its modes. Done, PIZERO-13. |
+| Screen text | The machine's font is a setting: `classic`, `6847t1`, or our `6847t2` (default), which has a real caret and underscore, plus true lower case and `{ \| } ~` with `lowercase` (on by default). The firmware's own screens draw them too. Done (PIZERO-162, 166). |
+| Gamepad | Works as both CoCo joysticks, two fire buttons (both buttons of each stick on a CoCo 3, PIZERO-215). Confirmed on hardware with a GameSir Tegenaria Lite in two of its modes. Done, PIZERO-13. |
+| Pad buttons | Any button can press a CoCo key (`pad_<button> = key`), and `dpad = arrows`. Done, PIZERO-164. |
+| Headphone DAC | A class-compliant USB headphone DAC on the host port plays the sound instead of the video cable. Needed isochronous OUT added to Pico-PIO-USB, which had none. Volume keys on a keyboard or DAC set the volume. Done, PIZERO-255. Costs about 2.3 ms a frame, more under heavy sound (PIZERO-259). |
+| Native port | A composite device: USB serial (log, serial typing) and, since PIZERO-287, "CoCo Zero MIDI Pak", the CoCo's MIDI interface as a computer sees it. Built, awaiting real software (PIZERO-287). |
 | Stick swap | `joystick_swap` setting, also per game. Done, PIZERO-160. |
 | Hub | Keyboard and pad together through a simple hub, 60 fps, clean audio. Done, PIZERO-54. |
 | Hot-plug | Straight into the board: no. A device plugged in after power-on is never seen. Through a hub: a keyboard plugged in while running did mount. PIZERO-51. |
-| Unused pad buttons | Start, Select, the top face button, triggers and stick clicks do nothing yet (PIZERO-164). |
+| Stability | The one live hang (PIZERO-203), about one every 3 hours on a soak, is core 0 stuck inside the USB host's 1 ms timer interrupt, in PIO-USB's bus code. Found by PIZERO-227's post-mortem. Not yet fixed. |
 
-Host tests: 206, of which 21 are the gamepad decoders and joystick
-comparator (`test/test_gamepad`) and 17 the keyboard translation and
-auto-repeat (`test/test_key_translate`).
+Host tests: 338 in all (2026-11-01). 21 are the gamepad decoders and joystick
+comparator (`test/test_gamepad`), 17 the keyboard translation and
+auto-repeat (`test/test_key_translate`), 8 the MIDI packing
+(`test/test_midi_usb_pack`).
 
 ## Timeline
 
@@ -48,6 +59,14 @@ auto-repeat (`test/test_key_translate`).
 | 09-28 | PIZERO-163 | The keyboard types what its keycaps say, and the key matrix gets one layer per source (8fe9ca9). |
 | 09-28 | PIZERO-166 | Font setting and the 6847T2 (6786424). The user's `POKE 65314,16` did not work; a register trace showed BASIC undoing it. `lowercase` setting added (f4c9ca6). |
 | 09-28 | PIZERO-167 | Auto-repeat, on by default, confirmed on hardware (8b6cdca). Rule adopted: improvements are on by default. |
+| 09-28 | PIZERO-164 | Pad buttons press CoCo keys; `dpad = arrows` confirmed on hardware. |
+| 10-15 to 10-17 | PIZERO-227 | Watchdog post-mortem: where core 0 really was at a freeze (interrupted PC, exception number). |
+| 10-20 | PIZERO-215 | CoCo 3 keys and second fire buttons. The GameSir's R2 bit, set at rest, held a key row down once R2 had a job. |
+| 10-23 | PIZERO-255 | USB headphone DAC: isochronous OUT patched into Pico-PIO-USB, the stream in the 1 ms frame interrupt; volume keys. |
+| 10-29 | PIZERO-283 | Idea filed: with a debug probe doing flashing and the log, the native port could be a second, hardware USB host. |
+| 11-01 | PIZERO-203 | 269 card soak logs read: every post-mortem hang is in the USB host's timer interrupt. |
+| 11-01 | PIZERO-287 | The native port becomes serial plus MIDI. Two USB lessons on the way (below). |
+| 11-01 | PIZERO-316 | The boot no longer waits 4 s for a serial monitor unless `debug = on`; early output is held until one opens the port. |
 
 ## What worked
 
@@ -204,17 +223,72 @@ a `PRINT` in a program reset it too. The emulation was right; a real CoCo
 **Lesson:** when a register "does not take", count the writes to it before
 blaming the code that reads it.
 
+### 11. A hang that was not in our code (PIZERO-203, 227)
+
+Five watchdog recoveries landed in five different phases of the main loop,
+so the phase markers said nothing. PIZERO-227 recorded the interrupted
+program counter and exception number instead, and every hang since was in
+the same place: the USB host's 1 ms timer interrupt, inside PIO-USB's bus
+code, which busy-waits on the wire. The DAC stream (PIZERO-255) runs in the
+same interrupt and makes it heavier.
+
+**Lesson:** work done in an interrupt is invisible to markers in the main
+loop. When a hang moves around, record where the CPU was, not which phase
+it was in.
+
+### 12. A device the computer remembered wrongly (PIZERO-287)
+
+Adding the MIDI interface to the native port left the Mac seeing a device
+with no interfaces, and only a BOOT-button replug cleared it: the board
+re-enumerated before the new interface was added. `midi_usb_begin()` now
+adds it first thing and forces a detach and re-attach. macOS also keeps
+the old product name ("RP2350 PiZero") until it is deleted in Audio MIDI
+Setup.
+
+**Lesson:** when a USB device's descriptors change, force a re-enumeration,
+and expect the host to cache names.
+
+### 13. A library parser that garbled a note (PIZERO-287)
+
+The TinyUSB MIDI stream parser, given a lone `$90` left by a program that
+stopped mid-message, sent `90 10 3C` when the next note came. Our own
+packer (`src/midi_usb_pack.h`, host-tested) follows MIDI's rules: an
+unfinished message is dropped, never sent garbled.
+
+**Lesson:** at a protocol boundary, own the byte-level rules and test them;
+the less third-party code in the path, the fewer surprises.
+
 ## Still open
 
 | Issue | What |
 |---|---|
+| PIZERO-203 | The hang in the USB host's timer interrupt. |
 | PIZERO-51 | Hot-plug straight into the board. Needs switched VBUS; a hub may be the practical answer. |
 | PIZERO-157 | Switch Pro handshake, so the pad works in any mode. |
 | PIZERO-158 | Serial typing drops the first character of a line. |
 | PIZERO-159 | Devices behind a chained USB-C hub never mount (TinyUSB race). |
-| PIZERO-162, 163, 166, 49 | Built and on the board, awaiting confirmation: screen glyphs, keycap keyboard and keypad, fonts. |
-| PIZERO-164 | Pad buttons press CoCo keys; `dpad = arrows`. |
+| PIZERO-259 | The DAC stream's cost in the frame interrupt (a table-driven encoder, encoding outside the interrupt). |
 | PIZERO-50 | A real CoCo joystick on the header pins. |
+
+## Ideas for using USB further
+
+USB has turned out to be the board's way to reach most of the outside
+world, so these are worth keeping in view:
+
+- **MIDI on the host port** (PIZERO-305, which meets the CoCo Zero
+  standard's PIZERO-281): a class-compliant USB MIDI keyboard or synth,
+  through the hub, as the MIDI Pak's in and out. Then **choosing MIDI ports**
+  (PIZERO-306) when there are several.
+- **Sound to the DAC and the video cable at once** (PIZERO-257): one ring,
+  two readers on two clocks.
+- **A second USB host on the native port** (PIZERO-283), once a debug probe
+  does flashing and the log: hardware USB, its own connect detection (the
+  first place to try hot-plug again), and less work on core 0.
+- **A USB stick as a drive** (PIZERO-288's directory drives): a directory on
+  a USB stick or the card behind Disk BASIC, so files move by plugging in.
+- **Moving USB work out of the interrupt** (PIZERO-259, and the likeliest
+  fix for PIZERO-203): encode packets in the main loop and only send them in
+  the interrupt.
 
 ## Working rules this produced
 
@@ -235,3 +309,8 @@ blaming the code that reads it.
   (the `[vdg]` line's `pb_writes` and `pb_last` are the model).
 - Improvements to the machine are on by default; authentic behavior stays
   one setting away, per game if need be (CLAUDE.md).
+- When a hang moves between phases, record the interrupted PC and exception,
+  not the phase.
+- After changing what the native port presents, force a re-enumeration.
+- Own the byte-level rules at a protocol boundary, with host tests, rather
+  than a library's convenience parser.
