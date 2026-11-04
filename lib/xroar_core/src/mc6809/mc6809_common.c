@@ -73,6 +73,32 @@ extern void coco_mem_nvma(void *sptr);
 		if (!coco_fastbus_advance(ticks)) coco_mem_tick(cpu->mem_cycle.sptr, (rnw), (a)); \
 	} while (0)
 
+#ifdef COCO_FASTBUS_PAGES
+// PIZERO-322: what is not in the page table. Out of line, so each inlined
+// read or write keeps the one call it had (the core runs from RAM, and a
+// check at every site cost 8 KB): on a CoCo 3 $FE00-$FEFF and the vectors
+// come from memory here, the rest takes the full hook.
+static void __attribute__((noinline)) HOT_FUNC(slow_read)(struct MC6809 *cpu, uint16_t a) {
+	const uint8_t *p;
+	if (a >= 0xfe00 && (p = coco_fastbus_hi_rd(a))) {
+		cpu->D = *p;
+		COCO_TICK(1, a, coco_fastbus.ticks);
+	} else {
+		coco_mem_cycle(cpu->mem_cycle.sptr, 1, a);
+	}
+}
+
+static void __attribute__((noinline)) HOT_FUNC(slow_write)(struct MC6809 *cpu, uint16_t a, uint8_t d) {
+	uint8_t *p;
+	if ((a & 0xff00) == 0xfe00 && (p = coco_fastbus.fe_wr)) {
+		p[a & 0xff] = d;
+		COCO_TICK(0, a, coco_fastbus.ticks);
+	} else {
+		coco_mem_cycle(cpu->mem_cycle.sptr, 0, a);
+	}
+}
+#endif
+
 static CPU_PROF_INLINE uint8_t fetch_byte_notrace(struct MC6809 *cpu, uint16_t a) {
 	CPU_PROF_BUS_BEGIN();
 	cpu->nmi_latch |= (cpu->nmi_armed && cpu->nmi);
@@ -84,7 +110,7 @@ static CPU_PROF_INLINE uint8_t fetch_byte_notrace(struct MC6809 *cpu, uint16_t a
 		cpu->D = p[a & 0x1fff];
 		COCO_TICK(1, a, coco_fastbus.ticks);
 	} else {
-		coco_mem_cycle(cpu->mem_cycle.sptr, 1, a);
+		slow_read(cpu, a);             // PIZERO-322: $FExx and the vectors first
 	}
 #else
 	if (a < coco_fastbus.ram_top) {
@@ -135,7 +161,7 @@ static CPU_PROF_INLINE void store_byte(struct MC6809 *cpu, uint16_t a, uint8_t d
 		p[a & 0x1fff] = d;
 		COCO_TICK(0, a, coco_fastbus.ticks);
 	} else {
-		coco_mem_cycle(cpu->mem_cycle.sptr, 0, a);
+		slow_write(cpu, a, d);         // PIZERO-322: the $FExx page first
 	}
 #else
 	if (a < coco_fastbus.ram_top) {

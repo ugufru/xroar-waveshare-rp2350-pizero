@@ -767,6 +767,13 @@ unsigned tcc1014_decode_page(struct TCC1014 *gimep, unsigned page, unsigned *ban
 	return 7;
 }
 
+// PIZERO-322 (port addition): INIT0's MC3, so the port's fast path can
+// serve $FE00-$FEFF: with it set they are RAM at bank $3F whatever the MMU
+// says (tcc1014_mem_cycle sets RAS, and RAM wins over a ROM decode).
+_Bool tcc1014_mc3(struct TCC1014 *gimep) {
+	return ((struct TCC1014_private *)gimep)->MC3;
+}
+
 // PIZERO-213 (port addition): event ticks per CPU cycle, as tcc1014_mem_cycle
 // passes to cpu_cycle: 8 at 1.79 MHz, 16 at 0.89 MHz.
 

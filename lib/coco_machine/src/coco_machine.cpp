@@ -903,9 +903,14 @@ static inline void fastbus_sync(void) {
         // PIZERO-213: map each 8 KB logical page through the GIME's MMU as
         // its decode stands now. coco3_cpu_cycle calls this after every
         // write that can change the map.
+#ifdef CPU_PROF
+        g_cpu_prof.c3_sync_n++;                      // PIZERO-322
+#endif
         g_c3bus.cart = g_m.cart_rom;
         g_c3bus.cart_mask = g_m.cart_mask;
         coco_fastbus.ram_top = coco_fastbus.rom_top = coco_fastbus.cart_top = 0;
+        coco_fastbus.fe_rd = coco_fastbus.vec_rd = nullptr;
+        coco_fastbus.fe_wr = nullptr;
         if (!g_gime3) { coco_fastbus.page_top = 0; return; }
         for (unsigned p = 0; p < 8; p++) {
             unsigned bank;
@@ -915,6 +920,19 @@ static inline void fastbus_sync(void) {
         coco_fastbus.rom = g_c3bus.rom + 0x4000;     // a dummy cycle reads $FFFF
         coco_fastbus.ticks = coco_fastbus.rom_ticks = (uint16_t)tcc1014_cycle_ticks(g_gime3);
         coco_fastbus.page_top = 0xFE00;              // $FE00 up: MC3 and I/O
+        // PIZERO-322: $FE00-$FEFF as tcc1014_mem_cycle decodes it: with MC3
+        // the RAM at bank $3F (RAS, whatever the MMU and ROM say), without
+        // it the rest of page 7. The vectors read the internal ROM by their
+        // logical address, as coco3_bus_cycle's S = 0 does.
+        if (tcc1014_mc3(g_gime3)) {
+            uint8_t *fe = coco3_ram_at(&g_c3bus, (0x3Fu << 13) | 0x1E00u);
+            coco_fastbus.fe_rd = fe;
+            coco_fastbus.fe_wr = fe;
+        } else {
+            coco_fastbus.fe_rd = coco_fastbus.rd[7] ? coco_fastbus.rd[7] + 0x1E00 : nullptr;
+            coco_fastbus.fe_wr = coco_fastbus.wr[7] ? coco_fastbus.wr[7] + 0x1E00 : nullptr;
+        }
+        coco_fastbus.vec_rd = g_c3bus.rom ? g_c3bus.rom + 0x7FE0 : nullptr;
         return;
     }
 #endif
@@ -953,6 +971,8 @@ static inline void fastbus_sync(void) {
         coco_fastbus.wr[p] = wr;
     }
     coco_fastbus.page_top = coco_fastbus.cart_top ? 0xFF00 : 0;
+    coco_fastbus.fe_rd = coco_fastbus.vec_rd = nullptr;   // PIZERO-322: CoCo 3 only
+    coco_fastbus.fe_wr = nullptr;
 #endif
 }
 
@@ -1042,6 +1062,20 @@ static inline __attribute__((always_inline)) void mem_cycle_tail(int ncycles, ui
 // coco3_cpu_cycle. PIZERO-220: timed in the profiler build.
 static inline __attribute__((always_inline)) void c3_slow(_Bool RnW, uint16_t A) {
 #ifdef CPU_PROF
+    {   // PIZERO-322: which addresses take the slow path
+        unsigned c;
+        if (A < 0xFE00) { c = RnW ? CPU_PROF_C3_RD : CPU_PROF_C3_WR; g_cpu_prof.c3_page[A >> 13]++; }
+        else if (A < 0xFF00) c = CPU_PROF_C3_FE;
+        else if (A < 0xFF40) c = CPU_PROF_C3_PIA;
+        else if (A < 0xFF90) c = CPU_PROF_C3_CART;
+        else if (A < 0xFFA0) c = CPU_PROF_C3_GIME;
+        else if (A < 0xFFB0) c = CPU_PROF_C3_MMU;
+        else if (A < 0xFFC0) c = CPU_PROF_C3_PAL;
+        else if (A < 0xFFE0) c = CPU_PROF_C3_SAM;
+        else if (A < 0xFFFF) c = CPU_PROF_C3_VEC;
+        else c = CPU_PROF_C3_FFFF;
+        g_cpu_prof.c3_cls[c]++;
+    }
     uint32_t t0 = cpu_prof_now();
     tcc1014_mem_cycle(g_gime3, RnW, A);
     g_cpu_prof.slow_clk += cpu_prof_now() - t0;
@@ -1256,6 +1290,7 @@ static inline __attribute__((always_inline)) void coco3_tick(void) {
 #ifdef CPU_PROF
     g_cpu_prof.slow_clk += cpu_prof_now() - t0;
     g_cpu_prof.slow_n++;
+    g_cpu_prof.c3_tick_n++;               // PIZERO-322
 #endif
 }
 #else

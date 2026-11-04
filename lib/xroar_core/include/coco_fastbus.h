@@ -65,6 +65,13 @@ struct coco_fastbus {
 	const uint8_t *rd[8];
 	uint8_t *wr[8];
 	uint16_t page_top;
+	// PIZERO-322: above page_top, the CoCo 3's $FE00-$FEFF (the constant
+	// page, or the rest of page 7) and its vectors $FFE0-$FFFF (internal
+	// ROM, reads only). Each points at the byte for the range's first
+	// address, or is NULL for the full hook. The I/O between stays slow.
+	const uint8_t *fe_rd;
+	uint8_t *fe_wr;
+	const uint8_t *vec_rd;
 #endif
 };
 
@@ -80,6 +87,17 @@ static inline int coco_fastbus_advance(uint32_t ticks) {
 	event_current_tick = t;
 	return 1;
 }
+
+#ifdef COCO_FASTBUS_PAGES
+// PIZERO-322: where a read at or above page_top may come from directly.
+static inline const uint8_t *coco_fastbus_hi_rd(uint16_t a) {
+	if (a < 0xff00)
+		return coco_fastbus.fe_rd ? coco_fastbus.fe_rd + (a - 0xfe00) : 0;
+	if (a >= 0xffe0)
+		return coco_fastbus.vec_rd ? coco_fastbus.vec_rd + (a - 0xffe0) : 0;
+	return 0;
+}
+#endif
 
 // One bus cycle whose data the core has already moved. A and RnW are what
 // was on the bus; the machine ignores them, the lockstep harness records them.

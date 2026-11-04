@@ -3200,6 +3200,16 @@ void loop() {
                     tprintf("[prof3] port render per drawn line: gather+hash=%lu decode=%lu clk (%lu lines/s)\r\n",
                             (unsigned long)(p.pr_gather / p.pr_n), (unsigned long)(p.pr_decode / p.pr_n),
                             (unsigned long)p.pr_n);
+                if (p.slow_n) {   // PIZERO-322: where the slow cycles go, per second
+                    const uint32_t *c = p.c3_cls, *pg = p.c3_page;
+                    tprintf("[prof3] slow/s: tick=%lu rd=%lu wr=%lu fe=%lu pia=%lu cart=%lu gime=%lu mmu=%lu pal=%lu sam=%lu vec=%lu ffff=%lu | maps=%lu | pages %lu %lu %lu %lu %lu %lu %lu %lu\r\n",
+                            (unsigned long)p.c3_tick_n, (unsigned long)c[0], (unsigned long)c[1], (unsigned long)c[2],
+                            (unsigned long)c[3], (unsigned long)c[4], (unsigned long)c[5], (unsigned long)c[6],
+                            (unsigned long)c[7], (unsigned long)c[8], (unsigned long)c[9], (unsigned long)c[10],
+                            (unsigned long)p.c3_sync_n,
+                            (unsigned long)pg[0], (unsigned long)pg[1], (unsigned long)pg[2], (unsigned long)pg[3],
+                            (unsigned long)pg[4], (unsigned long)pg[5], (unsigned long)pg[6], (unsigned long)pg[7]);
+                }
                 tprintf("[prof3] worst frame: run=%lu clk cyc=%lu slow=%lu ev=%lu lines=%lu sink=%lu\r\n",
                         (unsigned long)p.wf_run, (unsigned long)p.wf_cyc, (unsigned long)p.wf_slow,
                         (unsigned long)p.wf_ev, (unsigned long)p.wf_lines, (unsigned long)p.wf_sink);

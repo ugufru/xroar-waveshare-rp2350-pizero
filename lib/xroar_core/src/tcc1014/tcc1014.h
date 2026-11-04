@@ -108,6 +108,7 @@ void tcc1014_mem_cycle(void *sptr, _Bool RnW, uint16_t A);
 
 unsigned tcc1014_decode(struct TCC1014 *, uint16_t A);
 unsigned tcc1014_decode_page(struct TCC1014 *, unsigned page, unsigned *bank);   // PIZERO-213
+_Bool tcc1014_mc3(struct TCC1014 *);   // PIZERO-322: $FExx is the constant RAM page
 unsigned tcc1014_cycle_ticks(struct TCC1014 *);                                   // PIZERO-213
 void tcc1014_poll_lines(struct TCC1014 *);                                         // PIZERO-220
 void tcc1014_set_sam_register(struct TCC1014 *gimep, unsigned val);

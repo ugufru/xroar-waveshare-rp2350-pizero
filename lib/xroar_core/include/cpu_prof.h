@@ -58,6 +58,27 @@ struct cpu_prof {
 	uint32_t pr_gather;   // GIME port renderer: gather and hash, per drawn line
 	uint32_t pr_decode;   //   and decode
 	uint32_t pr_n;        //   lines decoded
+	// PIZERO-322: the CoCo 3's cycles through the GIME by address
+	// (CPU_PROF_C3_* below), the fast cycles that only met the deadline,
+	// and the fast-path page table's rebuilds.
+	uint32_t c3_cls[11];
+	uint32_t c3_page[8];  //   classes 0 and 1 by logical page
+	uint32_t c3_tick_n;
+	uint32_t c3_sync_n;
+};
+
+enum {
+	CPU_PROF_C3_RD = 0,   // below $FE00, a page with no fast read
+	CPU_PROF_C3_WR,       // below $FE00, a page with no fast write
+	CPU_PROF_C3_FE,       // $FE00-$FEFF
+	CPU_PROF_C3_PIA,      // $FF00-$FF3F
+	CPU_PROF_C3_CART,     // $FF40-$FF8F (disk, cartridge, sound paks)
+	CPU_PROF_C3_GIME,     // $FF90-$FF9F
+	CPU_PROF_C3_MMU,      // $FFA0-$FFAF
+	CPU_PROF_C3_PAL,      // $FFB0-$FFBF
+	CPU_PROF_C3_SAM,      // $FFC0-$FFDF
+	CPU_PROF_C3_VEC,      // $FFE0-$FFFE
+	CPU_PROF_C3_FFFF,     // $FFFF (dummy cycles that came this way)
 };
 
 extern struct cpu_prof g_cpu_prof;
