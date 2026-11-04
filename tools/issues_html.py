@@ -87,8 +87,8 @@ h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em;
 .step.bad { border-color: var(--high); }
 .step .warn { color: var(--high); font-size: .78rem; }
 .controls {
-  position: sticky; top: 0; z-index: 5; background: var(--bg);
-  padding: .75rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1.25rem;
+  position: sticky; bottom: 0; z-index: 5; background: var(--bg);
+  padding: .75rem 0; border-top: 1px solid var(--line); margin-top: 1.25rem;
 }
 #q {
   width: 100%; padding: .6rem .75rem; font: inherit; color: var(--ink);
@@ -166,6 +166,9 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
   <ol class="plan" id="plan"></ol>
 </section>
 
+<main id="list"></main>
+<p class="empty" id="empty" hidden>Nothing matches those filters.</p>
+
 <div class="controls">
   <input id="q" type="search" placeholder="Search summaries and descriptions..." autocomplete="off">
   <div class="pills"><span class="label">status</span><span id="f-status"></span></div>
@@ -179,9 +182,6 @@ footer { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center;
     <button id="reset">clear filters</button>
   </div>
 </div>
-
-<main id="list"></main>
-<p class="empty" id="empty" hidden>Nothing matches those filters.</p>
 </div>
 
 <script id="snapshot" type="application/json">__SNAPSHOT__</script>
