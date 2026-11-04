@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "delegate.h"
+#include "cpu_prof.h"   // PIZERO-322: empty unless CPU_PROF
 
 /* Maintains queues of events.  Each event has a tick number at which its
  * delegate is scheduled to run.  */
@@ -159,7 +160,16 @@ inline void event_run_queue(struct event_list *list, event_ticks dt) {
 			}
 			break;
 		}
+#ifdef CPU_PROF
+		{   // PIZERO-322: per handler
+			void *fn = (void *)list->events->delegate.func;
+			uint32_t t0 = cpu_prof_now();
+			event_dispatch_next(list);
+			cpu_prof_ev_note(fn, cpu_prof_now() - t0);
+		}
+#else
 		event_dispatch_next(list);
+#endif
 	}
 	event_current_tick = to_time;
 }

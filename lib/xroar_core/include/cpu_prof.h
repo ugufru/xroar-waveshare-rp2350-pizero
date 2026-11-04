@@ -65,7 +65,16 @@ struct cpu_prof {
 	uint32_t c3_page[8];  //   classes 0 and 1 by logical page
 	uint32_t c3_tick_n;
 	uint32_t c3_sync_n;
+	// PIZERO-322: each event handler's dispatches and clocks (the first
+	// CPU_PROF_EVF handlers seen; the rest add to the last slot), and the
+	// audio catch-ups that had something to do.
+	void *evf[8];
+	uint32_t evf_n[8];
+	uint32_t evf_clk[8];
+	uint32_t catch_n;
+	uint32_t catch_skip_n;   // CoCo 3 slow-path reads that left the catch-up
 };
+#define CPU_PROF_EVF 8
 
 enum {
 	CPU_PROF_C3_RD = 0,   // below $FE00, a page with no fast read
@@ -85,6 +94,15 @@ extern struct cpu_prof g_cpu_prof;
 
 static inline uint32_t cpu_prof_now(void) {
 	return CPU_PROF_DWT_CYCCNT;
+}
+
+// PIZERO-322: charge one event dispatch to its handler.
+static inline void cpu_prof_ev_note(void *fn, uint32_t clk) {
+	unsigned i = 0;
+	while (i < CPU_PROF_EVF - 1 && g_cpu_prof.evf[i] && g_cpu_prof.evf[i] != fn) i++;
+	if (!g_cpu_prof.evf[i]) g_cpu_prof.evf[i] = fn;
+	g_cpu_prof.evf_n[i]++;
+	g_cpu_prof.evf_clk[i] += clk;
 }
 
 #ifdef __cplusplus

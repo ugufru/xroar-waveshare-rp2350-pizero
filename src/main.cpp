@@ -3210,6 +3210,16 @@ void loop() {
                             (unsigned long)pg[0], (unsigned long)pg[1], (unsigned long)pg[2], (unsigned long)pg[3],
                             (unsigned long)pg[4], (unsigned long)pg[5], (unsigned long)pg[6], (unsigned long)pg[7]);
                 }
+                {   // PIZERO-322: events by handler, and the audio catch-ups, per second
+                    char evl[200]; int k = 0;
+                    for (int i = 0; i < CPU_PROF_EVF && p.evf[i] && k < (int)sizeof evl - 40; i++)
+                        k += snprintf(evl + k, sizeof evl - k, " %08lx:%lu/%lu",
+                                      (unsigned long)(uintptr_t)p.evf[i], (unsigned long)p.evf_n[i],
+                                      (unsigned long)(p.evf_clk[i] / (p.evf_n[i] ? p.evf_n[i] : 1)));
+                    tprintf("[prof3] events/s (fn:n/clk each):%s | catch n=%lu clk each=%lu samples=%lu skipped=%lu\r\n", evl,
+                            (unsigned long)p.catch_n, (unsigned long)(p.catch_clk / (p.catch_n ? p.catch_n : 1)),
+                            (unsigned long)p.samp_n, (unsigned long)p.catch_skip_n);
+                }
                 tprintf("[prof3] worst frame: run=%lu clk cyc=%lu slow=%lu ev=%lu lines=%lu sink=%lu\r\n",
                         (unsigned long)p.wf_run, (unsigned long)p.wf_cyc, (unsigned long)p.wf_slow,
                         (unsigned long)p.wf_ev, (unsigned long)p.wf_lines, (unsigned long)p.wf_sink);

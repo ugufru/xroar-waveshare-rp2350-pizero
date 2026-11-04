@@ -822,7 +822,7 @@ static inline void audio_pia1_written(void);
 static inline __attribute__((always_inline)) void audio_integrate(uint32_t ticks);
 // PIZERO-131 step (c): see coco_fastbus.h and the audio section.
 static inline __attribute__((always_inline)) void audio_catch_up(void);
-static inline __attribute__((always_inline)) void fastbus_deadline(void);
+static inline __attribute__((always_inline)) void fastbus_deadline(bool audio = true);
 static uint32_t g_budget_end;   // event tick at which this run's budget is spent
 
 // PIZERO-143: the Games Master Cartridge's SN76489. Written from the bus
@@ -996,7 +996,11 @@ static inline void cart_io_write(uint16_t A, uint8_t D) {
 // if a PIA may have changed them, and spend the frame's cycle budget. Shared
 // by coco_mem_cycle and the dummy-cycle entry coco_mem_nvma (PIZERO-131).
 // pt0 is the profile timestamp, unused unless CPU_PROF=2.
-static inline __attribute__((always_inline)) void mem_cycle_tail(int ncycles, uint32_t pt0) {
+// PIZERO-322: audio false is a cycle that cannot change the sound (a CoCo 3
+// read): it is neither integrated here nor moves g_aud_tick, so it stays in
+// the span the next catch-up integrates at the same level, as a fast cycle
+// does. The samples come out the same.
+static inline __attribute__((always_inline)) void mem_cycle_tail(int ncycles, uint32_t pt0, bool audio = true) {
     (void)pt0;
     // AMOLED-30 fast path: ~96% of memory cycles have no event due, so
     // skip the function-call overhead and just advance the tick counter.
@@ -1021,7 +1025,7 @@ static inline __attribute__((always_inline)) void mem_cycle_tail(int ncycles, ui
 
     // PIZERO-18: integrate the DAC level over this access and emit 32 kHz
     // samples on tick boundaries (band-limited resampling at the source).
-    audio_integrate((uint32_t)ncycles);
+    if (audio) audio_integrate((uint32_t)ncycles);
 
 #if PROFILE_MEM_CYCLE
     { uint32_t pt1 = cpu_prof_now(); g_cpu_prof.sec_clk[2] += pt1 - pt0; pt0 = pt1; }
@@ -1051,7 +1055,7 @@ static inline __attribute__((always_inline)) void mem_cycle_tail(int ncycles, ui
     // so cycles that skip the tail still count against it).
     if (event_tick_delta(event_current_tick, g_budget_end) >= 0) g_m.cpu->running = 0;
 
-    fastbus_deadline();
+    fastbus_deadline(audio);
 
 #if PROFILE_MEM_CYCLE
     { uint32_t pt1 = cpu_prof_now(); g_cpu_prof.sec_clk[3] += pt1 - pt0; }
@@ -1421,9 +1425,17 @@ static void HOT_FUNC(coco3_cpu_cycle)(void *sptr, int ncycles, bool RnW, uint16_
     (void)sptr;
 #ifdef CPU_PROF
     uint32_t cb0 = cpu_prof_now();
+    if (RnW) g_cpu_prof.catch_skip_n++;
 #endif
-    audio_catch_up();     // before a PIA1 write can change the level
-    g_m.total_mem_cycles++;
+    // Before a write can change the level (a PIA1 DAC or sound-select
+    // write, PIA0's mux lines, a sound cartridge). PIZERO-322: a read cannot
+    // (the comparator and the chips' reads only look), so it leaves the
+    // audio to the next write or deadline: SCARED reads the PIAs about
+    // 90,000 times a second.
+    if (!RnW) {
+        audio_catch_up();
+        g_m.total_mem_cycles++;
+    }                     // a read is counted by the next catch-up's span
     uint8_t *D = &g_m.cpu->D;
     // PIZERO-149: the AY cartridges' registers. All are in the I/O page,
     // which has no RAM behind it, so the bus has nothing else to move.
@@ -1464,11 +1476,11 @@ static void HOT_FUNC(coco3_cpu_cycle)(void *sptr, int ncycles, bool RnW, uint16_
     g_gime3->IL1 = (PIA_VALUE_A(g_m.pia0) | 0x80) != 0xff;
 #ifdef CPU_PROF
     uint32_t cb1 = cpu_prof_now();
-    mem_cycle_tail(ncycles, 0);
+    mem_cycle_tail(ncycles, 0, !RnW);
     g_cpu_prof.cb_bus_clk += cb1 - cb0;
     g_cpu_prof.cb_tail_clk += cpu_prof_now() - cb1;
 #else
-    mem_cycle_tail(ncycles, 0);
+    mem_cycle_tail(ncycles, 0, !RnW);
 #endif
 }
 
@@ -2006,6 +2018,7 @@ static void HOT_FUNC(audio_catch_up_run)(uint32_t pend) {
         g_aud_tick = event_current_tick;
 #ifdef CPU_PROF
         g_cpu_prof.catch_clk += cpu_prof_now() - ct0;
+        g_cpu_prof.catch_n++;                 // PIZERO-322
 #endif
     }
 }
@@ -2015,9 +2028,9 @@ static void HOT_FUNC(audio_catch_up_run)(uint32_t pend) {
 // up to now. PIZERO-220: no longer the next sample boundary as well; the
 // catch-up emits the samples a run of cycles crossed (about 800 a frame of
 // tails saved at 1.79 MHz, where events still come every scanline).
-static inline __attribute__((always_inline)) void fastbus_deadline(void) {
+static inline __attribute__((always_inline)) void fastbus_deadline(bool audio) {
     uint32_t now = event_current_tick;
-    g_aud_tick = now;
+    if (audio) g_aud_tick = now;          // PIZERO-322: else the span runs on
     uint32_t dl = g_budget_end;
     struct event *head = machine_event_list_global->events;
     if (head && event_tick_delta(head->at_tick, dl) < 0) dl = head->at_tick;
