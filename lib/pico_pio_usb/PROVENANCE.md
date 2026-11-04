@@ -33,3 +33,16 @@ project)` in the source:
   (up to `PIO_USB_ISO_MAX` bytes) before sending the OUT token, then sends the
   packet and waits for no handshake. Upstream had no isochronous support: an
   OUT transaction always waited for a handshake.
+- `pio_usb.c`, `pio_usb_ll.h`, `pio_usb.h`, `pio_usb_host.c` (PIZERO-322):
+  the audio packet no longer holds core 0 while it goes out (about 136 us of
+  every 1 ms frame, spent waiting for a packet that gets no reply).
+  `pio_usb_bus_usb_transfer_nowait` starts it and returns; the frame sends it
+  after every root port's transactions (two ports here, so no other port's
+  setup moves the transmitter's pins mid-packet), and anything that next
+  drives the bus calls `pio_usb_bus_tx_wait` first (the send routines, PRE,
+  the root port setup, the frame's start, a port reset). That wait counts
+  the packet done when EOP has been seen and the DMA and TX FIFO are empty,
+  not by upstream's `pc >= COMP` test, which a frame later can fail: the last
+  encoded byte's spare symbols may have run the state machine round to an
+  earlier address. It gives up after 1 ms and counts it
+  (`pio_usb_bus_tx_wait_timeouts`, on the `[uac]` line; it should stay 0).

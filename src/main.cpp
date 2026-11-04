@@ -745,7 +745,9 @@ static uint8_t g_coco_rom[16384];
 #endif
 // PIZERO-139: room for a 16 KB cartridge. The double-buffered builds have
 // no RAM to spare (two framebuffers), so they keep the old 8 KB limit.
-#ifdef FB_SINGLE
+// A diagnostic build may set it (PIZERO-322: pizero_coco3_prof).
+#if defined(COCO_CART_MAX)
+#elif defined(FB_SINGLE)
 #define COCO_CART_MAX 16384
 #else
 #define COCO_CART_MAX 8192

@@ -357,8 +357,9 @@ void usb_audio_telemetry(uint32_t under) {
     static uint32_t last, last_under;
     uint32_t f = pio_usb_host_iso_frames();
     if (g_ua_daddr || f)
-        Serial.printf("[uac] %s packets=%lu (%lu/s) under=%lu/s\r\n", g_ua_state, (unsigned long)f,
-                      (unsigned long)(f - last), (unsigned long)(under - last_under));
+        Serial.printf("[uac] %s packets=%lu (%lu/s) under=%lu/s tx_timeouts=%lu\r\n", g_ua_state, (unsigned long)f,
+                      (unsigned long)(f - last), (unsigned long)(under - last_under),
+                      (unsigned long)pio_usb_bus_tx_wait_timeouts());   // PIZERO-322
     last = f;
     last_under = under;
 }

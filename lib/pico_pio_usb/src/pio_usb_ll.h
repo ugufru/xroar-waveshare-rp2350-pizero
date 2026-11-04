@@ -132,6 +132,12 @@ void pio_usb_bus_init(pio_port_t *pp, const pio_usb_configuration_t *c,
 
 void pio_usb_bus_prepare_receive(const pio_port_t *pp);
 int pio_usb_bus_receive_packet_and_handshake(pio_port_t *pp, uint8_t handshake);
+// PIZERO-322 (this project): start a packet and return while it goes out,
+// for an isochronous OUT, which has no handshake. Anything else that drives
+// the bus first calls pio_usb_bus_tx_wait(), which waits for it to finish.
+void pio_usb_bus_usb_transfer_nowait(pio_port_t *pp, uint8_t *data, uint16_t len);
+void pio_usb_bus_tx_wait(void);
+uint32_t pio_usb_bus_tx_wait_timeouts(void);   // waits that gave up (should stay 0)
 void pio_usb_bus_usb_transfer(pio_port_t *pp, uint8_t *data,
                               uint16_t len);
 

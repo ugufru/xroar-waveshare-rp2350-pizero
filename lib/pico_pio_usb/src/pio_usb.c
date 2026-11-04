@@ -40,7 +40,49 @@ static uint8_t pre_encoded[5];
 // Bus functions
 //--------------------------------------------------------------------+
 
+// PIZERO-322 (this project): a packet started by
+// pio_usb_bus_usb_transfer_nowait and not yet known to be finished.
+static pio_port_t *volatile tx_inflight;
+
+// A 196-byte packet takes about 140 us; past 1 ms something cut it short,
+// so give up rather than hang core 0 in the frame interrupt.
+static volatile uint32_t tx_wait_timeouts;
+static void __not_in_flash_func(tx_finish)(pio_port_t *pp) {
+  io_ro_32 *pc = &pp->pio_usb_tx->sm[pp->sm_tx].addr;
+  uint32_t const start = get_time_us_32();
+  while ((pp->pio_usb_tx->irq & IRQ_TX_ALL_MASK) == 0) {
+    if (get_time_us_32() - start > 1000) {
+      tx_wait_timeouts++;
+      return;
+    }
+  }
+  pp->pio_usb_tx->irq = IRQ_TX_ALL_MASK; // clear complete flag
+  // Not upstream's pc >= COMP test: that catches the state machine passing
+  // the bus release just after EOP. Checked a frame later, the last encoded
+  // byte's spare symbols (how many depends on the bit stuffing) may have
+  // taken it on round to stall at an earlier address. EOP seen, all data
+  // pulled from the DMA and the FIFO: the packet is out.
+  (void)pc;
+  while (dma_channel_is_busy(pp->tx_ch) || !pio_sm_is_tx_fifo_empty(pp->pio_usb_tx, pp->sm_tx)) {
+    if (get_time_us_32() - start > 1000) {
+      tx_wait_timeouts++;
+      return;
+    }
+  }
+}
+
+uint32_t pio_usb_bus_tx_wait_timeouts(void) { return tx_wait_timeouts; }
+
+void __not_in_flash_func(pio_usb_bus_tx_wait)(void) {
+  pio_port_t *pp = tx_inflight;
+  if (pp) {
+    tx_finish(pp);
+    tx_inflight = NULL;
+  }
+}
+
 static void __no_inline_not_in_flash_func(send_pre)(pio_port_t *pp) {
+  pio_usb_bus_tx_wait();
   // send PRE token in full-speed
   pp->low_speed = false;
   uint16_t instr = pp->fs_tx_pre_program->instructions[0];
@@ -84,6 +126,7 @@ static void __no_inline_not_in_flash_func(send_pre)(pio_port_t *pp) {
 
 void __not_in_flash_func(pio_usb_bus_usb_transfer)(pio_port_t *pp,
                                               uint8_t *data, uint16_t len) {
+  pio_usb_bus_tx_wait();
   if (pp->need_pre) {
     send_pre(pp);
   }
@@ -110,6 +153,23 @@ void __not_in_flash_func(pio_usb_bus_usb_transfer)(pio_port_t *pp,
       continue;
     }
   }
+}
+
+// PIZERO-322 (this project): as pio_usb_bus_usb_transfer, full speed only,
+// but returns once the DMA and the state machine have the packet. Sending
+// a 196-byte audio packet takes about 136 us, which the 1 ms frame handler
+// spent waiting, on the emulator's core, for a packet that gets no reply.
+void __not_in_flash_func(pio_usb_bus_usb_transfer_nowait)(pio_port_t *pp,
+                                                         uint8_t *data, uint16_t len) {
+  if (pp->need_pre || pp->low_speed) {
+    pio_usb_bus_usb_transfer(pp, data, len);
+    return;
+  }
+  pio_usb_bus_tx_wait();
+  pio_sm_exec(pp->pio_usb_tx, pp->sm_tx, pp->tx_start_instr);
+  dma_channel_transfer_from_buffer_now(pp->tx_ch, data, len);
+  pp->pio_usb_tx->irq = IRQ_TX_ALL_MASK; // clear complete flag
+  tx_inflight = pp;
 }
 
 void __no_inline_not_in_flash_func(pio_usb_bus_send_token)(pio_port_t *pp,

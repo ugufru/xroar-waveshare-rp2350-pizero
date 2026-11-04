@@ -30,6 +30,8 @@ typedef uint16_t (*pio_usb_iso_fill_t)(uint8_t *buf, uint16_t max);
 bool pio_usb_host_iso_out_stream(uint8_t root_idx, uint8_t device_address,
                                  uint8_t ep_address, pio_usb_iso_fill_t fill);
 uint32_t pio_usb_host_iso_frames(void);   // packets sent, for telemetry
+// PIZERO-322 (this project): waits for an audio packet that gave up after 1 ms.
+uint32_t pio_usb_bus_tx_wait_timeouts(void);
 
 // Device functions
 usb_device_t *pio_usb_device_init(const pio_usb_configuration_t *c,

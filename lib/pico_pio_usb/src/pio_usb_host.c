@@ -188,6 +188,7 @@ static void __no_inline_not_in_flash_func(configure_lowspeed_host)(
 
 static void __no_inline_not_in_flash_func(configure_root_port)(
     pio_port_t *pp, root_port_t *root) {
+  pio_usb_bus_tx_wait();          // PIZERO-322: never move pins mid-packet
   if (root->is_fullspeed) {
     configure_fullspeed_host(pp, root);
   } else {
@@ -277,7 +278,9 @@ static void __no_inline_not_in_flash_func(usb_iso_out_frame)(pio_port_t *pp, end
   uint16_t const enc_len = pio_usb_ll_encode_tx_data(iso_raw, len + 4, iso_enc);
 
   pio_usb_bus_send_token(pp, USB_PID_OUT, ep->dev_addr, ep->ep_num);
-  pio_usb_bus_usb_transfer(pp, iso_enc, enc_len);
+  // PIZERO-322: no handshake follows, and it is the frame's last packet, so
+  // the handler returns while it goes out; the next frame waits for it.
+  pio_usb_bus_usb_transfer_nowait(pp, iso_enc, enc_len);
   iso_frames++;
 }
 
@@ -288,6 +291,7 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
   }
 
   pio_port_t *pp = PIO_USB_PIO_PORT(0);
+  pio_usb_bus_tx_wait();          // PIZERO-322: last frame's audio packet
 
   // Send SOF
   for (int root_idx = 0; root_idx < PIO_USB_ROOT_PORT_CNT; root_idx++) {
@@ -319,9 +323,7 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
          ep_pool_idx++) {
       endpoint_t *ep = PIO_USB_ENDPOINT(ep_pool_idx);
       if ((ep->root_idx == root_idx) && ep->size) {
-        pio_usb_iso_fill_t const fill = iso_fill;
-        if (ep == iso_ep && fill) {          // PIZERO-255: one packet a frame
-          usb_iso_out_frame(pp, ep, fill);
+        if (ep == iso_ep) {                  // PIZERO-255: sent last, below
           continue;
         }
         bool const is_periodic = ((ep->attr & 0x03) == EP_ATTR_INTERRUPT);
@@ -359,6 +361,21 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
 
           ep->transfer_started = false;
         }
+      }
+    }
+  }
+
+  // PIZERO-255: the audio packet, one a frame. PIZERO-322: after every
+  // root port's transactions, so nothing in this frame waits behind it, and
+  // no other port's setup moves the transmitter's pins while it goes out.
+  {
+    endpoint_t *const iso = iso_ep;
+    pio_usb_iso_fill_t const fill = iso_fill;
+    if (iso && fill && iso->size && iso->root_idx < PIO_USB_ROOT_PORT_CNT) {
+      root_port_t *root = PIO_USB_ROOT_PORT(iso->root_idx);
+      if (root->initialized && root->connected && !root->suspended) {
+        configure_root_port(pp, root);
+        usb_iso_out_frame(pp, iso, fill);
       }
     }
   }
@@ -415,6 +432,7 @@ void pio_usb_host_port_reset_start(uint8_t root_idx) {
 
   // bus is not operating while in reset
   root->suspended = true;
+  pio_usb_bus_tx_wait();          // PIZERO-322: an audio packet still going out
 
   // Force line state to SE0
   gpio_set_outover(root->pin_dp,  GPIO_OVERRIDE_LOW);
