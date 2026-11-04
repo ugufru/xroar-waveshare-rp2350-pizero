@@ -87,6 +87,8 @@ struct CocoMachine {
     unsigned fdc_drive = 0;
     bool    fdc_busy = false;
     bool    fdc_writing = false;  // PIZERO-66: a Write Sector is collecting bytes
+    bool    fdc_type1 = true;     // PIZERO-320: status is Type I's (TRACK00, INDEX)
+    bool    fdc_intrq = false;    // PIZERO-320: INTRQ, held until status is read
     coco_disk_read_sector_fn fdc_read_cb = nullptr;
     coco_disk_write_sector_fn fdc_write_cb = nullptr;
     coco_disk_idle_fn fdc_idle_cb = nullptr;
@@ -438,15 +440,23 @@ extern "C" void coco_machine_release_all_keys(void) {
 // status looking for !BUSY + bytes available, and we satisfy that on
 // the first poll after a READ_SECTOR command.
 
-// Real CoCo wires FDC INTRQ through an NMI-enable flip-flop set by writes
-// to $FF40 with bit 7 (HALT enable). DECB sets this before each FDC command
-// and SYNCs the CPU waiting for the resulting NMI. So whenever an FDC
-// command completes we must pulse NMI on the 6809, but only if HALT was
-// armed in $FF40.
+// PIZERO-320: the RS-DOS controller wires INTRQ to NMI whenever $FF40 bit 5
+// (double density) is set, as upstream's rsdos.c does (latch_write and
+// set_intrq); bit 7 is HALT enable only. INTRQ is held until the status
+// register is read or a new command is written, and turning double density
+// on with INTRQ pending raises NMI then. Disk BASIC sets both bits for its
+// transfers, so it sees the same NMIs as before; a loader that runs the
+// controller itself with HALT off ($29: DD, motor, drive 0) and waits on NMI
+// after a Restore now gets it. (Before, NMI needed bit 7.)
 static void fdc_signal_intrq(void) {
-    if (g_m.cpu && (g_m.fdc_latch & 0x80)) {
-        MC6809_NMI_SET(g_m.cpu, 1);
-    }
+    g_m.fdc_intrq = true;
+    if (g_m.cpu && (g_m.fdc_latch & 0x20)) MC6809_NMI_SET(g_m.cpu, 1);
+}
+
+static void fdc_clear_intrq(void) {
+    if (!g_m.fdc_intrq) return;
+    g_m.fdc_intrq = false;
+    if (g_m.cpu) MC6809_NMI_SET(g_m.cpu, 0);
 }
 
 // PIZERO-66: the status a disk callback's return value maps to. After a
@@ -463,12 +473,15 @@ static void fdc_handle_command(uint8_t cmd) {
     g_m.fdc_command = cmd;
     g_m.fdc_writing = false;
     uint8_t top = cmd >> 4;
+    g_m.fdc_type1 = (top <= 0x7 || top == 0xD);
+    fdc_clear_intrq();                       // a new command drops INTRQ
     // Type IV: Force Interrupt
     if (top == 0xD) {
         g_m.fdc_busy = false;
         g_m.fdc_status = (g_m.fdc_track == 0) ? 0x04 : 0x00;
         g_m.fdc_buf_len = 0;
-        return;  // Force Interrupt does not raise NMI on its own.
+        if (cmd & 0x08) fdc_signal_intrq();  // $D8: interrupt now
+        return;                              // $D0: no interrupt
     }
     // Type I: Restore, Seek, Step, StepIn, StepOut.
     if (top <= 0x7) {
@@ -541,9 +554,35 @@ static void fdc_handle_command(uint8_t cmd) {
     fdc_signal_intrq();
 }
 
+// PIZERO-320: the index hole, once a revolution while the motor runs, as
+// upstream's vdrive.c times it: a 6,272-byte track at 32 us a byte (300 rpm,
+// about 200 ms) with the pulse 1/100 of that. In Type I status it is bit 1,
+// and loaders that drive the controller themselves (with NMI off) wait on
+// it after a Restore; Disk BASIC never looks.
+#define FDC_REV_TICKS   ((event_ticks)EVENT_US(6272u * 32u))
+#define FDC_INDEX_TICKS ((event_ticks)(FDC_REV_TICKS / 100))
+static uint8_t fdc_status_now(void) {
+    fdc_clear_intrq();                       // reading status drops INTRQ
+    uint8_t st = g_m.fdc_status;
+    if (g_m.fdc_type1 && !g_m.fdc_busy) {
+        st &= (uint8_t)~0x06;
+        if (g_m.fdc_track == 0) st |= 0x04;
+        if ((g_m.fdc_latch & 0x08) && (event_current_tick % FDC_REV_TICKS) < FDC_INDEX_TICKS)
+            st |= 0x02;
+    }
+#ifdef FDC_TRACE
+    // PIZERO-320: is the guest polling status, and on what?
+    { static uint32_t n = 0;
+      if ((++n & 0xFFFF) == 0)
+          FDC_TRACE_PORT.printf("[fdc] status reads=%lu st=%02x type1=%u latch=%02x\r\n",
+                                (unsigned long)n, st, (unsigned)g_m.fdc_type1, g_m.fdc_latch); }
+#endif
+    return st;
+}
+
 static uint8_t fdc_io_read(uint16_t A) {
     switch (A & 0xF) {
-    case 0x8: return g_m.fdc_status;
+    case 0x8: return fdc_status_now();
     case 0x9: return g_m.fdc_track;
     case 0xA: return g_m.fdc_sector;
     case 0xB: {
@@ -579,6 +618,7 @@ static void fdc_io_write(uint16_t A, uint8_t D) {
         // PIZERO-66: motor off is when the host syncs the card.
         if ((g_m.fdc_latch & 0x08) && !(D & 0x08) && g_m.fdc_idle_cb) g_m.fdc_idle_cb();
         g_m.fdc_latch = D;
+        if ((D & 0x20) && g_m.fdc_intrq && g_m.cpu) MC6809_NMI_SET(g_m.cpu, 1);   // PIZERO-320
         // PIZERO-190: bits 0-2 select drives 0-2, else bit 6 drive 3, else
         // drive 0, as upstream rsdos.c does. Bit 3 is MOTOR ON, not a drive.
         if (D & 0x01)      g_m.fdc_drive = 0;
@@ -1524,6 +1564,7 @@ static _Bool coco3_init(const uint8_t *rom) {
     tcc1014_notify_mode(g_gime3);
     tcc1014_reset(g_gime3);
     fastbus_sync();                                  // PIZERO-213: the GIME's map
+    g_m.fdc_intrq = false;                       // PIZERO-320: no NMI left over
     g_m.cpu->reset(g_m.cpu);
     return 1;
 }
@@ -2351,6 +2392,7 @@ extern "C" void coco_machine_cold_reset(void) {
         acia_power_on();                             // PIZERO-287
         tcc1014_reset(g_gime3);
         fastbus_sync();                              // PIZERO-213: the map after reset
+        g_m.fdc_intrq = false;                       // PIZERO-320: no NMI left over
         g_m.cpu->reset(g_m.cpu);
         return;
     }
@@ -2378,6 +2420,7 @@ extern "C" void coco_machine_cold_reset(void) {
     csg_reset();                                          // PIZERO-143: silent at power-on
     ayb_reset(&g_ayb);                                    // PIZERO-149
     acia_power_on();                                      // PIZERO-287
+    g_m.fdc_intrq = false;                       // PIZERO-320: no NMI left over
     g_m.cpu->reset(g_m.cpu);
 }
 
