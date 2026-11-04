@@ -87,7 +87,6 @@ h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em;
 .step.bad { border-color: var(--high); }
 .step .warn { color: var(--high); font-size: .78rem; }
 .controls {
-  position: sticky; bottom: 0; z-index: 5; background: var(--bg);
   padding: .75rem 0; border-top: 1px solid var(--line); margin-top: 1.25rem;
 }
 #q {
