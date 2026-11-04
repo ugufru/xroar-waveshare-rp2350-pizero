@@ -73,6 +73,9 @@ struct cpu_prof {
 	uint32_t evf_clk[8];
 	uint32_t catch_n;
 	uint32_t catch_skip_n;   // CoCo 3 slow-path reads that left the catch-up
+	uint32_t pr_mode;     // PIZERO-322: the last decoded line's mode (see tcc1014.c)
+	uint32_t pr_bytes;    //   and its VRAM bytes
+	uint32_t pr_general;  //   lines through the general (per-byte mode test) loop
 };
 #define CPU_PROF_EVF 8
 

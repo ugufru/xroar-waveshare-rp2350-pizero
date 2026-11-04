@@ -3197,9 +3197,10 @@ void loop() {
                             (unsigned long)(p.samp_n / 60), (unsigned long)(p.samp_clk / 60),
                             (unsigned long)(p.catch_clk / 60));
                 if (p.pr_n)
-                    tprintf("[prof3] port render per drawn line: gather+hash=%lu decode=%lu clk (%lu lines/s)\r\n",
+                    tprintf("[prof3] port render per drawn line: gather+hash=%lu decode=%lu clk (%lu lines/s) | mode=%04lx bytes=%lu general=%lu\r\n",
                             (unsigned long)(p.pr_gather / p.pr_n), (unsigned long)(p.pr_decode / p.pr_n),
-                            (unsigned long)p.pr_n);
+                            (unsigned long)p.pr_n, (unsigned long)p.pr_mode, (unsigned long)p.pr_bytes,
+                            (unsigned long)p.pr_general);
                 if (p.slow_n) {   // PIZERO-322: where the slow cycles go, per second
                     const uint32_t *c = p.c3_cls, *pg = p.c3_page;
                     tprintf("[prof3] slow/s: tick=%lu rd=%lu wr=%lu fe=%lu pia=%lu cart=%lu gime=%lu mmu=%lu pal=%lu sam=%lu vec=%lu ffff=%lu | maps=%lu | pages %lu %lu %lu %lu %lu %lu %lu %lu\r\n",

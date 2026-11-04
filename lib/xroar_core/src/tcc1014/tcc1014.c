@@ -1763,6 +1763,25 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 			                     pm[(vdata >> 2) & 3], pm[vdata & 3]));
 			break;
 		case 2: case 3:
+#ifdef TCC1014_PORT_FULL
+			// PIZERO-322: 320 x 16 colours, the highest resolution, which
+			// keeps two of each colour's four: each byte is its two pixels
+			// doubled, one 32-bit store from a table of the 16 colours
+			// already doubled (about 27 clocks a byte through port_quads
+			// and port_emit).
+			if (resolution == 3) {
+				uint16_t p2[16];
+				for (int i = 0; i < 16; i++)
+					p2[i] = (uint16_t)(pm[i] * 0x0101u);
+				for (unsigned n = nbytes; n; --n) {
+					uint_fast8_t vdata = *src++;
+					uint32_t w = p2[vdata >> 4] | (uint32_t)p2[vdata & 15] << 16;
+					memcpy(pixel, &w, 4);
+					pixel += 4;
+				}
+				break;
+			}
+#endif
 			PORT_LOOP(port_quads(pm[vdata >> 4], pm[vdata & 15]));
 			break;
 		}
@@ -1867,6 +1886,11 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 #ifdef CPU_PROF
 	g_cpu_prof.pr_decode += cpu_prof_now() - pr_t1;
 	g_cpu_prof.pr_n++;
+	// PIZERO-322: which mode the drawn lines are in
+	g_cpu_prof.pr_mode = COCO | GnA << 1 | GM1 << 2 | GM0 << 3 | CSS << 4 | BP << 5 | attr << 6
+	                     | CRES << 8 | resolution << 12;
+	g_cpu_prof.pr_bytes = nbytes;
+	if (!(!COCO && BP)) g_cpu_prof.pr_general++;
 #endif
 }
 
