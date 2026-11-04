@@ -25,7 +25,7 @@ pio device monitor                      # serial @ 115200, prints [run] telemetr
 # and gime_timer settings do nothing on it.
 pio run -e pizero_stream -t upload
 
-# Host unit tests (no board): 29 suites, 350 cases.
+# Host unit tests (no board): 30 suites, 355 cases.
 pio test -e native
 ```
 
@@ -66,7 +66,7 @@ buildable on its own.
 | `pizero_drive8` | `pizero_aif` | `+ -DDVI_PAD_DRIVE=2 -DDVI_PAD_SLEWFAST=1` | single-buffered | `pizero_aif` with the TMDS pads at 8 mA and fast slew instead of 2 mA slew-limited (PIZERO-234) | ~83% |
 | `pizero_slew2` | `pizero_aif` | `+ -DDVI_PAD_SLEWFAST=1` | single-buffered | `pizero_aif` with fast slew at the default 2 mA (PIZERO-234) | ~83% |
 | `pizero_wavmeas_boot` | `pizero_wavmeas` | `+ -DAUDIO_WAV_DUMP_BOOT` | single-buffered | `pizero_wavmeas`, but boots as usual (the card's autorun runs, so a program's own music plays) and records 20 s when Ctrl-W (0x17) arrives on USB serial; no picture or HDMI sound (PIZERO-223) | ~77% |
-| `native` | (none) | `platform = native`, Unity | n/a | host unit tests, no board (PIZERO-109): `pio test -e native`, 29 suites, 350 cases | n/a |
+| `native` | (none) | `platform = native`, Unity | n/a | host unit tests, no board (PIZERO-109): `pio test -e native`, 30 suites, 355 cases | n/a |
 
 PIZERO-150 retired `pizero` and `pizero_60hz` (silent, double-buffered, ~99%
 RAM, no use as a fallback for a machine with sound) and the finished

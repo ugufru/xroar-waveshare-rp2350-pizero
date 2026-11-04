@@ -23,6 +23,9 @@
 #include "pio_usb_configuration.h"
 #include "pio_usb_ll.h"
 #include "usb_crc.h"
+#define PIO_USB_ENC_FUNC(name) __not_in_flash_func(name)
+#define PIO_USB_ENC_DATA __attribute__((section(".data.pio_usb_enc")))
+#include "pio_usb_encode.h"   // PIZERO-322
 
 #define UNUSED_PARAMETER(x) (void)x
 
@@ -518,73 +521,11 @@ void __no_inline_not_in_flash_func(pio_usb_ll_configure_endpoint)(
 // Encode transfer data to 2bit sequence represents TX PIO instruction address
 // PIZERO-255 (this project): lengths and the output index are 16-bit, so a
 // packet longer than 64 bytes (an isochronous audio frame) can be encoded.
-uint16_t __no_inline_not_in_flash_func(pio_usb_ll_encode_tx_data)(
+uint16_t __attribute__((noipa)) __no_inline_not_in_flash_func(pio_usb_ll_encode_tx_data)(
     uint8_t const *buffer, uint16_t buffer_len, uint8_t *encoded_data) {
-  uint16_t bit_idx = 0;
-  int current_state = 1;
-  int bit_stuffing = 6;
-  for (int idx = 0; idx < buffer_len; idx++) {
-    uint8_t data_byte = buffer[idx];
-    for (int b = 0; b < 8; b++) {
-      uint16_t byte_idx = bit_idx >> 2;
-      encoded_data[byte_idx] <<= 2;
-      if (data_byte & (1 << b)) {
-        if (current_state) {
-          encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_K;
-        } else {
-          encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_J;
-        }
-        bit_stuffing--;
-      } else {
-        if (current_state) {
-          encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_J;
-          current_state = 0;
-        } else {
-          encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_K;
-          current_state = 1;
-        }
-        bit_stuffing = 6;
-      }
-
-      bit_idx++;
-
-      if (bit_stuffing == 0) {
-        byte_idx = bit_idx >> 2;
-        encoded_data[byte_idx] <<= 2;
-
-        if (current_state) {
-          encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_J;
-          current_state = 0;
-        } else {
-          encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_K;
-          current_state = 1;
-        }
-        bit_stuffing = 6;
-        bit_idx++;
-      }
-    }
-  }
-
-  uint16_t byte_idx = bit_idx >> 2;
-  encoded_data[byte_idx] <<= 2;
-  encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_SE0;
-  bit_idx++;
-
-  byte_idx = bit_idx >> 2;
-  encoded_data[byte_idx] <<= 2;
-  encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_COMP;
-  bit_idx++;
-
-  // terminate buffers with K
-  do {
-    byte_idx = bit_idx >> 2;
-    encoded_data[byte_idx] <<= 2;
-    encoded_data[byte_idx] |= PIO_USB_TX_ENCODED_DATA_K;
-    bit_idx++;
-  } while (bit_idx & 0x03);
-
-  byte_idx = bit_idx >> 2;
-  return byte_idx;
+  // PIZERO-322 (this project): four bits at a time (pio_usb_encode.h), the
+  // same bytes as upstream's bit-at-a-time loop (test/test_usb_encode).
+  return pio_usb_encode_fast(buffer, buffer_len, encoded_data);
 }
 
 static inline __force_inline void prepare_tx_data(endpoint_t *ep) {

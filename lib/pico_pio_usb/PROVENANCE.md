@@ -46,3 +46,12 @@ project)` in the source:
   encoded byte's spare symbols may have run the state machine round to an
   earlier address. It gives up after 1 ms and counts it
   (`pio_usb_bus_tx_wait_timeouts`, on the `[uac]` line; it should stay 0).
+- `pio_usb_encode.h` (new), `pio_usb.c` (PIZERO-322): `pio_usb_ll_encode_tx_data`
+  encodes four bits at a time. Four bits with no stuffed bit inside them are
+  exactly one output byte, looked up from the line level they start at;
+  a nibble where the run of 1s could reach six goes bit by bit, as does the
+  end of packet. Same bytes as upstream's bit-at-a-time loop
+  (`test/test_usb_encode`, which keeps a copy of it, checks every length to
+  200, runs of 1s before every byte value and 20,000 random packets), and
+  smaller (2.8 KB less RAM). The tables and the slow path are kept in RAM.
+  A 196-byte audio packet took about 100 us every 1 ms frame before.

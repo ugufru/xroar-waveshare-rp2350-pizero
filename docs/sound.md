@@ -389,10 +389,13 @@ working:
 A DAC that only works at high speed cannot work: the board's USB runs at full
 speed (12 Mbit/s).
 
-**What it costs.** Feeding the DAC takes about 2.3 ms of each 16.7 ms frame on
-the emulator's core, and more under heavy sound. Ordinary programs are
-unaffected; `allvoice.bas`, with every voice at once, runs over the frame for
-a few seconds at its loudest while a DAC has the sound.
+**What it costs.** Feeding the DAC takes about 0.9 ms of each 16.7 ms frame on
+the emulator's core (12.6 ms against 11.6 ms at the Basic prompt, measured
+for PIZERO-322). It was about 2.3 ms, and far more under a heavy program: the
+1 ms frame interrupt encoded each packet one bit at a time and then waited
+while it went out. Now the packet is encoded four bits at a time and sent
+without waiting (`lib/pico_pio_usb/PROVENANCE.md`). On a demo that already
+runs slower than real time, the speakers cost one to three frames a second.
 
 ## Turning it up and down
 
