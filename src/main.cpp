@@ -1636,16 +1636,16 @@ static void artifact_cycle_and_save(void) {
 // running game's own file, is re-read and applied at once, so a change needs
 // no reboot. autorun.txt only matters at power-on: running it now would
 // restart the machine unannounced. Another game's file waits for that game.
-// Is path NAME.TXT beside a NAME.BIN, .CCC or .DSK? PIZERO-319: its own
+// Is path NAME.TXT beside a NAME.BIN, .CCC, .DSK or .DMK? PIZERO-319: its own
 // function, so its FILINFO and name (about 400 bytes) are on the stack only
 // for a file that is not settings.txt, not under every save.
 static bool __attribute__((noinline)) is_game_settings(const char *path) {
     const char *dot = strrchr(path, '.');
     if (!dot || strcasecmp(dot, ".txt")) return false;
-    static const char *const games[] = { ".BIN", ".CCC", ".DSK" };
+    static const char *const games[] = { ".BIN", ".CCC", ".DSK", ".DMK" };
     char g[100];
     FILINFO fi;
-    for (unsigned i = 0; i < 3; i++) {
+    for (unsigned i = 0; i < sizeof games / sizeof games[0]; i++) {
         snprintf(g, sizeof g, "%.*s%s", (int)(dot - path), path, games[i]);
         if (f_stat(g, &fi) == FR_OK) return true;
     }

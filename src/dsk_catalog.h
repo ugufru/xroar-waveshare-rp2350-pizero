@@ -88,7 +88,7 @@ static inline bool cat_accepts(int kind, const char *fname, bool is_dir) {
     const char *ext = strrchr(fname, '.');
     if (!ext || ext == fname) return false;
     switch (kind) {
-    case CAT_DSK: return strcasecmp(ext, ".dsk") == 0;
+    case CAT_DSK: return strcasecmp(ext, ".dsk") == 0 || strcasecmp(ext, ".dmk") == 0;   // PIZERO-320
     case CAT_BIN: return strcasecmp(ext, ".bin") == 0;
     case CAT_CART: return strcasecmp(ext, ".ccc") == 0;
     default: return false;
@@ -177,7 +177,7 @@ static inline bool text_cat_skip(const char *sub, const char *leaf) {
     }
     const char *ext = strrchr(leaf, '.');
     if (!ext || ext == leaf) return false;
-    static const char *const binary[] = { ".tmp", ".dsk", ".bin", ".ccc", ".rom", ".png",
+    static const char *const binary[] = { ".tmp", ".dsk", ".dmk", ".bin", ".ccc", ".rom", ".png",
                                           ".zip", ".cas", ".wav", ".pal", ".fnt", ".uf2" };
     for (unsigned i = 0; i < sizeof binary / sizeof binary[0]; i++)
         if (!strcasecmp(ext, binary[i])) return true;

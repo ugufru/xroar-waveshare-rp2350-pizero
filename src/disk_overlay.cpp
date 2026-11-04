@@ -267,7 +267,8 @@ static void rename_disk(void) {
     g_rename_sel = i;
     snprintf(g_new_name, sizeof g_new_name, "%s", cat->e[i].name);
     size_t l = strlen(g_new_name);
-    if (l > 4 && !strcasecmp(g_new_name + l - 4, ".dsk")) g_new_name[l - 4] = '\0';
+    if (l > 4 && (!strcasecmp(g_new_name + l - 4, ".dsk") || !strcasecmp(g_new_name + l - 4, ".dmk")))
+        g_new_name[l - 4] = '\0';
     g_naming = true;
     g_renaming = true;
     naming_show();

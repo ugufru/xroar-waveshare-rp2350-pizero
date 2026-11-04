@@ -35,6 +35,7 @@ extern "C" {
 #include "decb_files.h"         // PIZERO-289: decb_is_text, host-tested
 #include "rsdos_file.h"         // PIZERO-309: files inside a .DSK, host-tested
 #include "rsdos_dir.h"          // the directory track and sectors
+#include "dmk.h"                // PIZERO-320: DMK images, host-tested
 
 #define COCO_NDRIVE 4           // drives 0-3 (PIZERO-114)
 #include "png_write.h"          // PIZERO-165, host-tested
@@ -202,7 +203,7 @@ static bool scan_dir_for_dsk(const char *dir, char *best_name, size_t name_sz) {
         if (fi.fattrib & AM_DIR) continue;
         if (fi.fname[0] == '.') continue;   // skip dotfiles incl. macOS ._* AppleDouble
         const char *ext = strrchr(fi.fname, '.');
-        if (!ext || (strcasecmp(ext, ".dsk") != 0)) continue;
+        if (!ext || (strcasecmp(ext, ".dsk") != 0 && strcasecmp(ext, ".dmk") != 0)) continue;
         if (!found || strcasecmp(fi.fname, best_name) < 0) {
             strncpy(best_name, fi.fname, name_sz - 1);
             best_name[name_sz - 1] = '\0';
@@ -946,11 +947,31 @@ static bool g_dsk_open[COCO_NDRIVE];
 #define DSK_RW    0x01                    // opened writable (else the file refused)
 #define DSK_WP    0x02                    // the user's write-protect tab
 #define DSK_DIRTY 0x04                    // written since the last f_sync
+#define DSK_DMK   0x08                    // a DMK image (PIZERO-320), not a JVC .DSK
 static uint8_t g_dsk_flags[COCO_NDRIVE];
 #define g_dsk_rw(d)    ((g_dsk_flags[d] & DSK_RW) != 0)
 #define g_dsk_wp(d)    ((g_dsk_flags[d] & DSK_WP) != 0)
 #define g_dsk_dirty(d) ((g_dsk_flags[d] & DSK_DIRTY) != 0)
+#define g_dsk_dmk(d)   ((g_dsk_flags[d] & DSK_DMK) != 0)
 static char g_dsk_path[COCO_NDRIVE][96];
+
+// PIZERO-320: a DMK drive's geometry, and the sectors of the track it last
+// read (about 80 bytes a drive), rebuilt from the track's ID fields when
+// the head moves. Side 0 only: Disk BASIC is single-sided.
+static struct dmk_geom g_dmk_geom[COCO_NDRIVE];
+static struct dmk_map  g_dmk_map[COCO_NDRIVE];
+
+static unsigned dmk_fat_read(void *ctx, uint32_t off, uint8_t *buf, unsigned n) {
+    FIL *f = (FIL *)ctx;
+    UINT br = 0;
+    if (f_lseek(f, (FSIZE_t)off) != FR_OK || f_read(f, buf, n, &br) != FR_OK) return 0;
+    return (unsigned)br;
+}
+
+static bool path_is_dmk(const char *path) {
+    const char *ext = strrchr(path, '.');
+    return ext && !strcasecmp(ext, ".dmk");
+}
 
 // PIZERO-66: write timing, printed when the drive syncs, so the worst case
 // over a SAVE is on the serial log. The ~90 ms audio ring is the budget.
@@ -1048,12 +1069,38 @@ extern "C" bool coco_boot_mount_drive(unsigned drive, const char *path) {
         drives_save();
         return false;
     }
+    // PIZERO-320: a .DMK, or any image whose header reads as one (DMKs are
+    // often passed around named .DSK), finds its sectors by track scan.
+    FIL *f = &g_dsk_file[drive];
+    uint32_t size = (uint32_t)f_size(f);
+    uint8_t hdr[DMK_HEADER];
+    bool dmk = false;
+    if (dmk_fat_read(f, 0, hdr, sizeof hdr) == sizeof hdr) {
+        bool named = path_is_dmk(path);
+        if (named || dmk_sniff(hdr, size)) {
+            int pr = dmk_parse_header(hdr, size, &g_dmk_geom[drive]);
+            if (pr != DMK_OK) {
+                Serial.printf("[dsk] drive %u: %s is not a DMK this reads (%d)\n", drive, path, pr);
+                f_close(f);
+                drives_save();
+                return false;
+            }
+            dmk = true;
+            g_dmk_map[drive].n_ok = 0;
+            if (g_dmk_geom[drive].protect) rw = false;   // the header says read-only
+        }
+    }
     g_dsk_open[drive] = true;
-    g_dsk_flags[drive] = rw ? DSK_RW : 0;
+    g_dsk_flags[drive] = (uint8_t)((rw ? DSK_RW : 0) | (dmk ? DSK_DMK : 0));
     strcpy(g_dsk_path[drive], path);
-    Serial.printf("[dsk] drive %u mounted %s (%lu bytes%s)\n",
-                  drive, path, (unsigned long)f_size(&g_dsk_file[drive]),
-                  rw ? "" : ", read-only file");
+    if (dmk)
+        Serial.printf("[dsk] drive %u mounted %s (DMK, %u tracks, %u side%s, track %u bytes%s)\n",
+                      drive, path, g_dmk_geom[drive].tracks, g_dmk_geom[drive].sides,
+                      g_dmk_geom[drive].sides == 1 ? "" : "s", g_dmk_geom[drive].track_len,
+                      rw ? "" : ", read-only");
+    else
+        Serial.printf("[dsk] drive %u mounted %s (%lu bytes%s)\n",
+                      drive, path, (unsigned long)size, rw ? "" : ", read-only file");
     drives_save();
     return true;
 }
@@ -1159,7 +1206,8 @@ extern "C" int coco_boot_create_blank_dsk(const char *base, char *name, size_t n
     return 0;
 }
 
-// PIZERO-196: rename a disk in place, in its own directory, keeping .DSK.
+// PIZERO-196: rename a disk in place, in its own directory, keeping its
+// extension (.DSK, or .DMK since PIZERO-320).
 // A disk in a drive is ejected from every drive holding it, renamed, and
 // put back with its write-protect tab, so the handle and drives.txt stay
 // right. Returns 0, COCO_NEWDSK_EXISTS or COCO_NEWDSK_FAILED.
@@ -1168,7 +1216,7 @@ extern "C" int coco_boot_rename_dsk(const char *old_path, const char *base,
     const char *slash = strrchr(old_path, '/');
     if (!slash) return COCO_NEWDSK_FAILED;
     char path[96];
-    snprintf(name, name_sz, "%s.DSK", base);
+    snprintf(name, name_sz, "%s.%s", base, path_is_dmk(old_path) ? "DMK" : "DSK");
     int len = snprintf(path, sizeof path, "%.*s/%s", (int)(slash - old_path), old_path, name);
     if (len <= 0 || (size_t)len >= sizeof path) return COCO_NEWDSK_FAILED;
     if (!strcmp(path, old_path)) return 0;
@@ -1192,15 +1240,39 @@ extern "C" int coco_boot_rename_dsk(const char *old_path, const char *base,
     return fr == FR_OK ? 0 : COCO_NEWDSK_FAILED;
 }
 
+// PIZERO-320: a DMK sector's data offset, from the track's map (rebuilt when
+// the track changes), or -1 when the track has no such sector.
+static int32_t dmk_offset(const char *what, unsigned drive, unsigned track,
+                          unsigned sector, int *rc, uint8_t *mark) {
+    struct dmk_map *m = &g_dmk_map[drive];
+    if (!m->n_ok || m->track != track) {
+        int n = dmk_build_map(&g_dmk_geom[drive], track, 0, dmk_fat_read, &g_dsk_file[drive], m);
+        if (n < 0)
+            Serial.printf("[dsk] dmk d=%u t=%u: off the disk or unreadable\n", drive, track);
+        else if (n == 0)
+            Serial.printf("[dsk] dmk d=%u t=%u: no 256-byte DD sectors\n", drive, track);
+    }
+    uint32_t off = m->n_ok ? dmk_map_find(&g_dmk_geom[drive], m, sector, mark) : 0;
+    if (!off) {
+        Serial.printf("[dsk] reject %s d=%u t=%u s=%u (not on the DMK track)\n", what, drive, track, sector);
+        *rc = 1;
+        return -1;
+    }
+    *rc = 0;
+    return (int32_t)off;
+}
+
 // A sector's offset in the image, or -1 when the drive is empty or the
 // address is off the 35-track, 18-sector, single-sided disk (PIZERO-68
-// covers more). *rc is the FDC's answer in that case.
+// covers more). *rc is the FDC's answer in that case. For a DMK, *mark
+// (when asked for) is the data mark the sector has.
 static int32_t dsk_offset(const char *what, unsigned drive, unsigned track,
-                          unsigned sector, int *rc) {
+                          unsigned sector, int *rc, uint8_t *mark = nullptr) {
     if (drive >= COCO_NDRIVE || !g_dsk_open[drive]) {
         *rc = COCO_DISK_NOT_READY;           // empty drive, as a real one reports
         return -1;
     }
+    if (g_dsk_dmk(drive)) return dmk_offset(what, drive, track, sector, rc, mark);
     if (track > 34 || sector < 1 || sector > 18) {
         Serial.printf("[dsk] reject %s d=%u t=%u s=%u (range)\n", what, drive, track, sector);
         *rc = 1;
@@ -1217,15 +1289,35 @@ static int32_t dsk_offset(const char *what, unsigned drive, unsigned track,
 extern "C" int coco_boot_disk_write_sector(unsigned drive, unsigned track,
                                            unsigned sector, const uint8_t *in256) {
     int rc;
-    int32_t off = dsk_offset("write", drive, track, sector, &rc);
+    uint8_t mark = 0xFB;
+    int32_t off = dsk_offset("write", drive, track, sector, &rc, &mark);
     if (off < 0) return rc;
     if (g_dsk_wp(drive) || !g_dsk_rw(drive)) return COCO_DISK_WRITE_PROTECT;
     if (!in256) return 0;                    // the probe: this drive takes writes
     FIL *f = &g_dsk_file[drive];
     uint32_t t0 = micros();
     UINT bw = 0;
-    FRESULT fr = f_lseek(f, (FSIZE_t)off);
+    FRESULT fr = FR_OK;
+    if (g_dsk_dmk(drive) && mark != 0xFB) {
+        // PIZERO-320: Write Sector puts down a normal $FB mark, so a deleted
+        // sector stops being one; the cached map is rebuilt to say so.
+        static const uint8_t fb = 0xFB;
+        UINT b1 = 0;
+        fr = f_lseek(f, (FSIZE_t)(off - 1));
+        if (fr == FR_OK) fr = f_write(f, &fb, 1, &b1);
+        g_dmk_map[drive].n_ok = 0;
+    }
+    if (fr == FR_OK) fr = f_lseek(f, (FSIZE_t)off);
     if (fr == FR_OK) fr = f_write(f, in256, 256, &bw);
+    if (fr == FR_OK && bw == 256 && g_dsk_dmk(drive)) {
+        // The data field's CRC, right after it, or a real controller (and
+        // XRoar) would read the sector back as a CRC error.
+        uint16_t crc = dmk_data_crc(0xFB, in256, 256);
+        uint8_t c[2] = { (uint8_t)(crc >> 8), (uint8_t)crc };
+        UINT b2 = 0;
+        fr = f_write(f, c, 2, &b2);
+        if (fr == FR_OK && b2 != 2) bw = 0;
+    }
     uint32_t us = micros() - t0;
     watchdog_update();                       // a slow card must not look like a hang
     g_dsk_flags[drive] |= DSK_DIRTY;

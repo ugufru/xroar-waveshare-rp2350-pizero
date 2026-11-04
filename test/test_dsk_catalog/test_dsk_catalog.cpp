@@ -22,6 +22,8 @@ static void test_only_dsk_files_count(void) {
     TEST_ASSERT_TRUE(dsk_cat_is_image("GAME.DSK", false));
     TEST_ASSERT_TRUE(dsk_cat_is_image("game.dsk", false));
     TEST_ASSERT_TRUE(dsk_cat_is_image("Mixed.Dsk", false));
+    TEST_ASSERT_TRUE(dsk_cat_is_image("GAME.DMK", false));   // PIZERO-320
+    TEST_ASSERT_TRUE(dsk_cat_is_image("game.dmk", false));
     TEST_ASSERT_FALSE(dsk_cat_is_image("GAME.BIN", false));
     TEST_ASSERT_FALSE(dsk_cat_is_image("GAME.DSK.TXT", false));
     TEST_ASSERT_FALSE(dsk_cat_is_image("DSK", false));

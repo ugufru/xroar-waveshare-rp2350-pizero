@@ -49,6 +49,9 @@ a build flag.
   on hardware when a change touches video, input or the machine core. Use a real env, never a
   one-off `PLATFORMIO_BUILD_FLAGS` (it links stale objects, see BUILD.md §4b).
 
+- Host tests: run them with the ROMs, `COCO_ROM_DIR=~/.xroar/roms pio test -e native`
+  (bas12, extbas11, disk11 and coco3 are there). Without it the ROM-boot cases are skipped.
+
 ## Build gotchas to remember
 
 - Target **RP2350B** (not the A on the AMOLED board), earlephilhower arduino-pico core.

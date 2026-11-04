@@ -104,8 +104,8 @@ which it needs, and launching it switches the board to that machine by itself.
    - Put the ROMs in the folder `/coco/roms/`. For the CoCo 2: `bas12.rom`, and if you have them,
      `extbas11.rom` and `disk11.rom`. For the CoCo 3: `coco3.rom` (32 KB), and `disk11.rom` for
      disks.
-   - Put disks (`.dsk` files) in `/coco/dsk`, programs (`.bin` files) in `/coco/bin`, and cartridges
-     (`.ccc` files) in `/coco/cart`.
+   - Put disks (`.dsk` or `.dmk` files) in `/coco/dsk`, programs (`.bin` files) in `/coco/bin`, and
+     cartridges (`.ccc` files) in `/coco/cart`.
 3. **Connect everything and switch on.**
    - Plug the TV or monitor into the mini video port.
    - Plug the keyboard or gamepad (or the hub) into the USB-C keyboard port.
@@ -221,6 +221,11 @@ Its limits:
 - **Disk writes are new** (PIZERO-66): `SAVE`, `SAVEM`, `KILL` and the rest write straight into the
   `.DSK` on the card. Press **W** in the disk list to lock a drive read-only. A `.DSK` whose file is
   read-only on the card is always locked.
+- **DMK disks are new** (PIZERO-320): a `.dmk` mounts like a `.dsk`, as does a DMK that has been
+  named `.dsk`, since the header gives it away. Reads and writes work on double-density 256-byte
+  sectors, side 0, which is what Disk BASIC uses. A DMK whose header says read-only is locked.
+  Single-density sectors, other sector sizes and formatting (`DSKINI`) on a DMK are not read or
+  written yet.
 - **The CoCo 2's high-speed POKEs** (PIZERO-132): `POKE 65495,0` (address-dependent) and
   `POKE 65497,0` (full, 2×) work, `POKE 65494,0` and `POKE 65496,0` go back to normal, and a reset
   always does. Details and measurements in [`docs/cpu-speed.md`](docs/cpu-speed.md).
