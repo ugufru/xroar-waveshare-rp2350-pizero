@@ -996,17 +996,21 @@ static uint32_t text_hash(const char *t) {
 
 static void drives_save(void) {
     if (g_drives_quiet) return;
-    char text[COCO_NDRIVE * 104];
+    // PIZERO-324: the text on the heap, not the stack: the F12 list mounts,
+    // ejects and renames from inside the USB key handler.
+    const size_t cap = COCO_NDRIVE * 104;
+    char *text = (char *)malloc(cap);
+    if (!text) { Serial.print("[dsk] drives not saved: no memory\n"); return; }
     int k = 0;
     for (unsigned d = 0; d < COCO_NDRIVE; d++)
-        k += snprintf(text + k, sizeof text - k, "%u%s = %s%s", d,
+        k += snprintf(text + k, cap - k, "%u%s = %s%s", d,
                       (g_dsk_open[d] && g_dsk_wp(d)) ? " ro" : "",
                       g_dsk_open[d] ? g_dsk_path[d] : "", tl_eol(g_drives_eol));
-    if (text_hash(text) == g_drives_saved_hash) return;
-    if (coco_boot_save_text(DRIVES_PATH, text, (uint32_t)k)) {
+    if (text_hash(text) != g_drives_saved_hash && coco_boot_save_text(DRIVES_PATH, text, (uint32_t)k)) {
         g_drives_saved_hash = text_hash(text);
         Serial.print("[dsk] drives saved\n");
     }
+    free(text);
 }
 
 // Push a drive's pending writes to the card, timed and logged with the
@@ -1177,22 +1181,31 @@ extern "C" int coco_boot_create_blank_dsk(const char *base, char *name, size_t n
         Serial.printf("[dsk] new: mkdir %s failed (%d)\n", dir, fr);
         return COCO_NEWDSK_FAILED;
     }
-    char path[96], tmp[100];
-    FILINFO fi;
+    // PIZERO-324: working memory on the heap (about 1.4 KB), only while the
+    // disk is written: this runs inside the F12 key handler, under the USB
+    // task, and on the stack it took core 0 to about 3,800 of its 4,096.
+    struct { FIL f; FILINFO fi; char path[96], tmp[100]; uint8_t blank[512]; } *w =
+        (decltype(w))malloc(sizeof *w);
+    if (!w) { Serial.printf("[dsk] new: no memory\n"); return COCO_NEWDSK_FAILED; }
+    char *path = w->path, *tmp = w->tmp;
+    uint8_t *blank = w->blank;
+    FIL &f = w->f;
     snprintf(name, name_sz, "%s.DSK", base);
-    snprintf(path, sizeof path, "%s/%s", dir, name);
-    if (f_stat(path, &fi) == FR_OK) return COCO_NEWDSK_EXISTS;
-    snprintf(tmp, sizeof tmp, "%s.tmp", path);
-    FIL f;
+    snprintf(path, sizeof w->path, "%s/%s", dir, name);
+    if (f_stat(path, &w->fi) == FR_OK) { free(w); return COCO_NEWDSK_EXISTS; }
+    snprintf(tmp, sizeof w->tmp, "%s.tmp", path);
     fr = f_open(&f, tmp, FA_WRITE | FA_CREATE_ALWAYS);
-    if (fr != FR_OK) { Serial.printf("[dsk] new: open %s failed (%d)\n", tmp, fr); return COCO_NEWDSK_FAILED; }
-    uint8_t blank[512];                     // on the stack: pizero_wavmeas has no spare RAM
-    memset(blank, 0xFF, sizeof blank);
+    if (fr != FR_OK) {
+        Serial.printf("[dsk] new: open %s failed (%d)\n", tmp, fr);
+        free(w);
+        return COCO_NEWDSK_FAILED;
+    }
+    memset(blank, 0xFF, sizeof w->blank);
     uint32_t t0 = micros();
     bool ok = true;
     for (int i = 0; i < 161280 / 512 && ok; i++) {
         UINT bw = 0;
-        ok = f_write(&f, blank, sizeof blank, &bw) == FR_OK && bw == sizeof blank;
+        ok = f_write(&f, blank, sizeof w->blank, &bw) == FR_OK && bw == sizeof w->blank;
         watchdog_update();
     }
     if (f_close(&f) != FR_OK) ok = false;
@@ -1200,9 +1213,11 @@ extern "C" int coco_boot_create_blank_dsk(const char *base, char *name, size_t n
     if (!ok) {
         Serial.printf("[dsk] new: writing %s failed\n", tmp);
         f_unlink(tmp);
+        free(w);
         return COCO_NEWDSK_FAILED;
     }
     Serial.printf("[dsk] new: %s (%lu us)\n", path, (unsigned long)(micros() - t0));
+    free(w);
     return 0;
 }
 
@@ -1389,15 +1404,20 @@ typedef void (*coco_loadm_seg_cb)(uint16_t addr, const uint8_t *data, uint16_t l
 extern "C" bool coco_boot_parse_loadm(const char *path,
                                       coco_loadm_seg_cb cb, void *ctx,
                                       uint16_t *entry_out) {
-    FIL f;
+    // PIZERO-324: the FIL and buffer on the heap (about 800 bytes), not the
+    // stack: the F12 launch check runs this inside the USB key handler.
+    struct { FIL f; uint8_t buf[256]; } *w = (decltype(w))malloc(sizeof *w);
+    if (!w) { Serial.println("[loadm] no memory"); return false; }
+    FIL &f = w->f;
+    uint8_t *buf = w->buf;
     FRESULT fr = f_open(&f, path, FA_READ);
     if (fr != FR_OK) {
         Serial.printf("[loadm] open %s failed: %s (%d)\n",
                       path, FRESULT_str(fr), fr);
+        free(w);
         return false;
     }
     bool ok = false;
-    uint8_t buf[256];
     while (true) {
         uint8_t hdr[5];
         UINT br = 0;
@@ -1425,7 +1445,7 @@ extern "C" bool coco_boot_parse_loadm(const char *path,
         uint16_t left = len;
         uint16_t curr = addr;
         while (left > 0) {
-            UINT want = (left > sizeof(buf)) ? sizeof(buf) : left;
+            UINT want = (left > sizeof w->buf) ? sizeof w->buf : left;
             if (f_read(&f, buf, want, &br) != FR_OK || br != want) {
                 Serial.println("[loadm] short read");
                 goto done;
@@ -1437,6 +1457,7 @@ extern "C" bool coco_boot_parse_loadm(const char *path,
     }
 done:
     f_close(&f);
+    free(w);
     return ok;
 }
 
