@@ -7,7 +7,7 @@ ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`). The short ranked
 list of what to pick up next is `roadmap.jsonl` (shown at the top of
 `issues.html`).
 
-_Last updated: 2026-11-05 (the CoCo 3 demos at full speed on average:
+_Last updated: 2026-11-05 (`PIZERO-328` measured and deferred for RAM, its fetch step filed as `338`; the CoCo 3 demos at full speed on average:
 `PIZERO-326`, `327`, `330`, `331`, `333`, `334` done, SCARED from about 190 to
 136.3 host clocks per emulated cycle; the peaks are `335`. Before that,
 2026-11-01: the CoCo Zero is a CoCo 3, `PIZERO-280`; switching machine in
@@ -173,7 +173,12 @@ the demos' own code is never looked at (diagnosed from the emulator's side).
 - **`PIZERO-335`** (peaks of about 166 on the profiling build) closed: on
   the product build every demo runs great (user, 2026-11-05). Headroom from
   here is the 6809 core rewrites **`PIZERO-328`** (registers in host
-  registers) and **`329`** (computed-goto dispatch). **`PIZERO-332`** does for the CoCo 2
+  registers) and **`329`** (computed-goto dispatch). `328` is deferred until
+  there is more RAM: measured 2026-11-05, inlining only the opcode and
+  operand fetch (**`PIZERO-338`**, also deferred) saves 5 to 7 host clocks
+  per emulated cycle but costs 4.7 KB, and inlining the rest of the helpers
+  that `328` needs leaves the CoCo 3 unable to start. The RAM would come from
+  `PIZERO-211`, `269`, `270` or the PSRAM board (`PIZERO-244`). **`PIZERO-332`** does for the CoCo 2
   what `331` did for the CoCo 3. The tear-free picture stays in `325`.
 
 ## The AY-3-8910 (done 2026-10-22)
