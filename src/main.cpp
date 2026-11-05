@@ -3013,8 +3013,10 @@ void loop() {
     wd_phase(WP_PACE);
 
 #ifdef AUDIO_WAV_DUMP
-    // Arm on USB-CDC attach (DTR), then autotype a deterministic ascending-tone
-    // program (SOUND = core Color BASIC, no ECB) and stream a base64 WAV.
+    // Arm on USB-CDC attach (DTR), then autotype a deterministic test tone
+    // (SOUND 159,255: a sustained ~440 Hz A, core Color BASIC, no ECB, for
+    // frequency analysis; PIZERO-42 kept it over the old ascending SOUND
+    // loop) and stream a base64 WAV.
     static bool dump_armed = false;
 #ifdef AUDIO_WAV_DUMP_BOOT
     // PIZERO-223: the machine boots as usual (autorun and all) and the
@@ -3030,7 +3032,7 @@ void loop() {
 #endif
     if (!dump_armed && Serial) {
         dump_armed = true;
-        g_autotype = "\rSOUND159,255\r";   // PIZERO-32 measure: sustained ~440Hz A for freq analysis
+        g_autotype = "\rSOUND159,255\r";   // PIZERO-32: the sustained tone above
         g_autotype_warmup = 120;   // ~2 s for the OK prompt to settle
         audio_dump_begin();
     }

@@ -157,7 +157,7 @@ What is left is small, and none of it blocks the next work: **`PIZERO-216`** (LO
 
 Related CPU-speed item: **`PIZERO-211`** (RAM back from the fast 6809 core).
 
-## CoCo 3 demo speed (`PIZERO-325`, from 2026-11-04)
+## CoCo 3 demo speed (`PIZERO-325`, 2026-11-04 to 11-05, closed)
 
 The demos (SCARED, DDEMO) ran at about three quarters of full speed: about
 190 host clocks per emulated cycle against the 141 a 252 MHz core 0 allows at
@@ -179,7 +179,8 @@ the demos' own code is never looked at (diagnosed from the emulator's side).
   per emulated cycle but costs 4.7 KB, and inlining the rest of the helpers
   that `328` needs leaves the CoCo 3 unable to start. The RAM would come from
   `PIZERO-211`, `269`, `270` or the PSRAM board (`PIZERO-244`). **`PIZERO-332`** does for the CoCo 2
-  what `331` did for the CoCo 3. The tear-free picture stays in `325`.
+  what `331` did for the CoCo 3. `325` closed 2026-11-05 at about 80%; the
+  tear-free picture is `PIZERO-217`.
 
 ## The AY-3-8910 (done 2026-10-22)
 
