@@ -57,7 +57,7 @@ buildable on its own.
 | `pizero_usbtone` | `pizero_stream_60` | `-DUSB_AUDIO -DUSB_AUDIO_TONE` | single-buffered | product + the USB audio driver (`src/usb_audio.cpp`) streaming a 440 Hz test tone to the first USB Audio Class DAC found at boot, through the vendored Pico-PIO-USB's isochronous OUT stream; `[uac]` lines report the setup and packets a second (PIZERO-255) | ~86% |
 | `pizero_cpuprof` | `pizero_stream_60` | `-DCPU_PROF=1` | single-buffered | product + the M33 cycle counter timing the 6809's bus path, with cycle, dummy-cycle and instruction counts: a `[prof]` line a second splits host clocks per emulated cycle into bus and core (PIZERO-209). The bus helpers are forced inline so the layout matches the product | ~77% |
 | `pizero_cpuprof_hook` | `pizero_stream_60` | `-DCPU_PROF=2` | single-buffered | `pizero_cpuprof` plus the hook split into its sections (decode, data, events and audio, irq and budget) | ~77% |
-| `pizero_coco3_prof` | `pizero_coco3` | `-DCPU_PROF=1` | single-buffered | `pizero_coco3` with the profiler, for the CoCo 3 speed work (PIZERO-220): `[prof3]` lines a second give, per frame, the cycles through the GIME's slow path and their clocks, event clocks, lines handed to the sink and its clocks, the run's clocks, audio samples and the catch-up; the port renderer's gather-and-hash and decode clocks per drawn line; and the worst frame's breakdown. Its `[prof]` bus/core split is not meaningful here (the nested timings land in the bus window). The profiler inlined into the 6809 core (which runs from RAM) costs about 14 KB, so this build lists 32 entries in F12 and takes cartridges up to 8 KB (Disk BASIC fits), or the CoCo 3 has no heap to start in (PIZERO-322) | ~83% |
+| `pizero_coco3_prof` | `pizero_coco3` | `-DCPU_PROF=1` | single-buffered | `pizero_coco3` with the profiler, for the CoCo 3 speed work (PIZERO-220): `[prof3]` lines a second give, per frame, the cycles through the GIME's slow path and their clocks, event clocks, lines handed to the sink and its clocks, the run's clocks, audio samples and the catch-up; the port renderer's gather-and-hash and decode clocks per drawn line; and the worst frame's breakdown. Its `[prof]` bus/core split is not meaningful here (the nested timings land in the bus window). `[pcs]` (PIZERO-331): core 0's SysTick samples where it runs about 250 times a second, and the line gives how many samples were in flash and in RAM with the XIP cache's accesses and misses a second; `[pcf]` lines list the flash addresses, for mapping to functions with `arm-none-eabi-nm`. Time in `sleep_until` and `time_reached` is core 0 idle, waiting for the frame. The profiler inlined into the 6809 core (which runs from RAM) costs about 14 KB, so this build lists 32 entries in F12 and takes cartridges up to 8 KB (Disk BASIC fits), or the CoCo 3 has no heap to start in (PIZERO-322) | ~83% |
 | `pizero_wdtest` | `pizero_stream` | `-DWATCHDOG_SELFTEST` | single-buffered | wedges core 0 to prove watchdog recovery (PIZERO-33); each freeze moves to the next kind (spin in `loop()`, spin with interrupts off, spin inside a timer interrupt, hard fault) so one flash shows every post-mortem (PIZERO-227) | ~81% |
 | `pizero_wavmeas` | `pizero_base` | `-DAUDIO_WAV_DUMP -DFB_SINGLE` | single-buffered | no data-island audio: dumps the emulator's sound as WAV over USB (PIZERO-41) | ~73% |
 | `pizero_chord` | `pizero_stream_60` | `+ -DAV_AUDIO_SYNTH -DAV_AUDIO_SYNTH_CHORD` | single-buffered | the product, but the HDMI sound is a C major chord made on core 1, repeating 4 s of sines, 4 s of squares, 1 s of silence, to tell the HDMI link from the TV by ear (PIZERO-223) | ~81% |
@@ -206,6 +206,22 @@ pio run -t compiledb
 Until then, expect bogus `'string.h' file not found` / implicit-`memset` diagnostics
 in editor; they are **not** real build errors (the actual `pio run` is clean).
 
+### d) The hot flash code is laid out on purpose (`scripts/xip_hot_ld.py`)
+Code not marked for RAM runs from flash through the 16 KB two-way XIP cache.
+The GIME's per-line code is about 10 KB and has to stay in flash (the CoCo 3
+takes 64 KB of the heap). Left to the linker, where it fell depended on
+everything else, and an unrelated 192-byte change moved the CoCo 3's speed
+by 6-8% (170.5 against 159.6 host clocks per emulated cycle on the same code,
+PIZERO-331). `scripts/xip_hot_ld.py` patches the generated
+`memmap_default.ld` to put a named list of hot functions (by their
+`-ffunction-sections` names) in one block at the start of `.text`, between
+`__xip_hot_start` and `__xip_hot_end`; the link fails if the block outgrows
+the cache. It also takes in newlib's `memset`, which the SDK script means to
+keep out of flash but misses (it matches `lib_a-mem*.o`, and this newlib
+names it `libc_a-memset.o`). When a function that runs per line or per cycle
+is added or renamed, add it to the list; the profiling build's `[pcs]` lines
+show which flash code is hot.
+
 ---
 
 ## 5. Verifying a build
@@ -237,7 +253,7 @@ in editor; they are **not** real build errors (the actual `pio run` is clean).
   bytes, core 1 N of 2048`, again whenever it grows and when a monitor opens
   the port: core 0 past 3,584 says `*** NEAR THE END ***`, since core 1's
   stack sits right below core 0's.
-- **RAM placement** of hot functions: see the `nm` snippet in §4a.
+- **RAM placement** of hot functions: see the `nm` snippet in §4a. The hot flash block: `nm -n` between `__xip_hot_start` and `__xip_hot_end` (§4d).
 - **6809 correctness (PIZERO-129):** `pio test -e native -f test_mc6809_lockstep`
   runs the frozen reference core (`test/mc6809_reference/`) and the live core
   side by side and fails at the first bus cycle or register that differs. Run
