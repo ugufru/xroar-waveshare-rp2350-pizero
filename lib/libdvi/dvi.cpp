@@ -206,6 +206,13 @@ void __dvi_func(dvi_static_framebuf_main_16bpp)(struct dvi_inst *inst, const uin
 #if !PICO_RP2040
 // PIZERO-134: as above, from one-byte palette indices at full resolution, on
 // the SIO hardware encoder.
+#ifdef CPU_PROF
+// PIZERO-330 (this project): microseconds core 1 spent waiting for a free
+// TMDS buffer, its spare time, and lines encoded; read and cleared by core 0.
+#include "hardware/timer.h"
+volatile uint32_t g_dvi_c1_wait_us, g_dvi_c1_lines;
+#endif
+
 void __dvi_func(dvi_static_framebuf_main_pal8)(struct dvi_inst *inst, const uint8_t * volatile *framebuf_ptr, const uint16_t *palette) {
 	const uint h = inst->timing->v_active_lines / DVI_VERTICAL_REPEAT;
 	const uint w = inst->timing->h_active_pixels;
@@ -214,7 +221,14 @@ void __dvi_func(dvi_static_framebuf_main_pal8)(struct dvi_inst *inst, const uint
 		const uint8_t *framebuf = *framebuf_ptr;
 		for (uint y = 0; y < h; ++y) {
 			uint32_t *tmdsbuf;
+#ifdef CPU_PROF
+			uint32_t w0 = timer_hw->timerawl;
 			queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
+			g_dvi_c1_wait_us += timer_hw->timerawl - w0;
+			g_dvi_c1_lines++;
+#else
+			queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
+#endif
 			tmds_encode_pal8_sio(framebuf + y * w, palette, tmdsbuf, w, words_per_channel);
 			queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);
 		}

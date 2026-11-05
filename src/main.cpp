@@ -3221,6 +3221,18 @@ void loop() {
                             (unsigned long)p.catch_n, (unsigned long)(p.catch_clk / (p.catch_n ? p.catch_n : 1)),
                             (unsigned long)p.samp_n, (unsigned long)p.catch_skip_n);
                 }
+                {   // PIZERO-330: core 1's spare time (waiting for a free TMDS buffer)
+                    extern volatile uint32_t g_dvi_c1_wait_us, g_dvi_c1_lines;
+                    static uint32_t c1_last_us;
+                    uint32_t now = time_us_32(), span = now - c1_last_us;
+                    uint32_t wait = g_dvi_c1_wait_us, lines = g_dvi_c1_lines;
+                    g_dvi_c1_wait_us = 0; g_dvi_c1_lines = 0;
+                    if (c1_last_us && span)
+                        tprintf("[prof3] core1: waiting %lu.%lu%% of the time, %lu lines/s encoded\r\n",
+                                (unsigned long)(wait * 100ull / span), (unsigned long)(wait * 1000ull / span % 10),
+                                (unsigned long)(lines * 1000000ull / span));
+                    c1_last_us = now;
+                }
                 tprintf("[prof3] worst frame: run=%lu clk cyc=%lu slow=%lu ev=%lu lines=%lu sink=%lu\r\n",
                         (unsigned long)p.wf_run, (unsigned long)p.wf_cyc, (unsigned long)p.wf_slow,
                         (unsigned long)p.wf_ev, (unsigned long)p.wf_lines, (unsigned long)p.wf_sink);
