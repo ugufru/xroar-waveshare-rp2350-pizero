@@ -247,9 +247,10 @@ show which flash code is hot.
   `[mem] free heap N bytes with no machine` and `[machine] now a CoCo 3, built
   in place in N ms; free heap N bytes`; the numbers must come back the same on
   every round trip, or the switch is leaking. Since PIZERO-319 the machine keeps
-  one 64 KB block for good, so the heap reads 12,192 with no machine, 10,144 as
-  a CoCo 2 (its spare 40 KB is kept for a bank-switched cart) and 8,248 as a
-  CoCo 3 (2026-11-01). The boot also prints `[stack] core 0 deepest N of 4096
+  one 64 KB block for good, so the heap reads 13,800 with no machine, 12,664 as
+  a CoCo 2 (its spare 40 KB is kept for a bank-switched cart) and 10,544 as a
+  CoCo 3 (2026-11-05, product at 82.4% RAM, after PIZERO-330; 2026-11-01 it
+  was 12,192, 10,144 and 8,248). The boot also prints `[stack] core 0 deepest N of 4096
   bytes, core 1 N of 2048`, again whenever it grows and when a monitor opens
   the port: core 0 past 3,584 says `*** NEAR THE END ***`, since core 1's
   stack sits right below core 0's.
