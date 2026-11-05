@@ -97,7 +97,9 @@ and draws while the 6809 runs:
   renderer (`port_render_scanline`, PIZERO-218) hands over 640 GIME colours
   (`TCC1014_PORT_FULL`, PIZERO-134):
   - **Active lines:** decoded from VRAM read directly (`port_vram`).
-  - **Other lines:** border, or black in vertical sync.
+  - **Other lines:** border, or black in vertical sync. One that shows the
+    same colour as that scanline did last frame is passed as NULL without
+    being filled or hashed (PIZERO-333, `port_border_line`).
 - **Skipping:** a line whose inputs (VRAM bytes, mode, palette, border) hash
   the same as last frame's (`port_sum`) is passed as NULL. That keeps static
   screens cheap.

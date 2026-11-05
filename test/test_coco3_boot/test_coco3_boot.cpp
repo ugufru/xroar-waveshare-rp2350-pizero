@@ -276,6 +276,10 @@ static void test_port_render(void) {
         { "256x192, 2 colours",             C3MODE(0x80, 0x08) },
         { "640x192, 2 colours (halved)",    C3MODE(0x80, 0x1C) },
         { "128x192, 2 colours",             C3MODE(0x80, 0x00) },
+        // PIZERO-333: the border lines are kept from frame to frame; a new
+        // border colour must still reach every one of them.
+        { "320x192, 16 colours, border $12", { { 0xFF90, 0x4C }, { 0xFF98, 0x80 }, { 0xFF99, 0x1E },
+                                              { 0xFF9D, 0 }, { 0xFF9E, 0 }, { 0xFF9A, 0x3F }, { 0xFF9A, 0x12 } } },
         { "VDG alpha and SG4, CSS 0",       VDGMODE(0x00, 0) },
         { "VDG alpha and SG4, CSS 1",       VDGMODE(0x08, 0) },
         { "VDG CG1",                        VDGMODE(0x80, 1) },

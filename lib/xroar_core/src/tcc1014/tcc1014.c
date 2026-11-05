@@ -949,6 +949,34 @@ static void tcc1014_set_register(struct TCC1014_private *gime, unsigned reg, uns
 
 // Horizontal timing points
 
+// RP2350 port: after the port drew over the picture, every line draws again.
+static inline void port_check_redraw(struct TCC1014_private *gime) {
+	if (gime->public.port_redraw) {
+		memset(gime->port_sum, 0, sizeof(gime->port_sum));
+		gime->public.port_redraw = 0;
+	}
+}
+
+// RP2350 port (PIZERO-333): a line outside the active area is all border, or
+// black in vertical sync. NULL when this scanline showed the same colour last
+// frame, so render_line keeps it and nobody hashes 640 equal bytes (the sink
+// did, every border line of every frame). Its port_sum entry is the colour
+// with bit 0 clear: an active line's hash has bit 0 set, so the two never
+// match, and it is never 0 (draw).
+static const uint8_t *port_border_line(struct TCC1014_private *gime) {
+	port_check_redraw(gime);
+	uint8_t c = gime->vertical.sync ? 0 : gime->border_colour;
+	uint32_t h = 0x80000000u | (uint32_t)c << 1;
+	unsigned sl = gime->scanline;
+	if (sl < TCC1014_PORT_LINES) {
+		if (gime->port_sum[sl] == h)
+			return NULL;
+		gime->port_sum[sl] = h;
+	}
+	memset(gime->port_line, c, TCC1014_PORT_W);
+	return gime->port_line;
+}
+
 static void do_hs_fall(void *sptr) {
 	struct TCC1014_private *gime = sptr;
 
@@ -965,10 +993,12 @@ static void do_hs_fall(void *sptr) {
 			DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_PORT_JOB,
 			              (const uint8_t *)&gime->port_job);
 		} else {
-			if (!gime->port_done)
-				memset(gime->port_line, gime->vertical.sync ? 0 : gime->border_colour, TCC1014_PORT_W);
-			DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_PORT_W,
-			              gime->port_done && gime->port_skip ? NULL : gime->port_line);
+			const uint8_t *data;
+			if (gime->port_done)
+				data = gime->port_skip ? NULL : gime->port_line;
+			else
+				data = port_border_line(gime);
+			DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_PORT_W, data);
 		}
 		gime->port_done = 0;
 		gime->port_skip = 0;
@@ -1710,10 +1740,7 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 	}
 
 	// Skip a line whose inputs have not changed since it was last drawn.
-	if (gime->public.port_redraw) {
-		memset(gime->port_sum, 0, sizeof(gime->port_sum));
-		gime->public.port_redraw = 0;
-	}
+	port_check_redraw(gime);
 	uint32_t h = 0x811C9DC5u;
 	h = port_mix(h, COCO | GnA << 1 | GM1 << 2 | GM0 << 3 | CSS << 4 | rg_full << 5 | BP << 6
 	             | (cmask == 0x30) << 7 | INVT << 8 | blink << 9 | resolution << 10 | CRES << 12
