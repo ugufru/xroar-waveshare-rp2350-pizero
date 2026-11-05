@@ -73,6 +73,10 @@ struct cpu_prof {
 	uint32_t evf_clk[8];
 	uint32_t catch_n;
 	uint32_t catch_skip_n;   // CoCo 3 slow-path reads that left the catch-up
+	// PIZERO-334: the CoCo 3's PIA reads alone, with the events and audio
+	// catch-up that ran inside them taken out, and of them PIA0's pre-read
+	// (the keyboard rows and the joystick comparator).
+	uint32_t pia_rd_n, pia_rd_clk, pia_rd_pre;
 	uint32_t pr_mode;     // PIZERO-322: the last decoded line's mode (see tcc1014.c)
 	uint32_t pr_bytes;    //   and its VRAM bytes
 	uint32_t pr_general;  //   lines through the general (per-byte mode test) loop

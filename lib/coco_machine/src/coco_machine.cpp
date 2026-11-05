@@ -251,6 +251,9 @@ static uint8_t g_kb_col_row_mask[8] = {
 // PIA read below costs the same as before.
 static uint8_t g_kb_src[COCO_KEY_SOURCES][8];
 static bool    g_kb_src_ready;
+// PIZERO-334: bumped whenever g_kb_col_row_mask changes, so the PIA read can
+// keep the rows it last worked out for a column strobe (both on core 0).
+static uint32_t g_kb_gen = 1;
 
 static void kb_src_init(void) {
     memset(g_kb_src, 0xFF, sizeof g_kb_src);
@@ -261,6 +264,7 @@ static void kb_combine(uint8_t col) {
     uint8_t m = 0xFF;
     for (int s = 0; s < COCO_KEY_SOURCES; s++) m &= g_kb_src[s][col];
     g_kb_col_row_mask[col] = m;
+    g_kb_gen++;
 }
 
 // AMOLED-22 globals consumed by mc6847.c's render_scanline LUT rebuild.
@@ -347,13 +351,30 @@ static void HOT_FUNC(audio_comparator_read)(void);   // PIZERO-253, with the aud
 extern "C" void HOT_FUNC(coco_pia0_preread_a)(void *sptr) {
     (void)sptr;
     if (!g_m.pia0) return;
+#ifdef CPU_PROF
+    uint32_t pp0 = cpu_prof_now();
+    struct pp_done { uint32_t t; ~pp_done() { g_cpu_prof.pia_rd_pre += cpu_prof_now() - t; } } pp_guard{pp0};
+#endif
     audio_comparator_read();
     uint8_t col_sel = PIA_VALUE_B(g_m.pia0);
-    uint8_t rows = 0xFF;
-    for (int c = 0; c < 8; c++) {
-        if (!(col_sel & (1u << c))) {
-            rows &= g_kb_col_row_mask[c];
+    // PIZERO-334: the rows for this column strobe, worked out again only when
+    // the strobe or a key has changed since the last read (SCARED reads the
+    // PIAs about 116,000 times a second; the loop was about 60 clocks).
+    static uint32_t s_kb_key;
+    static uint8_t s_kb_rows;
+    uint32_t key = g_kb_gen << 8 | col_sel;
+    uint8_t rows;
+    if (key == s_kb_key) {
+        rows = s_kb_rows;
+    } else {
+        rows = 0xFF;
+        for (int c = 0; c < 8; c++) {
+            if (!(col_sel & (1u << c))) {
+                rows &= g_kb_col_row_mask[c];
+            }
         }
+        s_kb_key = key;
+        s_kb_rows = rows;
     }
     // Fire buttons pull PA0/PA1 low whichever column is strobed (upstream:
     // row_sink &= ~(buttons & 3)); on a CoCo 3 the second buttons PA2/PA3
@@ -419,6 +440,7 @@ extern "C" void coco_machine_release_key(uint8_t dscan) {
 extern "C" void coco_machine_release_all_keys(void) {
     kb_src_init();
     memset(g_kb_col_row_mask, 0xFF, sizeof(g_kb_col_row_mask));
+    g_kb_gen++;
 }
 
 
@@ -1099,9 +1121,53 @@ static inline __attribute__((always_inline)) int sam_ticks(bool ram_or_pia0) {
     return ((g_m.sam_r & 2) || (g_m.sam_r && !ram_or_pia0)) ? 8 : 16;
 }
 
+#ifdef COCO3
+// PIZERO-334: a CoCo 3 read of a PIA ($FF00-$FF0F, $FF20-$FF2F; the GIME
+// gives $FF10-$FF1F and $FF30-$FF3F to nobody), straight to the PIA. What
+// tcc1014_mem_cycle and coco3_cpu_cycle do for one, less what cannot apply:
+// the GIME's edge detect on its interrupt inputs, its decode (S 2, no RAM),
+// the read, the keyboard interrupt input, and the tail. Its snoops are of
+// writes only, and no cartridge front-end (AY, ACIA, Orchestra-90) answers
+// here. The cycle is as long as every other (coco_fastbus.ticks is the
+// GIME's R1 rate, resynced on every SAM write). About 200 of a read's 510
+// host clocks went in the decode, the delegate call and those checks.
+static inline __attribute__((always_inline)) void coco3_pia_read(uint16_t A) {
+    tcc1014_poll_lines(g_gime3);
+    g_gime3->S = 2;
+    g_gime3->RAS = 0;
+    g_m.cpu->D = mc6821_read((A & 0x20) ? g_m.pia1 : g_m.pia0, A);
+    g_gime3->IL1 = (PIA_VALUE_A(g_m.pia0) | 0x80) != 0xff;
+    mem_cycle_tail(coco_fastbus.ticks, 0, false);
+}
+
+static inline __attribute__((always_inline)) void c3_pia_read(uint16_t A) {
+#ifdef CPU_PROF
+    g_cpu_prof.c3_cls[CPU_PROF_C3_PIA]++;
+    const uint32_t ev0 = g_cpu_prof.ev_clk, ca0 = g_cpu_prof.catch_clk;
+    uint32_t t0 = cpu_prof_now();
+    coco3_pia_read(A);
+    uint32_t dt = cpu_prof_now() - t0;
+    g_cpu_prof.slow_clk += dt;
+    g_cpu_prof.slow_n++;
+    g_cpu_prof.pia_rd_n++;
+    g_cpu_prof.pia_rd_clk += dt - (g_cpu_prof.ev_clk - ev0) - (g_cpu_prof.catch_clk - ca0);
+#else
+    coco3_pia_read(A);
+#endif
+}
+#endif
+
 extern "C" void HOT_FUNC(coco_mem_cycle)(void *sptr, _Bool RnW, uint16_t A) {
     (void)sptr;
-    if (g_c3) { c3_slow(RnW, A); return; }   // PIZERO-133
+#ifdef COCO3
+    if (g_c3) {                                // PIZERO-133
+        if (RnW && (A & 0xFFD0) == 0xFF00) { c3_pia_read(A); return; }   // PIZERO-334
+        c3_slow(RnW, A);
+        return;
+    }
+#else
+    if (g_c3) { c3_slow(RnW, A); return; }
+#endif
     audio_catch_up();     // before a PIA1 write can change the level
     g_m.total_mem_cycles++;
 

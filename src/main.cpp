@@ -3206,6 +3206,10 @@ void loop() {
                             (unsigned long)(p.run_clk / 60),
                             (unsigned long)(p.samp_n / 60), (unsigned long)(p.samp_clk / 60),
                             (unsigned long)(p.catch_clk / 60));
+                if (p.pia_rd_n)   // PIZERO-334
+                    tprintf("[prof3] pia reads: %lu/s, each %lu clk (of it PIA0's pre-read %lu), events and catch-up taken out\r\n",
+                            (unsigned long)p.pia_rd_n, (unsigned long)(p.pia_rd_clk / p.pia_rd_n),
+                            (unsigned long)(p.pia_rd_pre / p.pia_rd_n));
                 if (p.pr_n)
                     tprintf("[prof3] port render per drawn line: gather+hash=%lu decode=%lu clk (%lu lines/s) | mode=%04lx bytes=%lu general=%lu\r\n",
                             (unsigned long)(p.pr_gather / p.pr_n), (unsigned long)(p.pr_decode / p.pr_n),
