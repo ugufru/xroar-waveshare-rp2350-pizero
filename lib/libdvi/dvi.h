@@ -94,6 +94,9 @@ void dvi_static_framebuf_main_16bpp(struct dvi_inst *inst, const uint16_t * vola
 // indices (h_active_pixels wide, v_active_lines / DVI_VERTICAL_REPEAT high),
 // each looked up in the 256-entry RGB565 palette as it is encoded.
 void dvi_static_framebuf_main_pal8(struct dvi_inst *inst, const uint8_t * volatile *framebuf_ptr, const uint16_t *palette);
+// PIZERO-330: called by dvi_static_framebuf_main_pal8 while it waits for a
+// free TMDS buffer; true when it did work. Set before core 1 starts.
+extern bool (*volatile dvi_idle_work)(void);
 
 // PIZERO-175: true encodes 16bpp scanlines on the RP2350's SIO TMDS encoder.
 extern volatile bool dvi_sio_tmds_encode;

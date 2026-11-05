@@ -163,6 +163,14 @@ static void gime_fs(void *sptr, _Bool level) {
 }
 static void render_line(void *sptr, unsigned burst, unsigned npixels, const uint8_t *data) {
     (void)sptr; (void)burst;
+    if (npixels == TCC1014_PORT_JOB) {
+        // PIZERO-330: a line handed over undecoded; decode it as the port's
+        // other core would, then on as a drawn line.
+        static uint8_t line[TCC1014_PORT_W + 16];
+        tcc1014_port_decode((const struct tcc1014_port_job *)data, line);
+        coco3_bus_render_line(&bus, line, TCC1014_PORT_W);
+        return;
+    }
     coco3_bus_render_line(&bus, data, npixels);
 }
 static void set_active_area(void *sptr, int x, int y, int w, int h) {
@@ -244,6 +252,7 @@ void c3_key(int col, int row, int down) {
 uint8_t c3_gime_reg(int r) { return gime_regs[r & 31]; }
 void c3_set_port_render(int on) {
     gime->port_render = on;
-    gime->port_vram[0] = on == 1 ? ram[0] : NULL;   // 2: through fetch_vram
-    gime->port_vram[1] = on == 1 ? ram[1] : NULL;
+    gime->port_vram[0] = on == 1 || on == 3 ? ram[0] : NULL;   // 2: through fetch_vram
+    gime->port_vram[1] = on == 1 || on == 3 ? ram[1] : NULL;
+    gime->port_defer = on == 3;                                // PIZERO-330: as jobs
 }

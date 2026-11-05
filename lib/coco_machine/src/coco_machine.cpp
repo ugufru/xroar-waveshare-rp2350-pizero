@@ -1497,9 +1497,85 @@ static void coco3_signal_fs(void *sptr, bool level) {
     mc6821_set_cx1(&g_m.pia0->b, level);
     coco3_bus_frame_sync(&g_c3bus, level);
 }
+// PIZERO-330: the CoCo 3's active lines are decoded on core 1. The GIME
+// gathers a line's bytes and skips it when unchanged, on core 0 as before; a
+// line it has to draw arrives here as a job (its bytes, mode and palette),
+// which goes into this ring with the framebuffer row it lands on. Core 1
+// takes jobs while it waits for libdvi's next free TMDS buffer
+// (coco_machine_core1_work), so scanout always comes first, and decodes each
+// straight into its row. When the ring is full core 0 decodes the line
+// itself. One producer (core 0), one consumer (core 1).
+#if defined(VIDEO_640) && defined(TCC1014_PORT_FULL)
+#define COCO3_PORT_JOBS 4
+struct coco3_port_slot {
+    coco3_pix_t *dst;
+    struct tcc1014_port_job job;
+};
+static struct coco3_port_slot g_c3jobs[COCO3_PORT_JOBS];
+static volatile uint32_t g_c3job_head, g_c3job_tail;    // head: core 0's, tail: core 1's
+#ifdef CPU_PROF
+volatile uint32_t g_c3job_queued, g_c3job_full, g_c3job_c1_us;   // core 1's work: timer us
+#endif
+
+static void HOT_FUNC(coco3_port_job)(const struct tcc1014_port_job *job) {
+    coco3_pix_t *dst = coco3_bus_job_dst(&g_c3bus);
+    if (!dst) return;
+    uint32_t head = g_c3job_head;
+    if (head - g_c3job_tail >= COCO3_PORT_JOBS) {
+        tcc1014_port_decode(job, dst);               // core 1 is behind: here
+#ifdef CPU_PROF
+        g_c3job_full++;
+#endif
+        return;
+    }
+    struct coco3_port_slot *sl = &g_c3jobs[head % COCO3_PORT_JOBS];
+    sl->dst = dst;
+    memcpy(&sl->job, job, sizeof *job);
+    __dmb();                                         // the slot before the head
+    g_c3job_head = head + 1;
+    __sev();                                         // wake core 1 from its wait
+#ifdef CPU_PROF
+    g_c3job_queued++;
+#endif
+}
+
+// Core 1, between TMDS lines: one job if there is one. True when it did one.
+extern "C" bool HOT_FUNC(coco_machine_core1_work)(void) {
+    uint32_t tail = g_c3job_tail;
+    if (tail == g_c3job_head) return false;
+    __dmb();                                         // the head before the slot
+#ifdef CPU_PROF
+    uint32_t t0 = timer_hw->timerawl;
+#endif
+    struct coco3_port_slot *sl = &g_c3jobs[tail % COCO3_PORT_JOBS];
+    tcc1014_port_decode(&sl->job, sl->dst);
+    __dmb();                                         // done with the slot
+    g_c3job_tail = tail + 1;
+#ifdef CPU_PROF
+    g_c3job_c1_us += timer_hw->timerawl - t0;
+#endif
+    return true;
+}
+#else
+extern "C" bool coco_machine_core1_work(void) { return false; }
+#endif
+
 static void HOT_FUNC(coco3_render_line)(void *sptr, unsigned burst, unsigned npixels,
                                         const uint8_t *data) {
     (void)sptr; (void)burst;
+#ifdef COCO3_PORT_JOBS
+    if (npixels == TCC1014_PORT_JOB) {
+#ifdef CPU_PROF
+        uint32_t jt0 = cpu_prof_now();
+        coco3_port_job((const struct tcc1014_port_job *)data);
+        g_cpu_prof.line_clk += cpu_prof_now() - jt0;
+        g_cpu_prof.line_n++;
+#else
+        coco3_port_job((const struct tcc1014_port_job *)data);
+#endif
+        return;
+    }
+#endif
 #ifdef CPU_PROF
     uint32_t lt0 = cpu_prof_now();
     coco3_bus_render_line(&g_c3bus, data, npixels);
@@ -1608,6 +1684,9 @@ static _Bool coco3_init(const uint8_t *rom) {
     g_gime3->port_render = true;                     // PIZERO-218: TCC1014_PORT_W pixels a line
     g_gime3->port_vram[0] = lo;
     g_gime3->port_vram[1] = hi;
+#ifdef COCO3_PORT_JOBS
+    g_gime3->port_defer = true;                      // PIZERO-330: decoded on core 1
+#endif
     tcc1014_notify_mode(g_gime3);
     tcc1014_reset(g_gime3);
     fastbus_sync();                                  // PIZERO-213: the GIME's map

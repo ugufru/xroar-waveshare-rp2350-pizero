@@ -41,11 +41,14 @@ core 0  (emulation + audio generation)        core 1  (display + audio encode)
 
 - **core 0** runs the emulator and produces both a video framebuffer and a stream of
   audio samples.
-- **core 1** does nothing but drive the display: it re-encodes the framebuffer to TMDS
+- **core 1** drives the display: it re-encodes the framebuffer to TMDS
   forever, and (in the audio builds) encodes audio data islands from inside the DVI
-  DMA IRQ, spread over the active and vblank lines (PIZERO-232).
-- Two lock-free hand-offs connect them: a published framebuffer pointer (`g_front`) and
-  a single-producer/single-consumer audio ring (`g_audio_w`/`g_audio_r`).
+  DMA IRQ, spread over the active and vblank lines (PIZERO-232). As a CoCo 3 it also
+  decodes the GIME's changed lines into the framebuffer while it waits for a free
+  TMDS buffer (PIZERO-330, step 2a).
+- Lock-free hand-offs connect them: a published framebuffer pointer (`g_front`), a
+  single-producer/single-consumer audio ring (`g_audio_w`/`g_audio_r`), and as a
+  CoCo 3 a ring of line decode jobs (`g_c3jobs`).
 
 Core launch: `core1_main()` in `src/main.cpp` registers the DVI IRQs, starts
 `libdvi`, and enters the static-framebuffer worker that never returns; `setup()`
@@ -98,10 +101,22 @@ and draws while the 6809 runs:
 - **Skipping:** a line whose inputs (VRAM bytes, mode, palette, border) hash
   the same as last frame's (`port_sum`) is passed as NULL. That keeps static
   screens cheap.
+- **Decode on core 1 (PIZERO-330):** a changed active line is not decoded on
+  core 0. `port_render_scanline` gathers its VRAM bytes and fills a
+  `struct tcc1014_port_job` (the bytes, mode and palette); `do_hs_fall` hands it
+  to `render_line` as npixels `TCC1014_PORT_JOB`. `coco3_render_line`
+  (`lib/coco_machine/src/coco_machine.cpp`) takes its framebuffer row
+  (`coco3_bus_job_dst`, which clears the row's hash) and puts the job in a
+  4-slot ring. Core 1 takes jobs in `dvi_idle_work` while it waits for libdvi's
+  next free TMDS buffer, so scanout comes first, and runs
+  `tcc1014_port_decode` straight into the row. When the ring is full core 0
+  decodes the line itself. The profiling build's `[prof3] core1` line gives
+  core 1's decode share and the ring-full count.
 - **Decode:** each bitplane graphics mode and resolution has its own loop
-  (`PORT_LOOP`, PIZERO-220).
+  (`PORT_LOOP`, PIZERO-220), in `tcc1014_port_decode`.
 - **Sink:** `coco3_bus_render_line` (`lib/coco_machine/src/coco3_bus.h`)
-  copies the row into `g_fb` as it is (GIME colours are `g_pal565[0..63]`),
+  copies the other lines (border, sync, and every line in builds without
+  `VIDEO_640`) into `g_fb` as they are (GIME colours are `g_pal565[0..63]`),
   centring 192 lines at row 24 and 225 at row 7. It has its own per-row hash
   as well.
 - **Redraw:** anything else that draws into `g_fb` (the overlay) calls
@@ -280,7 +295,7 @@ Symbols rather than line numbers, since the files move.
 
 | Stage                         | File : symbol                                                        |
 |-------------------------------|---------------------------------------------------------------------|
-| CoCo 3 scanline render       | `lib/xroar_core/src/tcc1014/tcc1014.c` : `port_render_scanline` / `do_hs_fall`; sink `lib/coco_machine/src/coco3_bus.h` : `coco3_bus_render_line` |
+| CoCo 3 scanline render       | `lib/xroar_core/src/tcc1014/tcc1014.c` : `port_render_scanline` / `do_hs_fall` / `tcc1014_port_decode`; sink `lib/coco_machine/src/coco3_bus.h` : `coco3_bus_render_line`; core 1's decode `lib/coco_machine/src/coco_machine.cpp` : `coco_machine_core1_work`, via `dvi_idle_work` in `lib/libdvi/dvi.cpp` |
 | VDG geometry / buffer         | `lib/coco_machine/src/coco_machine.h` : `COCO_VDG_W` / `coco_machine_get_vdg_buffer` |
 | Frame drive                   | `src/main.cpp` : `coco_machine_run_cycles` / `coco_machine_render_frame` (main loop) |
 | RGB565 blit                   | `src/coco_boot.cpp` : `coco_boot_blit_vdg_pizero_src`                |

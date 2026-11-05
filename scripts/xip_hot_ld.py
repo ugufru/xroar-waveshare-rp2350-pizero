@@ -26,6 +26,7 @@ HOT = [
     # GIME (tcc1014.c): per line, per frame, per timer tick, per bus cycle
     ".text.port_render_scanline",
     ".text.render_scanline",
+    ".text.tcc1014_port_decode",    # PIZERO-330: core 1 runs it too
     ".text.do_hs_fall",
     ".text.do_hs_rise",
     ".text.do_hb_irq",

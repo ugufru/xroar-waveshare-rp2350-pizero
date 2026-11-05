@@ -92,7 +92,34 @@ struct TCC1014 {
 	// port_redraw makes every line draw again (after the port drew over them).
 	const uint8_t *port_vram[2];
 	_Bool port_redraw;
+	// PIZERO-330: when set too, an active line that has to be drawn is not
+	// decoded here: render_line gets npixels TCC1014_PORT_JOB and data
+	// pointing to a struct tcc1014_port_job, everything the decode needs,
+	// for the port to run tcc1014_port_decode on it (on the other core).
+	// Valid only during the call.
+	_Bool port_defer;
 };
+
+// PIZERO-330: one active line's decode, gathered and hashed on the GIME's
+// side: the line's VRAM bytes and the mode and palette they are read in.
+#define TCC1014_PORT_JOB 0xFFFFu
+#define TCC1014_PORT_JOB_BYTES 196
+enum {
+	TCC1014_PJ_COCO = 1 << 0, TCC1014_PJ_GNA = 1 << 1, TCC1014_PJ_GM1 = 1 << 2,
+	TCC1014_PJ_GM0 = 1 << 3, TCC1014_PJ_CSS = 1 << 4, TCC1014_PJ_BP = 1 << 5,
+	TCC1014_PJ_RG_FULL = 1 << 6, TCC1014_PJ_INVT = 1 << 7, TCC1014_PJ_BLINK = 1 << 8,
+	TCC1014_PJ_ATTR = 1 << 9,
+};
+struct tcc1014_port_job {
+	uint8_t bytes[TCC1014_PORT_JOB_BYTES];
+	uint8_t pal[16];
+	uint16_t nbytes;      // bytes of pixel data (attribute bytes not counted)
+	uint16_t side;        // border pixels each side
+	uint16_t flags;       // TCC1014_PJ_*
+	uint8_t CRES, resolution, cmask, border, font_row, rowmask;
+};
+// The line's TCC1014_PORT_W pixels into pixel.
+void tcc1014_port_decode(const struct tcc1014_port_job *j, uint8_t *pixel);
 
 // PIZERO-134: TCC1014_PORT_FULL draws the 640 pixels at full resolution
 // instead of halving them, for a 640-wide display (80 columns).

@@ -213,6 +213,20 @@ void __dvi_func(dvi_static_framebuf_main_16bpp)(struct dvi_inst *inst, const uin
 volatile uint32_t g_dvi_c1_wait_us, g_dvi_c1_lines;
 #endif
 
+// PIZERO-330 (this project): work core 1 does while it waits for a free TMDS
+// buffer, so it never delays a line whose buffer is free: the CoCo 3's line
+// decode. Returns true when it did something (and is asked again), false
+// to sleep until the next event as before. NULL: none.
+bool (*volatile dvi_idle_work)(void);
+
+static inline void __dvi_func(dvi_take_free)(struct dvi_inst *inst, uint32_t **tmdsbuf) {
+	while (!queue_try_remove_u32(&inst->q_tmds_free, tmdsbuf)) {
+		bool (*work)(void) = dvi_idle_work;
+		if (!work || !work())
+			__wfe();
+	}
+}
+
 void __dvi_func(dvi_static_framebuf_main_pal8)(struct dvi_inst *inst, const uint8_t * volatile *framebuf_ptr, const uint16_t *palette) {
 	const uint h = inst->timing->v_active_lines / DVI_VERTICAL_REPEAT;
 	const uint w = inst->timing->h_active_pixels;
@@ -223,11 +237,11 @@ void __dvi_func(dvi_static_framebuf_main_pal8)(struct dvi_inst *inst, const uint
 			uint32_t *tmdsbuf;
 #ifdef CPU_PROF
 			uint32_t w0 = timer_hw->timerawl;
-			queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
+			dvi_take_free(inst, &tmdsbuf);
 			g_dvi_c1_wait_us += timer_hw->timerawl - w0;
 			g_dvi_c1_lines++;
 #else
-			queue_remove_blocking_u32(&inst->q_tmds_free, &tmdsbuf);
+			dvi_take_free(inst, &tmdsbuf);
 #endif
 			tmds_encode_pal8_sio(framebuf + y * w, palette, tmdsbuf, w, words_per_channel);
 			queue_add_blocking_u32(&inst->q_tmds_valid, &tmdsbuf);

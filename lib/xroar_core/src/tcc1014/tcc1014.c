@@ -301,6 +301,10 @@ struct TCC1014_private {
 	_Bool port_done;  // this scanline's port_line is drawn
 	_Bool port_skip;  // ... and unchanged since last frame: render_line gets NULL
 	uint32_t port_sum[TCC1014_PORT_LINES];  // per scanline: hash of its inputs, 0 = draw
+	// PIZERO-330: the active line's gathered bytes and mode; decoded here
+	// into port_line, or handed to render_line when port_defer is set.
+	struct tcc1014_port_job port_job;
+	_Bool port_job_ready;  // ... handed over at the line's end
 };
 
 // RP2350 port (PIZERO-133): serialisation removed, as for the other
@@ -956,12 +960,19 @@ static void do_hs_fall(void *sptr) {
 	if (gime->public.port_render) {
 		// RP2350 port (PIZERO-218): a line outside the active area is all
 		// border, or black in vertical sync.
-		if (!gime->port_done)
-			memset(gime->port_line, gime->vertical.sync ? 0 : gime->border_colour, TCC1014_PORT_W);
-		DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_PORT_W,
-		              gime->port_done && gime->port_skip ? NULL : gime->port_line);
+		if (gime->port_job_ready) {
+			// PIZERO-330: the port decodes it.
+			DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_PORT_JOB,
+			              (const uint8_t *)&gime->port_job);
+		} else {
+			if (!gime->port_done)
+				memset(gime->port_line, gime->vertical.sync ? 0 : gime->border_colour, TCC1014_PORT_W);
+			DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_PORT_W,
+			              gime->port_done && gime->port_skip ? NULL : gime->port_line);
+		}
 		gime->port_done = 0;
 		gime->port_skip = 0;
+		gime->port_job_ready = 0;
 	} else {
 		DELEGATE_CALL(gime->public.render_line, gime->burstn, TCC1014_tSL, gime->pixel_data);
 	}
@@ -1647,7 +1658,7 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 	unsigned nfetch = attr ? 2 * nbytes : nbytes;
 	if (nfetch > PORT_MAX_BYTES)
 		nfetch = PORT_MAX_BYTES, nbytes = attr ? nfetch / 2 : nfetch;
-	uint8_t buf[PORT_MAX_BYTES + 4];
+	uint8_t *buf = gime->port_job.bytes;   // PORT_MAX_BYTES + 4
 	{
 		_Bool have = gime->have_vdata_cache;
 		uint8_t cache = gime->vdata_cache;
@@ -1728,10 +1739,57 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 		}
 		gime->port_sum[sl] = h;
 	}
+	// PIZERO-330: the decode's inputs, for tcc1014_port_decode here or on
+	// the port's other core.
+	struct tcc1014_port_job *j = &gime->port_job;
+	memcpy(j->pal, pal, 16);
+	j->nbytes = nbytes;
+	j->side = (640 - tAA) / (1280 / TCC1014_PORT_W);
+	j->flags = (COCO ? TCC1014_PJ_COCO : 0) | (GnA ? TCC1014_PJ_GNA : 0) | (GM1 ? TCC1014_PJ_GM1 : 0)
+	         | (GM0 ? TCC1014_PJ_GM0 : 0) | (CSS ? TCC1014_PJ_CSS : 0) | (BP ? TCC1014_PJ_BP : 0)
+	         | (rg_full ? TCC1014_PJ_RG_FULL : 0) | (INVT ? TCC1014_PJ_INVT : 0)
+	         | (blink ? TCC1014_PJ_BLINK : 0) | (attr ? TCC1014_PJ_ATTR : 0);
+	j->CRES = CRES;
+	j->resolution = resolution;
+	j->cmask = cmask;
+	j->border = border;
+	j->font_row = font_row;
+	j->rowmask = rowmask;
 #ifdef CPU_PROF
 	uint32_t pr_t1 = cpu_prof_now();
 	g_cpu_prof.pr_gather += pr_t1 - pr_t0;
 #endif
+	if (gime->public.port_defer) {
+		gime->port_job_ready = 1;
+	} else {
+		tcc1014_port_decode(j, gime->port_line);
+	}
+#ifdef CPU_PROF
+	g_cpu_prof.pr_decode += cpu_prof_now() - pr_t1;
+	g_cpu_prof.pr_n++;
+	// PIZERO-322: which mode the drawn lines are in
+	g_cpu_prof.pr_mode = COCO | GnA << 1 | GM1 << 2 | GM0 << 3 | CSS << 4 | BP << 5 | attr << 6
+	                     | CRES << 8 | resolution << 12;
+	g_cpu_prof.pr_bytes = nbytes;
+	if (!(!COCO && BP)) g_cpu_prof.pr_general++;
+#endif
+}
+
+// PIZERO-330: the decode, from a job alone, so it can run on another core.
+void tcc1014_port_decode(const struct tcc1014_port_job *j, uint8_t *pixel) {
+	uint8_t *const line = pixel;
+	const unsigned f = j->flags;
+	const _Bool COCO = f & TCC1014_PJ_COCO, GnA = f & TCC1014_PJ_GNA, GM1 = f & TCC1014_PJ_GM1;
+	const _Bool GM0 = f & TCC1014_PJ_GM0, CSS = f & TCC1014_PJ_CSS, BP = f & TCC1014_PJ_BP;
+	const _Bool rg_full = f & TCC1014_PJ_RG_FULL, INVT = f & TCC1014_PJ_INVT;
+	const _Bool blink = f & TCC1014_PJ_BLINK, attr = f & TCC1014_PJ_ATTR;
+	const unsigned CRES = j->CRES, resolution = j->resolution;
+	const uint_fast8_t cmask = j->cmask;
+	const uint8_t border = j->border;
+	const unsigned font_row = j->font_row, rowmask = j->rowmask;
+	const unsigned nbytes = j->nbytes;
+	uint8_t pal[16];
+	memcpy(pal, j->pal, 16);
 
 	// Decode. Each VRAM byte becomes eight colours in one 64-bit word, the
 	// first pixel in the low byte: render_scanline's c0-c3 for its two 4-bit
@@ -1739,11 +1797,9 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 	// port_mask (byte i is 0xFF when bit 7-i is set); the four- and
 	// sixteen-colour ones look up pairs and quads. Then the word is emitted
 	// by resolution.
-	unsigned side = (640 - tAA) / (1280 / TCC1014_PORT_W);
-	uint8_t *pixel = gime->port_line;
-	memset(pixel, border, side);
-	pixel += side;
-	const uint8_t *src = buf;
+	memset(pixel, border, j->side);
+	pixel += j->side;
+	const uint8_t *src = j->bytes;
 
 	if (!COCO && BP) {
 		// PIZERO-220: the bitplane modes, the ones a game redraws whole,
@@ -1882,16 +1938,7 @@ static void port_render_scanline(struct TCC1014_private *gime, event_ticks t) {
 #endif
 	}
 
-	memset(pixel, border, TCC1014_PORT_W - (pixel - gime->port_line));
-#ifdef CPU_PROF
-	g_cpu_prof.pr_decode += cpu_prof_now() - pr_t1;
-	g_cpu_prof.pr_n++;
-	// PIZERO-322: which mode the drawn lines are in
-	g_cpu_prof.pr_mode = COCO | GnA << 1 | GM1 << 2 | GM0 << 3 | CSS << 4 | BP << 5 | attr << 6
-	                     | CRES << 8 | resolution << 12;
-	g_cpu_prof.pr_bytes = nbytes;
-	if (!(!COCO && BP)) g_cpu_prof.pr_general++;
-#endif
+	memset(pixel, border, TCC1014_PORT_W - (pixel - line));
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

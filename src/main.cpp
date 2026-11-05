@@ -2546,6 +2546,9 @@ void setup() {
 #endif
     dvi_sio_tmds_encode = g_settings.video_hw_encode;   // PIZERO-175: the default until settings.txt
     stack1_paint();                    // PIZERO-319
+#ifdef VIDEO_640
+    dvi_idle_work = coco_machine_core1_work;   // PIZERO-330: the CoCo 3's line decode
+#endif
     multicore_launch_core1(core1_main);
 #ifdef CPU_PROF
     pc_sample_start();                 // PIZERO-331
@@ -3234,10 +3237,23 @@ void loop() {
                     uint32_t now = time_us_32(), span = now - c1_last_us;
                     uint32_t wait = g_dvi_c1_wait_us, lines = g_dvi_c1_lines;
                     g_dvi_c1_wait_us = 0; g_dvi_c1_lines = 0;
+#if defined(VIDEO_640) && defined(TCC1014_PORT_FULL)
+                    // PIZERO-330: core 1's decode runs inside its wait.
+                    extern volatile uint32_t g_c3job_queued, g_c3job_full, g_c3job_c1_us;
+                    uint32_t jq = g_c3job_queued, jf = g_c3job_full, jus = g_c3job_c1_us;
+                    g_c3job_queued = g_c3job_full = g_c3job_c1_us = 0;
+#else
+                    uint32_t jq = 0, jf = 0, jus = 0;
+#endif
+                    if (jus > wait) jus = wait;
+                    wait -= jus;
                     if (c1_last_us && span)
-                        tprintf("[prof3] core1: waiting %lu.%lu%% of the time, %lu lines/s encoded\r\n",
+                        tprintf("[prof3] core1: waiting %lu.%lu%% of the time, decoding %lu.%lu%%, %lu lines/s encoded"
+                                " | jobs %lu/s, decoded on core 0 (ring full) %lu/s\r\n",
                                 (unsigned long)(wait * 100ull / span), (unsigned long)(wait * 1000ull / span % 10),
-                                (unsigned long)(lines * 1000000ull / span));
+                                (unsigned long)(jus * 100ull / span), (unsigned long)(jus * 1000ull / span % 10),
+                                (unsigned long)(lines * 1000000ull / span),
+                                (unsigned long)(jq * 1000000ull / span), (unsigned long)(jf * 1000000ull / span));
                     c1_last_us = now;
                 }
                 pc_sample_print(tprintf);          // PIZERO-331

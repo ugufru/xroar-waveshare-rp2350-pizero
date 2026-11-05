@@ -42,3 +42,7 @@ documented by `PIZERO-NN` references in the source comments:
   flag on whichever subpacket starts a 192-frame block. The upstream packet set
   V=1, sent no channel status and could skip block starts.
 - `pio_set_gpio_base(pio, 16)` support for TMDS on GPIO 32–39 (RP2350B).
+- `dvi_static_framebuf_main_pal8` (PIZERO-134) calls `dvi_idle_work`, a hook
+  the firmware sets, while it waits for a free TMDS buffer instead of only
+  sleeping, so core 1 can decode the CoCo 3's lines between scanlines
+  (PIZERO-330). The profiling build times that wait (`g_dvi_c1_wait_us`).

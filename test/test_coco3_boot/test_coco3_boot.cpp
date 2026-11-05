@@ -229,6 +229,15 @@ static void check_port_render(const char *what, const struct reg_write *w, int n
     render_run(2, w, nw);                       // through fetch_vram
     memcpy(fb2, c3_fb(), sizeof fb2);
     TEST_ASSERT_EQUAL_MEMORY_MESSAGE(g_fb_ref, fb2, sizeof fb2, what);
+    render_run(3, w, nw);                       // PIZERO-330: as jobs
+    memcpy(fb2, c3_fb(), sizeof fb2);
+    {
+        int nj = 0, bj = -1;
+        for (int i = 0; i < 320 * 240; i++) if (fb2[i] != g_fb_ref[i]) { if (bj < 0) bj = i; nj++; }
+        char m[128];
+        snprintf(m, sizeof m, "%s as jobs: %d pixels differ, first at x=%d y=%d", what, nj, bj % 320, bj / 320);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(0, nj, m);
+    }
     render_run(1, w, nw);
     const uint16_t *fb = c3_fb();
     int bad = -1, n = 0;

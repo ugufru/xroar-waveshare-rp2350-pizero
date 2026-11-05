@@ -53,8 +53,11 @@ void pc_sample_start(void) {
     // the slot still holds its default, and the core's getCycleCount has it.
     ((exception_handler_t *)scb_hw->vtor)[SYSTICK_EXCEPTION] = (exception_handler_t)pcs_isr;
     __asm volatile("dsb; isb" ::: "memory");
-    // SysTick at the highest priority, so time inside interrupts is sampled too.
-    scb_hw->shpr[2] = (scb_hw->shpr[2] & 0x00FFFFFFu);
+    // SysTick at the lowest priority: at the highest (to sample time inside
+    // interrupts too) the board froze in its frame pacing and the freeze
+    // watchdog rebooted it, about once a minute. So time in interrupts is
+    // not sampled: a sample falls just after the interrupt returns.
+    scb_hw->shpr[2] = (scb_hw->shpr[2] & 0x00FFFFFFu) | 0xF0000000u;
     systick_hw->csr = 0;
     systick_hw->rvr = PCS_RELOAD - 1;
     systick_hw->cvr = 0;

@@ -198,6 +198,17 @@ static inline uint32_t coco3_bus_line_sum(const uint8_t *src, int n) {
     return h | 1u;
 }
 
+// PIZERO-330: a line the GIME hands over undecoded (npixels TCC1014_PORT_JOB):
+// where its COCO3_FB_W pixels go, NULL for none. The caller decodes it there
+// (tcc1014_port_decode), now or on the other core. The row's sum is cleared,
+// as what it will show is not hashed here.
+static inline coco3_pix_t *coco3_bus_job_dst(struct coco3_bus *b) {
+    int row = coco3_bus_row(b, b->line++);
+    if (row < 0 || !b->fb) return NULL;
+    b->row_sum[row] = 0;
+    return b->fb + row * COCO3_FB_W;
+}
+
 // One scanline from the GIME. npixels says which form: COCO3_FB_W (its
 // port_render form, PIZERO-218: the shown pixels, already reduced to it) or
 // a whole scanline, of which the 640 around the active area are taken here.
