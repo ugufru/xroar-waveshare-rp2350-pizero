@@ -7,11 +7,12 @@ ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`). The short ranked
 list of what to pick up next is `roadmap.jsonl` (shown at the top of
 `issues.html`).
 
-_Last updated: 2026-11-01, evening (the CoCo Zero is a CoCo 3, `PIZERO-280`;
-switching machine in place, `314`, `319`; boot times and the `debug` setting,
-`315`, `316`; the MIDI Pak, `287`; a DAC-off soak for `203` running. Earlier the
-same day: directory drives agreed and sequenced, `PIZERO-288` to `304`; the
-FILES list and line endings, `289`, `294` to `296`, `309` to `313`)._
+_Last updated: 2026-11-05 (the CoCo 3 demos at full speed on average:
+`PIZERO-326`, `327`, `330`, `331`, `333`, `334` done, SCARED from about 190 to
+136.3 host clocks per emulated cycle; the peaks are `335`. Before that,
+2026-11-01: the CoCo Zero is a CoCo 3, `PIZERO-280`; switching machine in
+place, `314`, `319`; a DAC-off soak for `203` running; directory drives agreed
+and sequenced, `PIZERO-288` to `304`)._
 
 ## Where things stand
 
@@ -155,6 +156,24 @@ What is left is small, and none of it blocks the next work: **`PIZERO-216`** (LO
 **`PIZERO-237`** (faster 640-wide screenshots, a host test of that path).
 
 Related CPU-speed item: **`PIZERO-211`** (RAM back from the fast 6809 core).
+
+## CoCo 3 demo speed (`PIZERO-325`, from 2026-11-04)
+
+The demos (SCARED, DDEMO) ran at about three quarters of full speed: about
+190 host clocks per emulated cycle against the 141 a 252 MHz core 0 allows at
+1.79 MHz. Each step is measured on `pizero_coco3_prof` (`docs/BUILD.md`), and
+the demos' own code is never looked at (diagnosed from the emulator's side).
+
+- Done: **`PIZERO-326`** (interrupt line sampling), **`327`** (the
+  instruction loop), **`330`** (changed lines decoded on core 1), **`331`**
+  (the hot flash code grouped for the XIP cache), **`333`** (border lines a
+  compare), **`334`** (PIA reads straight to the PIA). SCARED now averages
+  **136.3**, about 95% of full speed in the profiling build; the user reports
+  every demo running great on the product build.
+- Next: **`PIZERO-335`** (the heaviest stretches still peak at about 166),
+  then the 6809 core rewrites **`PIZERO-328`** (registers in host registers)
+  and **`329`** (computed-goto dispatch). **`PIZERO-332`** does for the CoCo 2
+  what `331` did for the CoCo 3. The tear-free picture stays in `325`.
 
 ## The AY-3-8910 (done 2026-10-22)
 
