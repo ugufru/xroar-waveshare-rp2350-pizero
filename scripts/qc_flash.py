@@ -216,11 +216,13 @@ def main():
 
     while True:
         rows = read_log()
-        # Next after the highest, so a row removed from the log never lets
-        # a unit number (or its photo and log file names) be used twice.
-        unit = max([int(r["unit"]) for r in rows if r.get("unit", "").isdigit()] or [0]) + 1
-        known = {r["board_serial"]: r["unit"] for r in rows if r.get("board_serial")}
-        say("=== Unit %d ===" % unit)
+        # PIZERO-337: a unit number names a board, not a run. A board seen
+        # before keeps its number; a new one takes the next after the
+        # highest, so a number is never given to two boards.
+        known = {r["board_serial"]: int(r["unit"]) for r in rows
+                 if r.get("board_serial") and r.get("unit", "").isdigit()}
+        next_unit = max(list(known.values()) or [0]) + 1
+        say("=== Next board (a new one would be unit %d) ===" % next_unit)
         cmd = ask("Hold BOOT, plug the board's power USB-C port into this Mac, let go of BOOT,\n"
                   "then press Enter (q to finish): ").strip().lower()
         if cmd == "q":
@@ -243,10 +245,17 @@ def main():
         board_serial = port.serial_number or "unknown"
         say("  Board serial: %s" % board_serial)
         if board_serial in known:
-            say("  NOTE: this board is already in the log as unit %s." % known[board_serial])
+            unit = known[board_serial]
+            say("  This board is unit %d (logged before); this run is logged as unit %d again." % (unit, unit))
+        else:
+            unit = next_unit
+            say("  A new board: unit %d." % unit)
         ok_boot, lines = capture_boot(port.device)
         say("  Boot check: %s" % ("PASS (BASIC up, display at 60 fps, USB host running)" if ok_boot else "FAIL"))
         stem = "%02d-%s" % (unit, board_serial)
+        if os.path.exists(os.path.join(QC, "photos", stem + ".jpg")) or \
+           os.path.exists(os.path.join(QC, "logs", stem + ".txt")):
+            stem += "-" + datetime.datetime.now().strftime("%Y-%m-%d-%H%M")   # a reflash
         log_path = os.path.join(QC, "logs", stem + ".txt")
         with open(log_path, "w") as f:
             f.write("\n".join(lines) + "\n")
@@ -290,7 +299,9 @@ def main():
             % (unit, board_serial, sticker or "(none)", "pass" if ok_boot else "FAIL"))
 
     rows = read_log()
-    say("\n%d unit(s) in %s." % (len(rows), os.path.relpath(LOG, ROOT)))
+    rows = read_log()
+    say("\n%d board(s), %d run(s) in %s." % (len({r["unit"] for r in rows}), len(rows),
+                                              os.path.relpath(LOG, ROOT)))
 
 
 if __name__ == "__main__":
