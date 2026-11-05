@@ -170,9 +170,10 @@ the demos' own code is never looked at (diagnosed from the emulator's side).
   compare), **`334`** (PIA reads straight to the PIA). SCARED now averages
   **136.3**, about 95% of full speed in the profiling build; the user reports
   every demo running great on the product build.
-- Next: **`PIZERO-335`** (the heaviest stretches still peak at about 166),
-  then the 6809 core rewrites **`PIZERO-328`** (registers in host registers)
-  and **`329`** (computed-goto dispatch). **`PIZERO-332`** does for the CoCo 2
+- **`PIZERO-335`** (peaks of about 166 on the profiling build) closed: on
+  the product build every demo runs great (user, 2026-11-05). Headroom from
+  here is the 6809 core rewrites **`PIZERO-328`** (registers in host
+  registers) and **`329`** (computed-goto dispatch). **`PIZERO-332`** does for the CoCo 2
   what `331` did for the CoCo 3. The tear-free picture stays in `325`.
 
 ## The AY-3-8910 (done 2026-10-22)
