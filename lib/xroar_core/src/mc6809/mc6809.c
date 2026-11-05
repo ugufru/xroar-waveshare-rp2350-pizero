@@ -330,6 +330,9 @@ static void HOT_FUNC(mc6809_run)(struct MC6809 *cpu) {
 
 		case mc6809_state_next_instruction: {
 			unsigned op;
+#ifndef TRACE
+		next_instruction:     // PIZERO-327: straight here from the last one
+#endif
 			CPU_PROF_INSN();
 			// Fetch op-code and process
 			op = byte_immediate(cpu);
@@ -1332,6 +1335,19 @@ static void HOT_FUNC(mc6809_run)(struct MC6809 *cpu) {
 		cpu->firq_active = cpu->firq_latch;
 		cpu->irq_active = cpu->irq_latch;
 		instruction_posthook(cpu);
+#ifndef TRACE
+		// PIZERO-327: with nothing pending, what label_a and label_b would
+		// decide (no halt, no interrupt it can take, no instruction hook,
+		// still running) is the next fetch, so go there without three more
+		// passes through the state switch. Anything else takes them.
+		if (LIKELY(cpu->running && !cpu->halt && !cpu->nmi_active
+		           && !(cpu->firq_active && !(REG_CC & CC_F))
+		           && !(cpu->irq_active && !(REG_CC & CC_I))
+		           && !cpu->debug_cpu.instruction_hook.func)) {
+			cpu->page = 0;
+			goto next_instruction;
+		}
+#endif
 		continue;
 
 	} while (cpu->running);
