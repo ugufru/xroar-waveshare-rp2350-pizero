@@ -150,7 +150,18 @@ def capture_boot(port, seconds=8):
     s.close()
     lines = buf.decode(errors="replace").splitlines()
     text = "\n".join(lines)
-    ok = "DVI up" in text and "USB host up" in text
+    if "DVI up" in text and "USB host up" in text:
+        return True, lines
+    # PIZERO-336: since PIZERO-316 the boot's own lines are held until a
+    # monitor opens the port, and without debug = on they are gone by the
+    # time this connects. What does come through is the [boot] times line
+    # (BASIC reached, basic=) and the [run] lines once a second: pass when
+    # BASIC came up and a [run] line shows the display at 60 fps (core 1
+    # scanning out) with the USB host's frame counter (sof=) running.
+    fps = [int(m) for m in re.findall(r"\[run\] fps=(\d+)", text)]
+    sof = [int(m) for m in re.findall(r"\[run\] .*?sof=(\d+)", text)]
+    ok = (re.search(r"\[boot\] times ms: .* basic=\d+", text) is not None
+          and any(f >= 58 for f in fps) and len(sof) >= 2 and sof[-1] > sof[0])
     return ok, lines
 
 
@@ -234,7 +245,7 @@ def main():
         if board_serial in known:
             say("  NOTE: this board is already in the log as unit %s." % known[board_serial])
         ok_boot, lines = capture_boot(port.device)
-        say("  Boot check: %s" % ("PASS (display and USB host up)" if ok_boot else "FAIL"))
+        say("  Boot check: %s" % ("PASS (BASIC up, display at 60 fps, USB host running)" if ok_boot else "FAIL"))
         stem = "%02d-%s" % (unit, board_serial)
         log_path = os.path.join(QC, "logs", stem + ".txt")
         with open(log_path, "w") as f:
