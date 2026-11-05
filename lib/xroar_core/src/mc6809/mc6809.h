@@ -105,7 +105,15 @@ struct MC6809 {
 	_Bool nmi_armed;
 	_Bool nmi_latch, firq_latch, irq_latch;
 	_Bool nmi_active, firq_active, irq_active;
+	// PIZERO-326 (port): a line or nmi_armed may have changed since the
+	// latches were last sampled. Every bus cycle samples them only then.
+	_Bool lines_dirty;
 };
+#define MC6809_LINES_DIRTY 1
+
+// PIZERO-326: anything that sets nmi_armed or the lines outside the setters
+// below must also set lines_dirty.
+#define MC6809_ARM_NMI(cpu) do { (cpu)->nmi_armed = 1; (cpu)->lines_dirty = 1; } while (0)
 
 #if __BYTE_ORDER == __BIG_ENDIAN
 # define MC6809_REG_HI (0)
@@ -122,16 +130,18 @@ inline void MC6809_HALT_SET(struct MC6809 *cpu, _Bool val) {
 	cpu->halt = val;
 }
 
+// PIZERO-326: only a change marks the latches for sampling, so the machine
+// can set the lines on every slow cycle without making the next one sample.
 inline void MC6809_NMI_SET(struct MC6809 *cpu, _Bool val) {
-	cpu->nmi = val;
+	if (cpu->nmi != val) { cpu->nmi = val; cpu->lines_dirty = 1; }
 }
 
 inline void MC6809_FIRQ_SET(struct MC6809 *cpu, _Bool val) {
-	cpu->firq = val;
+	if (cpu->firq != val) { cpu->firq = val; cpu->lines_dirty = 1; }
 }
 
 inline void MC6809_IRQ_SET(struct MC6809 *cpu, _Bool val) {
-	cpu->irq = val;
+	if (cpu->irq != val) { cpu->irq = val; cpu->lines_dirty = 1; }
 }
 
 // Used by MC6809-compatibles:

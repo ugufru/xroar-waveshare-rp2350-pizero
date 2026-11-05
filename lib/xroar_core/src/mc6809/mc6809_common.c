@@ -61,6 +61,21 @@ extern void coco_mem_cycle(void *sptr, _Bool RnW, uint16_t A);
 extern void coco_mem_nvma(void *sptr);
 
 #include "cpu_prof.h"   // PIZERO-209: empty unless CPU_PROF
+
+// Every bus cycle latches the interrupt lines as they stand at its start
+// (an NMI is remembered once armed). PIZERO-326: the lines only change in
+// the setters (mc6809.h), in the machine's slow path, and nmi_armed when S
+// is loaded, which all mark lines_dirty; the rest of the time the latches
+// already hold what sampling would store, so a cycle samples only then. A
+// change made during cycle N is seen from cycle N+1, as before.
+#define MC6809_SAMPLE_LINES(cpu) do { \
+		if (UNLIKELY((cpu)->lines_dirty)) { \
+			(cpu)->nmi_latch |= ((cpu)->nmi_armed && (cpu)->nmi); \
+			(cpu)->firq_latch = (cpu)->firq; \
+			(cpu)->irq_latch = (cpu)->irq; \
+			(cpu)->lines_dirty = 0; \
+		} \
+	} while (0)
 #include "coco_fastbus.h"  // PIZERO-131: RAM and ROM without the decode
 
 // PIZERO-131: RAM, BASIC ROM and cartridge ROM are read here, and RAM
@@ -101,9 +116,7 @@ static void __attribute__((noinline)) HOT_FUNC(slow_write)(struct MC6809 *cpu, u
 
 static CPU_PROF_INLINE uint8_t fetch_byte_notrace(struct MC6809 *cpu, uint16_t a) {
 	CPU_PROF_BUS_BEGIN();
-	cpu->nmi_latch |= (cpu->nmi_armed && cpu->nmi);
-	cpu->firq_latch = cpu->firq;
-	cpu->irq_latch = cpu->irq;
+	MC6809_SAMPLE_LINES(cpu);
 #ifdef COCO_FASTBUS_PAGES
 	const uint8_t *p;
 	if (a < coco_fastbus.page_top && (p = coco_fastbus.rd[a >> 13])) {
@@ -151,9 +164,7 @@ static uint16_t HOT_FUNC(fetch_word)(struct MC6809 *cpu, uint16_t a) {
 
 static CPU_PROF_INLINE void store_byte(struct MC6809 *cpu, uint16_t a, uint8_t d) {
 	CPU_PROF_BUS_BEGIN();
-	cpu->nmi_latch |= (cpu->nmi_armed && cpu->nmi);
-	cpu->firq_latch = cpu->firq;
-	cpu->irq_latch = cpu->irq;
+	MC6809_SAMPLE_LINES(cpu);
 	cpu->D = d;
 #ifdef COCO_FASTBUS_PAGES
 	uint8_t *p;
@@ -179,9 +190,7 @@ static CPU_PROF_INLINE void store_byte(struct MC6809 *cpu, uint16_t a, uint8_t d
 // A dummy cycle samples the interrupt lines like any other.
 static CPU_PROF_INLINE void nvma_cycle(struct MC6809 *cpu) {
 	CPU_PROF_BUS_BEGIN();
-	cpu->nmi_latch |= (cpu->nmi_armed && cpu->nmi);
-	cpu->firq_latch = cpu->firq;
-	cpu->irq_latch = cpu->irq;
+	MC6809_SAMPLE_LINES(cpu);
 	if (coco_fastbus_advance(coco_fastbus.rom_ticks))
 		cpu->D = coco_fastbus.rom[0x3fff];   // what a read of $FFFF finds
 	else

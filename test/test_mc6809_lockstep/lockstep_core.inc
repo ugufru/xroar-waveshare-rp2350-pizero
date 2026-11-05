@@ -129,11 +129,17 @@ static void LS(set_regs)(void *vcpu, const struct ls_regs *i) {
     cpu->reg_x = i->x; cpu->reg_y = i->y; cpu->reg_u = i->u; cpu->reg_s = i->s; cpu->reg_pc = i->pc;
     cpu->nmi_armed = i->nmi_armed;
     cpu->nmi_latch = i->nmi_latch; cpu->firq_latch = i->firq_latch; cpu->irq_latch = i->irq_latch;
+#ifdef MC6809_LINES_DIRTY
+    cpu->lines_dirty = 1;                    // PIZERO-326: written directly
+#endif
 }
 
 static void LS(set_lines)(void *vcpu, int halt, int nmi, int firq, int irq) {
     struct MC6809 *cpu = (struct MC6809 *)vcpu;
     cpu->halt = halt; cpu->nmi = nmi; cpu->firq = firq; cpu->irq = irq;
+#ifdef MC6809_LINES_DIRTY
+    cpu->lines_dirty = 1;                    // PIZERO-326: written directly
+#endif
 }
 
 const struct ls_core LS_TABLE = {
