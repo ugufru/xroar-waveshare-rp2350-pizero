@@ -70,6 +70,7 @@
 #define OVL_EMPTY_BIN    "NO PROGRAMS FOUND. PUT .BIN FILES IN /COCO/BIN ON THE SD CARD."
 #define OVL_EMPTY_CART   "NO CARTRIDGES FOUND. PUT .CCC FILES IN /COCO/CART ON THE SD CARD."
 #define OVL_SKIPPED      "%d NAME(S) TOO LONG, NOT SHOWN"
+#define OVL_NO_MEMORY    "NO MEMORY FOR THE LIST"   // PIZERO-273
 
 // The lists, in Left/Right order. The catalogue lists share enum cat_kind's
 // numbers (disk_overlay.cpp checks).

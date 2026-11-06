@@ -232,7 +232,11 @@ extern "C" bool coco_boot_find_default_dsk(char *out, size_t out_sz) {
 // duplicates) are in dsk_catalog.h and tested on the host; this is only the
 // FatFs walk. The kind's folder first, then /coco, so a name in both is
 // listed from the kind's folder, as coco_boot_resolve would find it.
-static struct dsk_catalog g_dsk_cat;
+// PIZERO-273: the list (about 8 KB) is on the heap, taken by a rescan and
+// given back by coco_boot_catalog_release when the overlay closes, so the
+// machine has it the rest of the time. Null when not held.
+static struct dsk_catalog *g_cat;
+#define g_dsk_cat (*g_cat)
 
 static void cat_scan_dir(const char *dir, uint8_t which) {
     DIR d;
@@ -305,6 +309,11 @@ static int text_scan_dir(struct text_scan_ws *w, const char *sub, bool top) {
 }
 
 extern "C" int coco_boot_rescan(int kind) {
+    if (!g_cat) g_cat = (struct dsk_catalog *)malloc(sizeof *g_cat);
+    if (!g_cat) {
+        Serial.printf("[dsk] no memory for the list (%u bytes)\r\n", (unsigned)sizeof *g_cat);
+        return 0;
+    }
     dsk_cat_clear(&g_dsk_cat, kind);
     if (kind == CAT_TEXT) {
         struct text_scan_ws *w = (struct text_scan_ws *)malloc(sizeof *w);
@@ -353,7 +362,12 @@ extern "C" int coco_boot_rescan(int kind) {
 }
 
 extern "C" const struct dsk_catalog *coco_boot_dsk_catalog(void) {
-    return &g_dsk_cat;
+    return g_cat;
+}
+
+extern "C" void coco_boot_catalog_release(void) {
+    free(g_cat);
+    g_cat = nullptr;
 }
 
 // PIZERO-145: read /coco/settings.txt into *out, starting from the defaults.

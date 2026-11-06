@@ -92,7 +92,7 @@ static void legend(void) { set_status(k_legend[g_kind]); }
 // Which drives hold catalogue entry i, as a bit mask. Disks only.
 static unsigned drives_holding(const struct dsk_catalog *cat, int i) {
     unsigned mask = 0;
-    if (cat->kind != CAT_DSK) return 0;
+    if (!cat || cat->kind != CAT_DSK) return 0;
     for (unsigned d = 0; d < OVL_NDRIVE; d++) {
         const char *p = coco_boot_drive_path(d);
         if (p && dsk_cat_find_path(cat, p) == i) mask |= 1u << d;
@@ -104,7 +104,7 @@ static unsigned drives_holding(const struct dsk_catalog *cat, int i) {
 static const char *files_name(const struct dsk_catalog *cat, int i) {
     if (i < OVL_NFILES) return k_files[i].name;
     i -= OVL_NFILES;
-    return (cat->kind == CAT_TEXT && i < cat->n) ? cat->e[i].name : "";
+    return (cat && cat->kind == CAT_TEXT && i < cat->n) ? cat->e[i].name : "";
 }
 
 static void draw(void) {
@@ -127,8 +127,8 @@ static void draw(void) {
             coco_boot_card_text(0, 1 + r, line);
             if (i == g_ovk.sel) coco_boot_card_invert_row(1 + r);
         }
-    } else if (cat->n == 0) {
-        coco_boot_card_wrap(2, 3, 28, 6, k_empty[g_kind]);
+    } else if (!cat || cat->n == 0) {             // PIZERO-273: no list without memory
+        coco_boot_card_wrap(2, 3, 28, 6, cat ? k_empty[g_kind] : OVL_NO_MEMORY);
     } else {
         g_top = ovk_top(g_ovk.sel, g_top, cat->n);
         for (int r = 0; r < OVK_ROWS && g_top + r < cat->n; r++) {
@@ -158,7 +158,9 @@ static void load_list(void) {
     int n = coco_boot_rescan(g_kind);                   // FILES: CAT_TEXT (PIZERO-296)
     ovk_set_count(&g_ovk, g_kind == OVL_FILES ? OVL_NFILES + n : n);
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
-    if (cat->skipped_long) {
+    if (!cat) {
+        set_status(OVL_NO_MEMORY);
+    } else if (cat->skipped_long) {
         char msg[CARD_COLS + 1];
         snprintf(msg, sizeof msg, OVL_SKIPPED, cat->skipped_long);
         set_status(msg);
@@ -175,7 +177,8 @@ static void open_now(void) {
     load_list();                          // a swapped card is seen at once
     if (g_kind == CAT_DSK) {
         const char *p = coco_boot_drive_path(coco_machine_fdc_drive());
-        int i = p ? dsk_cat_find_path(coco_boot_dsk_catalog(), p) : -1;
+        const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+        int i = (p && cat) ? dsk_cat_find_path(cat, p) : -1;
         if (i >= 0) g_ovk.sel = i;
     }
     Serial.printf("[overlay] open: list %d, %d entries\r\n", g_kind, g_ovk.n);
@@ -198,7 +201,7 @@ static void switch_kind(int dir) {
 static void toggle_drive(int d) {
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     int i = g_ovk.sel;
-    if (g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
+    if (!cat || g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
     char name[20];
     dsk_cat_display_name(cat->e[i].name, name, 16);   // leave room for the words
     char msg[CARD_COLS + 1];
@@ -220,7 +223,7 @@ static void toggle_drive(int d) {
 static void toggle_protect(void) {
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     int i = g_ovk.sel;
-    if (g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
+    if (!cat || g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
     unsigned mask = drives_holding(cat, i);
     if (!mask) { set_status("PUT IT IN A DRIVE FIRST"); return; }
     char msg[CARD_COLS + 1] = "";
@@ -263,7 +266,7 @@ static void new_disk(void) {
 static void rename_disk(void) {
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     int i = g_ovk.sel;
-    if (g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
+    if (!cat || g_kind != CAT_DSK || i < 0 || i >= cat->n) return;
     g_rename_sel = i;
     snprintf(g_new_name, sizeof g_new_name, "%s", cat->e[i].name);
     size_t l = strlen(g_new_name);
@@ -278,7 +281,8 @@ static void new_disk_commit(void) {
     char name[NEW_NAME_MAX + 8], msg[CARD_COLS + 1], old_path[DSK_NAME_MAX + 16];
     int rc;
     if (g_renaming) {
-        if (!dsk_cat_path(coco_boot_dsk_catalog(), g_rename_sel, old_path, sizeof old_path)) return;
+        const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+        if (!cat || !dsk_cat_path(cat, g_rename_sel, old_path, sizeof old_path)) return;
         rc = coco_boot_rename_dsk(old_path, g_new_name, name, sizeof name);
     } else {
         rc = coco_boot_create_blank_dsk(g_new_name, name, sizeof name);
@@ -287,7 +291,8 @@ static void new_disk_commit(void) {
     if (rc != 0) { set_status(g_renaming ? "CANNOT RENAME IT: SD CARD?" : "CANNOT MAKE THE DISK: SD CARD?"); return; }
     int n = coco_boot_rescan(g_kind);
     ovk_set_count(&g_ovk, n);
-    int i = dsk_cat_find_name(coco_boot_dsk_catalog(), name);
+    const struct dsk_catalog *cat = coco_boot_dsk_catalog();
+    int i = cat ? dsk_cat_find_name(cat, name) : -1;
     if (i >= 0) g_ovk.sel = i;
     g_dirty = true;
     snprintf(msg, sizeof msg, g_renaming ? "RENAMED TO %s" : "%s MADE: 0-3 PUTS IT IN", name);
@@ -397,7 +402,7 @@ static void edit_file(const uint8_t codes[6]) {
         return;
     }
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
-    if (cat->kind != CAT_TEXT) return;
+    if (!cat || cat->kind != CAT_TEXT) return;
     int d = dsk_cat_drive(cat, i - OVL_NFILES);
     if (d >= 0) { view_disk_file(d, cat->e[i - OVL_NFILES].name, codes); return; }   // PIZERO-309
     char path[DSK_NAME_MAX + 16];
@@ -416,7 +421,7 @@ static void edit_game_settings(const uint8_t codes[6]) {
     if (g_kind == OVL_FILES || g_kind == OVL_INFO) return;
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     char game[DSK_NAME_MAX + 16], path[DSK_NAME_MAX + 16];
-    if (!dsk_cat_path(cat, g_ovk.sel, game, sizeof game)) return;
+    if (!cat || !dsk_cat_path(cat, g_ovk.sel, game, sizeof game)) return;
     if (!settings_game_path(game, path, sizeof path)) { set_status(OVL_NO_SETTINGS); return; }
     const char *slash = strrchr(path, '/');
     if (!editable(path)) return;             // PIZERO-296
@@ -428,7 +433,7 @@ static void edit_game_settings(const uint8_t codes[6]) {
 static bool launch(void) {
     const struct dsk_catalog *cat = coco_boot_dsk_catalog();
     char path[DSK_NAME_MAX + 16];
-    if (!g_launch || !dsk_cat_path(cat, g_ovk.sel, path, sizeof path)) return false;
+    if (!g_launch || !cat || !dsk_cat_path(cat, g_ovk.sel, path, sizeof path)) return false;
     char msg[CARD_COLS + 1] = "";
     if (!g_launch(g_kind, path, msg, sizeof msg)) {
         set_status(msg[0] ? msg : "CANNOT START THAT");
@@ -502,6 +507,7 @@ bool disk_overlay_key(uint8_t mods, const uint8_t codes[6], uint32_t frame, bool
         break;
     default: break;
     }
+    if (shut) coco_boot_catalog_release();   // PIZERO-273: the machine gets the 8 KB back
     if (closed) *closed = shut;
     return r.swallow;
 }

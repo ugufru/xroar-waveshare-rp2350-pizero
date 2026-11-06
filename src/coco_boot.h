@@ -29,7 +29,10 @@ bool coco_boot_find_default_dsk(char *out, size_t out_sz);
 // (enum cat_kind in dsk_catalog.h). Returns the number of entries listed.
 struct dsk_catalog;
 int coco_boot_rescan(int kind);
+// PIZERO-273: the list from the last coco_boot_rescan, or null when none
+// is held (released, or no memory for it).
 const struct dsk_catalog *coco_boot_dsk_catalog(void);
+void coco_boot_catalog_release(void);
 
 // Parsed autorun.txt. Bare-name fields (cart_name etc.) are "" if the
 // corresponding directive was absent. `autotype` is a concatenation of

@@ -756,7 +756,10 @@ static uint8_t g_coco_rom[16384];
 #else
 #define COCO_CART_MAX 8192
 #endif
-static uint8_t g_cart_rom[COCO_CART_MAX];
+// PIZERO-271: the cartridge (2 to COCO_CART_MAX bytes) is on the heap, the
+// size of the image, and given back when it is unplugged: Disk BASIC takes
+// 8 KB, a session with no cartridge none.
+static uint8_t *g_cart_rom = nullptr;
 
 static bool mount_sd() {
     static FATFS fs;
@@ -1474,6 +1477,7 @@ static bool machine_available(bool coco3) {
 #ifdef COCO3
 static bool install_cart_file(const char *path);
 static void release_big_cart(void);
+static void release_small_cart(void);
 
 // PIZERO-314: build the other machine in place, with no restart: USB, the
 // card and the display carry on, and the drives stay mounted. The machine
@@ -1488,6 +1492,7 @@ static bool machine_rebuild(bool coco3) {
     g_audio_paused = true;
     coco_machine_install_cart(nullptr);
     release_big_cart();
+    release_small_cart();
     coco_machine_shutdown();
     Serial.printf("[mem] free heap %d bytes with no machine\r\n", rp2040.getFreeHeap());
     bool rom = coco3 ? coco_boot_load_coco3_rom(g_coco_rom) : coco_boot_load_rom_from_sd(g_coco_rom);
@@ -1800,6 +1805,11 @@ static bool banked_cart_fits(uint32_t len) {
     return (uint32_t)rp2040.getFreeHeap() + (g_cart_big_lent ? 0 : g_cart_big_len) >= len + CART_HEAP_MARGIN;
 }
 
+static void release_small_cart(void) {
+    free(g_cart_rom);
+    g_cart_rom = nullptr;
+}
+
 static void release_big_cart(void) {
     if (!g_cart_big_lent) free(g_cart_big);
     g_cart_big = nullptr;
@@ -1814,6 +1824,7 @@ static bool install_cart_file(const char *path) {
     if (cart_is_banked_size(n)) {
         coco_machine_install_cart(nullptr);
         release_big_cart();
+        release_small_cart();
         uint32_t room = 0;
         uint8_t *lend = coco_machine_cart_room(&room);   // PIZERO-319: a CoCo 2's spare 40 KB first
         bool lent = lend && n <= room;
@@ -1831,7 +1842,17 @@ static bool install_cart_file(const char *path) {
         return true;
     }
     uint32_t len = 0;
-    if (!coco_boot_load_cart_path(path, g_cart_rom, COCO_CART_MAX, &len)) return false;
+    if (!cat_cart_size_ok((unsigned long)n, COCO_CART_MAX))      // the old cart stays in
+        return coco_boot_load_cart_path(path, nullptr, COCO_CART_MAX, &len);   // says why
+    coco_machine_install_cart(nullptr);   // unplugged before its memory goes
+    release_small_cart();
+    uint8_t *img = (uint8_t *)malloc(n);
+    if (!img) {
+        Serial.printf("[cart] no memory for %lu bytes\r\n", (unsigned long)n);
+        return false;
+    }
+    if (!coco_boot_load_cart_path(path, img, n, &len)) { free(img); return false; }
+    g_cart_rom = img;
     coco_machine_install_cart_sized(g_cart_rom, len);
     release_big_cart();
     return true;
@@ -1950,6 +1971,8 @@ static void perform_launch(void) {
     }
     case CAT_BIN:
         coco_machine_install_cart(nullptr);
+        release_small_cart();                     // PIZERO-271
+        release_big_cart();
         settings_for_game(g_launch_path);         // PIZERO-154
         coco_machine_cold_reset();
         g_bin_settle = 30;                        // as at power-on: PIA DDRs settle
@@ -2682,12 +2705,13 @@ void setup() {
         bt_mark(BT_CATALOG);                   // PIZERO-315
         const struct dsk_catalog *cat = coco_boot_dsk_catalog();
         Serial.printf("[dsk] %d image(s)", n);
-        if (cat->skipped_long) Serial.printf(", %d skipped (name too long)", cat->skipped_long);
-        if (cat->skipped_full) Serial.printf(", %d skipped (over %d)", cat->skipped_full, DSK_CAT_MAX);
+        if (cat && cat->skipped_long) Serial.printf(", %d skipped (name too long)", cat->skipped_long);
+        if (cat && cat->skipped_full) Serial.printf(", %d skipped (over %d)", cat->skipped_full, DSK_CAT_MAX);
         Serial.print("\r\n");
         char p[96];
-        for (int i = 0; i < n; i++)
+        for (int i = 0; cat && i < n; i++)
             if (dsk_cat_path(cat, i, p, sizeof p)) Serial.printf("[dsk]   %s\r\n", p);
+        coco_boot_catalog_release();           // PIZERO-273: the overlay takes it again
         bt_mark(BT_LISTED);
     }
 
