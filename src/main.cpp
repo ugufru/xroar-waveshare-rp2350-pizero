@@ -2039,10 +2039,41 @@ static void midi_usb_begin(void) {
     TinyUSBDevice.attach();
 }
 
+// PIZERO-305: a class-compliant USB MIDI interface or instrument on the
+// PIO-USB host port (straight in or through the hub) is the pak's other end
+// too. TinyUSB's MIDI host class (CFG_TUH_MIDI 1 in the library's config:
+// one such device at a time) enumerates it; these callbacks only note it.
+// Until PIZERO-306 chooses ports, every byte the CoCo sends goes to every
+// port (the native one and each cable of the host device, so both outs of a
+// CME 2x2), and every input is merged into the pak.
+static bool     g_midih_up;                // a host-port MIDI device is mounted
+static uint8_t  g_midih_daddr, g_midih_tx_cables;
+static uint32_t g_midih_out, g_midih_in;   // packets moved on the host port
+static uint32_t g_midih_lost;              // packets its send buffer had no room for
+
+void tuh_midi_mount_cb(uint8_t idx, const tuh_midi_mount_cb_t *d) {
+    if (idx != 0) return;
+    g_midih_daddr = d->daddr;
+    g_midih_tx_cables = d->tx_cable_count > 16 ? 16 : d->tx_cable_count;
+    g_midih_up = true;
+    uint16_t vid = 0, pid = 0;
+    tuh_vid_pid_get(d->daddr, &vid, &pid);
+    Serial.printf("[midi] host device addr=%u %04x:%04x cables in=%u out=%u\r\n",
+                  d->daddr, vid, pid, d->rx_cable_count, d->tx_cable_count);
+}
+
+void tuh_midi_umount_cb(uint8_t idx) {
+    if (idx != 0) return;
+    g_midih_up = false;
+    Serial.printf("[midi] host device addr=%u removed\r\n", g_midih_daddr);
+}
+
 // Move bytes both ways. Called between the slices of a frame while software
 // has the pak set up, and once a frame otherwise.
 static void midi_pump(void) {
-    if (!TinyUSBDevice.mounted()) {
+    bool dev = TinyUSBDevice.mounted();
+    bool host = g_midih_up;
+    if (!dev && !host) {
         uint8_t b;
         while (coco_machine_midi_tx_pop(&b)) {}      // nobody to hear them
         return;
@@ -2051,17 +2082,46 @@ static void midi_pump(void) {
     // packet calls: the library's stream parser garbled a message after an
     // unfinished one, and the fewer third-party layers the better.
     static struct midi_pack pack = { 0, 0, 0, { 0, 0, 0 }, false };
-    uint8_t b, pk[4];
+    uint8_t b, pk[4], m[3];
+    bool host_sent = false;
     while (coco_machine_midi_tx_pop(&b)) {
         g_midi_out++;
-        if (midi_pack_byte(&pack, b, pk) && !tud_midi_packet_write(pk)) g_midi_out_lost++;
+        if (!midi_pack_byte(&pack, b, pk)) continue;
+        if (dev && !tud_midi_packet_write(pk)) g_midi_out_lost++;
+        if (host) {
+            for (uint8_t c = 0; c < g_midih_tx_cables; c++) {
+                uint8_t hp[4] = { (uint8_t)((c << 4) | (pk[0] & 0x0F)), pk[1], pk[2], pk[3] };
+                if (tuh_midi_packet_write_n(0, hp, 4) == 4) g_midih_out++;
+                else g_midih_lost++;
+            }
+            host_sent = true;
+        }
     }
-    while (tud_midi_packet_read(pk)) {
-        uint8_t m[3];
-        int n = midi_unpack(pk, m);
-        for (int i = 0; i < n; i++) { coco_machine_midi_rx_push(m[i]); g_midi_in++; }
+    if (dev) {
+        while (tud_midi_packet_read(pk)) {
+            int n = midi_unpack(pk, m);
+            for (int i = 0; i < n; i++) { coco_machine_midi_rx_push(m[i]); g_midi_in++; }
+        }
+        TinyUSB_Device_Task();
     }
-    TinyUSB_Device_Task();
+    if (host) {
+        if (host_sent) tuh_midi_write_flush(0);
+        // A send finishes, and the next one starts, in USBHost.task(), which
+        // loop() runs only once a frame; run it here too so a byte leaves in
+        // about the slice's 2 ms, as on the native port.
+        wd_phase(WP_USB);
+        USBHost.task();
+        wd_phase(WP_EMU);
+        uint8_t in[64];                              // whole packets, all cables merged
+        uint32_t got;
+        while ((got = tuh_midi_packet_read_n(0, in, sizeof in)) > 0) {
+            for (uint32_t k = 0; k + 4 <= got; k += 4) {
+                g_midih_in++;
+                int n = midi_unpack(in + k, m);
+                for (int i = 0; i < n; i++) { coco_machine_midi_rx_push(m[i]); g_midi_in++; }
+            }
+        }
+    }
 }
 
 // PIZERO-287: a frame in slices while the pak is in use, so a byte the CoCo
@@ -3187,10 +3247,13 @@ void loop() {
           if (coco_machine_midi_active() || g_midi_out != last_out || g_midi_in != last_in) {
               uint32_t txd, rxd;
               coco_machine_midi_counters(&txd, &rxd);
-              tprintf("[midi] active=%d usb=%d out=%lu in=%lu dropped_out=%lu dropped_in=%lu usb_full=%lu\r\n",
+              tprintf("[midi] active=%d usb=%d out=%lu in=%lu dropped_out=%lu dropped_in=%lu usb_full=%lu"
+                      " | host=%d hout=%lu hin=%lu hfull=%lu\r\n",
                       (int)coco_machine_midi_active(), (int)TinyUSBDevice.mounted(),
                       (unsigned long)g_midi_out, (unsigned long)g_midi_in,
-                      (unsigned long)txd, (unsigned long)rxd, (unsigned long)g_midi_out_lost);
+                      (unsigned long)txd, (unsigned long)rxd, (unsigned long)g_midi_out_lost,
+                      (int)g_midih_up, (unsigned long)g_midih_out,
+                      (unsigned long)g_midih_in, (unsigned long)g_midih_lost);
               last_out = g_midi_out; last_in = g_midi_in;
           } }
 #ifdef CPU_PROF

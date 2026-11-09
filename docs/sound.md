@@ -340,12 +340,25 @@ their code.
 - **To the computer.** The board cuts the byte stream into USB-MIDI packets
   itself (`src/midi_usb_pack.h`, running status, SysEx and real-time
   included), so a program that stops mid-message never garbles the next one.
+- **A USB MIDI interface on the host port** (PIZERO-305, waiting on a board
+  check). A class-compliant USB MIDI interface or instrument on the USB-A
+  host port, straight in or through the hub beside the keyboard, is the
+  pak's other end too, through TinyUSB's MIDI host class. One such device
+  at a time. Until PIZERO-306 lets you choose ports, every byte the CoCo
+  sends goes to every port: the computer on USB-C and each output of the
+  interface (both of a 2x2). Input from all of them is merged into the pak.
+  While the pak is in use the USB host is serviced between the slices of
+  a frame too, so bytes leave in about 2 ms on this port as well. The serial
+  log shows `[midi] host device addr=N vid:pid cables in=N out=N` when one
+  is plugged in.
 - **Where it lives.** `$FF6E`-`$FF6F` are free on both machines, so
   `midi_pak` is on for the CoCo Zero and off for the stock CoCo 2 and CoCo 3
   (put `midi_pak = on` in a program's own file to use it there). It sits
   beside Disk BASIC with no Multi-Pak.
 - The serial log shows `[midi] active=1 usb=1 out=N in=N ...` once a program
-  has set the chip up, with any bytes dropped.
+  has set the chip up, with any bytes dropped, then `| host=1 hout=N hin=N
+  hfull=N`: whether a host-port device is mounted, the USB-MIDI packets sent
+  to it and received from it, and packets its send buffer had no room for.
 
 Tests, in [`midi-checks/`](midi-checks/): [`midiecho.bas`](midi-checks/midiecho.bas)
 sends middle C on and off from BASIC, then echoes received bytes, slowly
