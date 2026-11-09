@@ -7,7 +7,9 @@ ticket (`PIZERO-NN`) and the deep docs (`README.md`, `docs/`). The short ranked
 list of what to pick up next is `roadmap.jsonl` (shown at the top of
 `issues.html`).
 
-_Last updated: 2026-11-05 (`PIZERO-328` measured and deferred for RAM, its fetch step filed as `338`; the CoCo 3 demos at full speed on average:
+_Last updated: 2026-11-08 (a USB MIDI interface on the host port, `PIZERO-305`,
+is now first, with `PIZERO-339` beside it; the `203` soak restarted 11-05.
+Before that, 2026-11-05: `PIZERO-328` measured and deferred for RAM, its fetch step filed as `338`; the CoCo 3 demos at full speed on average:
 `PIZERO-326`, `327`, `330`, `331`, `333`, `334` done, SCARED from about 190 to
 136.3 host clocks per emulated cycle; the peaks are `335`. Before that,
 2026-11-01: the CoCo Zero is a CoCo 3, `PIZERO-280`; switching machine in
@@ -114,6 +116,27 @@ with them stayed as `coco2+` (`PIZERO-280`).
   usb-retrospective, show-prep-retrospective, coco3-retrospective; for the
   hardware's future, supplier-primer and coco-zero-2-proposal.
 
+## Next: a USB MIDI interface on the host port (prioritised 2026-11-08)
+
+**`PIZERO-305`**: a class-compliant USB MIDI interface on the PIO-USB host
+port (the CME 1x1, then the 2x2, straight in and then through the hub) as the
+MIDI Pak's in and out. It is the first device class on the host port beyond
+the keyboard and pad, so it proves the port can host other USB devices, and
+it meets the CoCo Zero standard's MIDI line (`PIZERO-281`). The Pak and its
+router are already built (`PIZERO-287`).
+
+Alongside it:
+
+- **`PIZERO-339`**: MIDI arriving at the Pak during playback freezes the
+  board. MIDI in from the host port goes through the same receive side, so
+  `305` is not working until this is fixed.
+- **`PIZERO-318`**: Lyra and CoCo MIDI 3 on the native port first, so a
+  software problem is told apart from a host-port problem.
+- **`PIZERO-203`**: the hang is in PIO-USB's timer interrupt, the stack the
+  MIDI endpoint joins, so note the hang rate with a MIDI device attached.
+- Later: **`PIZERO-306`** (which USB MIDI port each byte goes to, by port
+  and by channel).
+
 ## In flight (waiting on a hardware step)
 
 These need the board or the user rather than more code (`PIZERO-199`, NitrOS-9
@@ -121,9 +144,11 @@ on the board, passed 2026-10-12):
 
 - **`PIZERO-203`: the USB timer-interrupt hang.** The one live stability bug:
   every post-mortem since 2026-10-25 is core 0 stuck in PIO-USB's timer
-  interrupt, about one every 3 h. A soak with `usb_audio = off` started
-  2026-11-01 on `575c5a4`, to test the DAC stream, the first suspect. Pull the
-  card and analyse when it has run long enough to compare.
+  interrupt, about one every 3 h. The 11-01 soak with `usb_audio = off` left
+  no logs (a settings save on the board most likely rewrote them); a fresh
+  one was set up 2026-11-05 on `2a7a28a`. Read the card from `soak-119` on
+  after 15 h or more. Logs kept from before the DAC existed give about one
+  freeze per 10 to 18 h, so expect a rate, not zero.
 - **`PIZERO-318`**: Lyra 2.85 and CoCo MIDI 3 through the MIDI Pak, on `coco2+`.
 
 ## Done: the CoCo 3 track
