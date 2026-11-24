@@ -201,7 +201,10 @@ def main():
         sys.exit("No firmware at %s. Build it first: pio run -e pizero_stream_60" % a.uf2)
     if not os.path.exists(PICOTOOL):
         sys.exit("picotool not found at %s (it comes with PlatformIO)" % PICOTOOL)
-    version = firmware_version()
+    # A release file (scripts/release.py, PIZERO-341) carries its version in
+    # its name; fw_version.h describes the local build, not that file.
+    m = re.match(r"coco-zero-(v[^/]+)\.uf2$", os.path.basename(a.uf2))
+    version = m.group(1) if m else firmware_version()
     if version.endswith("-dirty") and not a.allow_dirty:
         sys.exit("The firmware (%s) was built from uncommitted changes. Commit, rebuild, "
                  "or pass --allow-dirty." % version)

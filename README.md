@@ -81,8 +81,8 @@ which it needs, and launching it switches the board to that machine by itself.
 - A **microSD card**, formatted FAT32, with the CoCo ROM files on it. You supply the ROMs (see
   below). The CoCo 2 needs `bas12.rom`; the CoCo 3 needs `coco3.rom`. Disks need `disk11.rom` on
   either machine.
-- A computer with [PlatformIO](https://platformio.org/install) and a **USB-C cable**, to install the
-  firmware.
+- A computer and a **USB-C data cable**, to copy the firmware onto the board. (PlatformIO only if
+  you build it yourself.)
 - *Optional:* the printable [case](hardware/case/README.md).
 
 > **ROMs are not included.** Color, Extended, Disk and Super Extended Color BASIC are © Microsoft,
@@ -97,9 +97,12 @@ which it needs, and launching it switches the board to that machine by itself.
 
 ## Quick start
 
-1. **Install the firmware.** Connect the board's USB-C power port to your computer and run
-   `pio run -t upload`. If the upload can't reset the board, hold the **BOOT** button while you
-   plug in the USB-C cable.
+1. **Install the firmware.** Download the `.uf2` file from the latest
+   [release](https://github.com/ugufru/xroar-waveshare-rp2350-pizero/releases). Hold the board's
+   **BOOT** button while you plug its USB-C **power** port into your computer, and a drive named
+   **RP2350** appears. Copy the `.uf2` onto it; the board restarts into the CoCo Zero by itself.
+   To update later, do the same again. (Building it yourself instead: see
+   [Building from source](#building-from-source).)
 2. **Fill the microSD card.**
    - Put the ROMs in the folder `/coco/roms/`. For the CoCo 2: `bas12.rom`, and if you have them,
      `extbas11.rom` and `disk11.rom`. For the CoCo 3: `coco3.rom` (32 KB), and `disk11.rom` for

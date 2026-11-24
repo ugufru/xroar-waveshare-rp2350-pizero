@@ -23,3 +23,6 @@ src/fw_version.h
 
 # PIZERO-189: the QC log, sticker photos and boot logs stay local
 qc/
+
+# PIZERO-341: release builds from scripts/release.py, attached to GitHub releases
+dist/

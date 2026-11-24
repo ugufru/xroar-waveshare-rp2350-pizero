@@ -303,7 +303,30 @@ show which flash code is hot.
 
 ---
 
-## 6. See also
+## 6. Releases (PIZERO-341)
+
+A release is the product env's `.uf2` attached to a GitHub release, so a user installs by
+drag-and-drop with no PlatformIO. `scripts/release.py` builds it. For now every release is a
+**pre-release**: the current `main`, tagged. Vetted "safe" releases come later.
+
+```sh
+git tag -a v0.8.0 -m "CoCo Zero v0.8.0"    # annotated: git describe ignores lightweight tags
+python3 scripts/release.py                 # clean build, checks, writes dist/
+git push origin main v0.8.0                # ask the user first
+python3 scripts/release.py --publish       # rebuilds and creates the GitHub release with gh
+```
+
+The script refuses a dirty tree, a HEAD without exactly one version tag, and (with `--publish`) a
+tag that is not on `origin` yet or already has a release. It does a clean build, so no stale
+objects reach a release (§4b), and checks that the firmware calls itself by the tag (the INFO page
+shows it) and that every UF2 block is RP2350 Arm family (`0xe48bff59`) within the 16 MB flash.
+Output, in the gitignored `dist/`: `coco-zero-<tag>.uf2`, its `.sha256`, and the release notes.
+
+The same file flashes through QC: `scripts/qc_flash.py --uf2 dist/coco-zero-<tag>.uf2`.
+
+---
+
+## 7. See also
 - `CLAUDE.md`: repo conventions, source-repo pointers, workflow rules.
 - `docs/audio-decision.md`: why audio over the video link (vs PWM), the single-buffer trade-off.
 - `docs/kit.md`: what goes in a built unit, BOM, and assembly (see `PIZERO-91`).
