@@ -12,7 +12,6 @@
 //   coco_psg          = on | off              PIZERO-149: CoCo PSG's AY at $FF5D-$FF5F
 //   symphony12        = on | off              PIZERO-149: Symphony-12's four AYs at $FF60
 //   symphony12_stereo = on | off              PIZERO-250: its chips 1-2 left, 3-4 right
-//   deluxe_psg        = on | off              PIZERO-149: Deluxe CoCo's AY at $FF38
 //   orchestra90       = on | off              PIZERO-148: Orchestra-90CC's DACs at $FF7A/$FF7B
 //   midi_pak          = on | off              PIZERO-287: the MIDI Pak's 6850 at $FF6E, to USB MIDI
 //   usb_audio         = on | off              PIZERO-255: a USB headphone DAC at boot takes the sound
@@ -85,7 +84,6 @@ struct coco_settings {
     bool    coco_psg;                 // PIZERO-149: the AY cartridges
     bool    symphony12;
     bool    symphony12_stereo;        // PIZERO-250: the card's stereo jumper
-    bool    deluxe_psg;
     bool    orchestra90;              // PIZERO-148
     bool    midi_pak;                 // PIZERO-287
     bool    usb_audio;                // PIZERO-255
@@ -131,8 +129,7 @@ static inline bool settings_is_coco3(const struct coco_settings *s) {
 // emulated hardware. Only cocozero and coco2+ add anything: the GIME-style palette and
 // timer, the SN76489 without a cartridge (a Games Master cartridge brings it
 // on any machine), the AY cartridges' chips (PIZERO-149: the CoCo PSG and
-// the Symphony-12; the Deluxe CoCo's stays off, its addresses being PIA1's
-// mirror on a CoCo 2), the Orchestra-90's DACs (PIZERO-148), the 6847T2 font with true lower case, and auto-repeat
+// the Symphony-12), the Orchestra-90's DACs (PIZERO-148), the 6847T2 font with true lower case, and auto-repeat
 // (PIZERO-247: the stock machines' BASIC never repeated a key), every sound
 // source heard at once and joystick reads kept out of the sound (PIZERO-253:
 // the stock machines switch their sources through the multiplexer, and a
@@ -283,7 +280,6 @@ static inline int settings_parse_line(struct coco_settings *s, const char *line,
     else if (!strcmp(name, "orchestra90"))       { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->orchestra90 = b; }
     else if (!strcmp(name, "midi_pak"))          { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->midi_pak = b; }
     else if (!strcmp(name, "joystick_quiet"))    { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->joystick_quiet = b; }
-    else if (!strcmp(name, "deluxe_psg"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->deluxe_psg = b; }
     else if (!strcmp(name, "gime_palette")) { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_palette = b; }
     else if (!strcmp(name, "gime_timer"))   { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->gime_timer = b; }
     else if (!strcmp(name, "autorun"))           { if (!settings_bool(v, &b)) return SET_BAD_VALUE; s->autorun = b; }
@@ -515,7 +511,6 @@ static inline int settings_template(char *out, size_t n) {
         "# sound_sources = %s\n"
         "# joystick_quiet = %s\n"
         "symphony12_stereo = %s\n"
-        "deluxe_psg = %s\n"
         "usb_audio = %s\n"
         "usb_audio_db = %d\n"
         "volume = %u\n"
@@ -539,7 +534,7 @@ static inline int settings_template(char *out, size_t n) {
         d.font == FONT_CLASSIC ? "classic" : d.font == FONT_6847T1 ? "6847t1" : "6847t2",
         d.lowercase ? "on" : "off", d.key_repeat ? "on" : "off",
         d.sound_all ? "all" : "switched", d.joystick_quiet ? "on" : "off",
-        d.symphony12_stereo ? "on" : "off", d.deluxe_psg ? "on" : "off", d.usb_audio ? "on" : "off", (int)d.usb_audio_db, d.volume, (unsigned)d.lowpass_hz,
+        d.symphony12_stereo ? "on" : "off", d.usb_audio ? "on" : "off", (int)d.usb_audio_db, d.volume, (unsigned)d.lowpass_hz,
         d.artifact == ART_OFF ? "off" : d.artifact == ART_SWAPPED ? "swapped" : "on",
         d.autorun ? "on" : "off", d.reset_to_basic ? "basic" : "autorun", d.serial_keyboard ? "on" : "off",
         d.joystick_swap ? "on" : "off",

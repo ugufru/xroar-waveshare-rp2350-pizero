@@ -277,7 +277,6 @@ static void test_machine_profiles(void) {
         TEST_ASSERT_EQUAL(zero, s.key_repeat);
         TEST_ASSERT_EQUAL(zero, s.coco_psg);            // PIZERO-149
         TEST_ASSERT_EQUAL(zero, s.symphony12);
-        TEST_ASSERT_FALSE(s.deluxe_psg);
         TEST_ASSERT_TRUE(s.symphony12_stereo);          // PIZERO-250: the card's, any machine
         TEST_ASSERT_EQUAL(zero, s.sound_all);           // PIZERO-253
         TEST_ASSERT_EQUAL(zero, s.joystick_quiet);
@@ -309,7 +308,7 @@ static void test_machine_profiles(void) {
     settings_profile(&s, MACH_COCO2);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("key_repeat = on"));
     TEST_ASSERT_TRUE(s.key_repeat);
-    TEST_ASSERT_EQUAL_INT(SET_OK, line("deluxe_psg = on"));   TEST_ASSERT_TRUE(s.deluxe_psg);
+    TEST_ASSERT_EQUAL_INT(SET_UNKNOWN, line("deluxe_psg = on"));   // PIZERO-342: dropped; an old line is ignored
     TEST_ASSERT_EQUAL_INT(SET_OK, line("symphony12 = on"));   TEST_ASSERT_TRUE(s.symphony12);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("symphony12_stereo = off")); TEST_ASSERT_FALSE(s.symphony12_stereo);
     TEST_ASSERT_EQUAL_INT(SET_OK, line("sound_sources = all"));  TEST_ASSERT_TRUE(s.sound_all);

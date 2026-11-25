@@ -198,7 +198,8 @@ static void bank_reset(uint8_t en) {
 static void test_coco_psg_registers_and_clock(void) {
     bank_reset(AYB_PSG | AYB_SYM12);
     TEST_ASSERT_TRUE(ayb_owns(&b, 0xFF5E));
-    TEST_ASSERT_FALSE(ayb_owns(&b, 0xFF38));     // Deluxe not enabled
+    TEST_ASSERT_FALSE(ayb_owns(&b, 0xFF38));     // PIA1's mirror, never the bank's (PIZERO-342)
+    TEST_ASSERT_FALSE(ayb_owns(&b, 0xFF39));
     TEST_ASSERT_FALSE(ayb_owns(&b, 0xFF5C));
     TEST_ASSERT_FALSE(ayb_owns(&b, 0xFF64));
     ayb_write(&b, 0xFF5E, 8); ayb_write(&b, 0xFF5F, 0x0C);
@@ -245,16 +246,6 @@ static void test_symphony12_ignores_a_port_left_as_input(void) {
     ayb_write(&b, 0xFF62, 3);
     ayb_write(&b, 0xFF62, 2);
     TEST_ASSERT_EQUAL_UINT8(0, b.active);
-}
-
-static void test_deluxe_coco_registers(void) {
-    bank_reset(AYB_DELUXE);
-    TEST_ASSERT_TRUE(ayb_owns(&b, 0xFF39));
-    ayb_write(&b, 0xFF39, 9);                    // latch
-    ayb_write(&b, 0xFF38, 0x0F);                 // data
-    TEST_ASSERT_EQUAL_UINT8(0x0F, b.chip[0].reg[9]);
-    TEST_ASSERT_EQUAL_UINT8(0x0F, ayb_read(&b, 0xFF39));
-    TEST_ASSERT_EQUAL_UINT32(AY_CLK_DELUXE, b.chip[0].clock_hz);
 }
 
 static void test_bank_mix_is_silent_until_used_and_scales(void) {
@@ -373,7 +364,6 @@ int main(void) {
     RUN_TEST(test_coco_psg_registers_and_clock);
     RUN_TEST(test_symphony12_drives_four_chips_through_its_pia);
     RUN_TEST(test_symphony12_ignores_a_port_left_as_input);
-    RUN_TEST(test_deluxe_coco_registers);
     RUN_TEST(test_bank_mix_is_silent_until_used_and_scales);
     RUN_TEST(test_symphony12_stereo_pans_its_chips);
     RUN_TEST(test_render_skipping_matches_every_tick);

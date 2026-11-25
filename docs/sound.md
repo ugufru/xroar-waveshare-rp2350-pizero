@@ -14,7 +14,6 @@ mixed sample.
 | SN76489 (Games Master Cartridge) | 3 tones + noise | `$FF41` | `sn76489` | on | off* | off* |
 | AY-3-8910 (CoCo PSG) | 3 tones + noise | `$FF5D`-`$FF5F` | `coco_psg` | on | off | off |
 | 4 x AY-3-8910 (Symphony-12) | 12 tones + 4 noise | `$FF60`-`$FF63` | `symphony12` | on | off | off |
-| AY-3-8913 (Deluxe CoCo) | 3 tones + noise | `$FF38`-`$FF39` | `deluxe_psg` | off | off | off |
 | Orchestra-90CC | 2 DACs, left and right | `$FF7A`-`$FF7B` | `orchestra90` | on | off | off |
 | MIDI Pak (6850 ACIA) | MIDI out and in, to the computer over USB-C | `$FF6E`-`$FF6F` | `midi_pak` | on | off | off |
 
@@ -138,8 +137,7 @@ Two are never switched off by the multiplexer:
 
 - the Symphony-12 in stereo, which plays from the card's own jacks (as if
   they were plugged into the speakers);
-- the Orchestra-90, which also has its own stereo jacks;
-- the Deluxe CoCo's chip, which is inside that machine.
+- the Orchestra-90, which also has its own stereo jacks.
 
 ### On the CoCo Zero
 
@@ -224,11 +222,11 @@ From BASIC, tone channel 0 at about middle C, at full volume:
 20 POKE &HFF41,144
 ```
 
-## AY-3-8910: three cartridges, one bank of chips
+## AY-3-8910: two cartridges, one bank of chips
 
 General Instrument's AY-3-8910 (and Yamaha's YM2149) has three tone channels,
 one noise generator, a 16-level volume per channel and a hardware envelope. The
-board has one bank of four of them, shared by three cartridge front-ends. Each
+board has one bank of four of them, shared by two cartridge front-ends. Each
 front-end sets its chips' clock when a program uses it, so the pitch is right for
 whichever card the program was written for.
 
@@ -236,7 +234,6 @@ whichever card the program was written for.
 |---|---|---|---|
 | CoCo PSG | chip 1 | `$FF5E` register select, `$FF5F` data (read and write), `$FF5D` bit 0 picks the clock | 2 MHz (bit 0 = 0) or 1 MHz (bit 0 = 1) |
 | Speech Systems Symphony-12 | chips 1-4 | a 6821 PIA at `$FF60`-`$FF63`: port A is the chips' data, port B two bits a chip | 894,886 Hz (14.31818 MHz / 16) |
-| Tandy's Deluxe CoCo (unreleased, 1984) | chip 1 | `$FF38` data write, `$FF39` register latch on a write and data on a read | 1.79 MHz (14.31818 MHz / 8) |
 
 - **Registers**, as the data sheet: R0-R5 tone periods (12 bits, f = clock / (16
   x TP)), R6 noise period, R7 the mixer (bits 0-2 tone off, bits 3-5 noise off,
@@ -260,11 +257,11 @@ whichever card the program was written for.
   with `M(K)` = 1, 4, 16, 64 for chips 1-4, after making both ports outputs
   (`POKE &HFF61,0:POKE &HFF60,255:POKE &HFF61,4`, and the same for `$FF63` and
   `$FF62`).
-- **Where they live.** On the CoCo 2, `$FF38` and `$FF39` repeat the keyboard and
-  sound PIA, so turning `deluxe_psg` on there could break a program that uses the
-  repeat. That is why it is off on every machine; nearly no software uses it. On
-  the CoCo 3 those addresses are free. `$FF5D`-`$FF63` are free on both machines.
-- **Shared chip.** All three front-ends use chip 1. A program that drives two
+- **Where they live.** `$FF5D`-`$FF63` are free on both machines.
+- **Not here: Tandy's Deluxe CoCo.** The unreleased 1984 machine's AY-3-8913 at
+  `$FF38`-`$FF39` was emulated until PIZERO-342 dropped it: next to no software
+  drives it, and on a CoCo 2 those addresses repeat the keyboard and sound PIA.
+- **Shared chip.** Both front-ends use chip 1. A program that drives two
   cartridges at once shares that chip, as it would if the cards really shared it.
 - Not emulated: the CoCo PSG's flash memory, RAM and joystick ports, and the AY
   I/O ports.
@@ -274,8 +271,8 @@ whichever card the program was written for.
 The real card has a jumper for mono or stereo. With `symphony12_stereo = on` (the
 default, on every machine, since it is the card's jumper and not the machine's),
 chips 1 and 2 play on the left and chips 3 and 4 on the right, as MAME routes
-them. With it off all four are in the middle. A chip that the CoCo PSG or Deluxe
-CoCo wrote last stays in the middle either way, so a CoCo PSG game is not stuck
+them. With it off all four are in the middle. A chip that the CoCo PSG
+wrote last stays in the middle either way, so a CoCo PSG game is not stuck
 on one side. The DAC and the SN76489 are always in the middle.
 
 ## Orchestra-90CC
@@ -571,8 +568,7 @@ SN76489 it costs about 0.85 ms a frame even when silent, until PIZERO-252.
 **Telemetry.** The serial log prints `[csg] writes=N dropped=N` once the SN76489
 has been written (dropped writes came inside its ready gap) and `[ay] writes=N
 chips=M`, where `M` is a bit per AY chip written since reset. The `[settings]`
-line shows `sn76489`, `coco_psg`, `symphony12` (`stereo`, `mono` or `off`) and
-`deluxe_psg`.
+line shows `sn76489`, `coco_psg` and `symphony12` (`stereo`, `mono` or `off`).
 
 ## Not yet
 

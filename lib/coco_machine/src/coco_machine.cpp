@@ -861,8 +861,8 @@ static void csg_reset(void) {
     g_csg_active = false;
 }
 
-// PIZERO-149: the AY-3-8910 bank, shared by the CoCo PSG, Symphony-12 and
-// Deluxe CoCo front-ends (psg_ay8910.h). Same timing as the SN76489: written
+// PIZERO-149: the AY-3-8910 bank, shared by the CoCo PSG and Symphony-12
+// front-ends (psg_ay8910.h). Same timing as the SN76489: written
 // from the bus, rendered at each audio sample, idle until first written.
 static struct ay_bank g_ayb;
 
@@ -2486,8 +2486,8 @@ extern "C" void coco_machine_csg_always(bool on) {   // PIZERO-143/145: the sn76
 }
 
 // PIZERO-149: which AY cartridges answer. A change silences the chips.
-extern "C" void coco_machine_set_ay_carts(bool psg, bool sym12, bool deluxe, bool sym12_stereo) {
-    uint8_t mask = (uint8_t)((psg ? AYB_PSG : 0) | (sym12 ? AYB_SYM12 : 0) | (deluxe ? AYB_DELUXE : 0));
+extern "C" void coco_machine_set_ay_carts(bool psg, bool sym12, bool sym12_stereo) {
+    uint8_t mask = (uint8_t)((psg ? AYB_PSG : 0) | (sym12 ? AYB_SYM12 : 0));
     if (mask != g_ayb.enabled) { g_ayb.enabled = mask; ayb_reset(&g_ayb); }
     g_ayb.stereo = sym12_stereo;                     // PIZERO-250: takes effect at once
 }

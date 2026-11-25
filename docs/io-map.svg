@@ -71,9 +71,6 @@
     { id:'sym', name:'Symphony-12 (4 x AY)', col:'#f48fb1', st:'shipped', addr:'$FF60-$FF63',
       r:[[0xFF60,0xFF60,'use','Symphony-12 PIA port A: chip data'],[0xFF61,0xFF61,'use','Symphony-12 PIA control A'],[0xFF62,0xFF62,'use','Symphony-12 PIA port B: two bits a chip'],[0xFF63,0xFF63,'use','Symphony-12 PIA control B']],
       v:'ok', why:'Coexists: outside the cartridge window altogether.' },
-    { id:'dlx', name:'Deluxe CoCo PSG (AY-3-8913)', col:'#ce93d8', st:'shipped, off', addr:'$FF38-$FF39',
-      r:[[0xFF38,0xFF38,'use','Deluxe CoCo AY data write'],[0xFF39,0xFF39,'use','Deluxe CoCo AY register latch / data read']],
-      v:'ok', why:'Coexists with the disk. On the CoCo 2 it sits on a repeat of PIA1, which is why it is off by default; on the CoCo 3 those addresses are free.' },
     { id:'orch', name:'Orchestra-90CC (2 DACs)', col:'#aed581', st:'shipped', addr:'$FF7A-$FF7B',
       r:[[0xFF7A,0xFF7A,'use','Orchestra-90 left DAC'],[0xFF7B,0xFF7B,'use','Orchestra-90 right DAC']],
       v:'ok', why:'Coexists: outside the cartridge window.' },
@@ -244,7 +241,7 @@
 
   // The verdict, in words, at the foot.
   var key = document.getElementById('key');
-  [ 'Beside Disk BASIC with no switching: the CoCo\'s own DAC, the SN76489, CoCo PSG, Symphony-12, Deluxe PSG, Orchestra-90, MIDI Pak, and the planned Speech/Sound Cartridge.',
+  [ 'Beside Disk BASIC with no switching: the CoCo\'s own DAC, the SN76489, CoCo PSG, Symphony-12, Orchestra-90, MIDI Pak, and the planned Speech/Sound Cartridge.',
     'The planned OPL3 also fits beside Disk BASIC, but collides with the always-on SN76489 at $FF51 and $FF53. The planned SID cannot: it sits on the disk controller\'s own registers.',
     'Sources: lib/coco_machine/src/coco_machine.cpp (fdc_io_write, the bus write decode), cart_gmc.h, docs/sound.md; PIZERO-249, 267, 278, 287.' ]
     .forEach(function (s, i) { el('text', { x:40, y:764 + i * 22, 'class':i === 2 ? 'muted small' : 'fg', 'font-size':i === 2 ? 12 : 14 }, key, s); });

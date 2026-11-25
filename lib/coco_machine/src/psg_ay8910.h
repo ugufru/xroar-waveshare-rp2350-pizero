@@ -33,9 +33,8 @@
 //     A port A write acts with port B as it stands, a port B write with port A
 //     as it stands, as MAME's coco_sym12.cpp does. Clocked from the cartridge
 //     port, 14.31818 MHz / 16. Chips 0-3.
-//   * Deluxe CoCo (Tandy's 1984 prototype, an AY-3-8913): $FF38 writes data,
-//     $FF39 latches a register on a write and reads data, at 14.31818 MHz / 8
-//     as XRoar clocks it. Chip 0. On a CoCo 2 these addresses mirror PIA1.
+// (The Deluxe CoCo's AY at $FF38-$FF39 was here until PIZERO-342 dropped it:
+// an unreleased machine, with next to no software.)
 // Each sets its chips' clock when the program uses it, so the pitch is right
 // for whichever card the program was written for.
 //
@@ -64,7 +63,6 @@
 #define AY_CLK_PSG_2MHZ  2000000u
 #define AY_CLK_PSG_1MHZ  1000000u
 #define AY_CLK_SYM12     (AY_EVENT_HZ / 16)
-#define AY_CLK_DELUXE    (AY_EVENT_HZ / 8)
 
 // Level of one channel at each 4-bit amplitude: full scale 1260, each step
 // down 1/sqrt 2. One chip's three channels at full match the DAC's loudest,
@@ -390,7 +388,7 @@ static inline void ay_write(struct ay8910 *c, uint8_t d) {
 
 // - - - the cartridges - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-enum { AYB_PSG = 1, AYB_SYM12 = 2, AYB_DELUXE = 4 };   // which front-ends answer
+enum { AYB_PSG = 1, AYB_SYM12 = 2 };   // which front-ends answer
 
 struct ay_bank {
     struct ay8910 chip[AY_CHIPS];
@@ -401,7 +399,6 @@ struct ay_bank {
     uint8_t  orb, ddrb, crb;
     uint8_t  stereo;             // PIZERO-250: the Symphony-12's stereo jumper
     uint8_t  sym12;              // bit per chip: last written by the Symphony-12
-    bool     deluxe;             // PIZERO-253: chip 1 last written by the Deluxe CoCo
     uint32_t writes;             // register writes, for telemetry
 };
 
@@ -430,7 +427,6 @@ static inline void ayb_sym12_bus(struct ay_bank *b) {
         else if (f == 2) {
             ayb_chip_write(b, k, data);
             b->sym12 |= (uint8_t)(1u << k);
-            if (k == 0) b->deluxe = false;
         }
     }
 }
@@ -450,22 +446,13 @@ static inline void ayb_sym12_clock(struct ay_bank *b) {
 // True when `a` is an address some enabled front-end answers. One compare
 // covers the span, so the bus pays little for addresses outside it.
 static inline bool ayb_owns(const struct ay_bank *b, uint16_t a) {
-    if ((uint16_t)(a - 0xFF38) > (0xFF63 - 0xFF38) || !b->enabled) return false;
-    if (a == 0xFF38 || a == 0xFF39) return b->enabled & AYB_DELUXE;
-    if (a >= 0xFF5D && a <= 0xFF5F) return b->enabled & AYB_PSG;
-    if (a >= 0xFF60) return b->enabled & AYB_SYM12;
-    return false;
+    if ((uint16_t)(a - 0xFF5D) > (0xFF63 - 0xFF5D) || !b->enabled) return false;
+    if (a <= 0xFF5F) return b->enabled & AYB_PSG;
+    return b->enabled & AYB_SYM12;
 }
 
 static inline void ayb_write(struct ay_bank *b, uint16_t a, uint8_t d) {
     switch (a) {
-    case 0xFF38:
-        ay_set_clock(&b->chip[0], AY_CLK_DELUXE);
-        ayb_chip_write(b, 0, d);
-        b->sym12 &= (uint8_t)~1u;
-        b->deluxe = true;
-        break;
-    case 0xFF39: ay_latch(&b->chip[0], d); break;
     case 0xFF5D:
         b->psg_ctrl = d;
         ay_set_clock(&b->chip[0], (d & 1) ? AY_CLK_PSG_1MHZ : AY_CLK_PSG_2MHZ);
@@ -475,7 +462,6 @@ static inline void ayb_write(struct ay_bank *b, uint16_t a, uint8_t d) {
         ay_set_clock(&b->chip[0], (b->psg_ctrl & 1) ? AY_CLK_PSG_1MHZ : AY_CLK_PSG_2MHZ);
         ayb_chip_write(b, 0, d);
         b->sym12 &= (uint8_t)~1u;
-        b->deluxe = false;
         break;
     case 0xFF60:
         if (b->cra & 4) b->ora = d; else b->ddra = d;
@@ -495,13 +481,12 @@ static inline void ayb_write(struct ay_bank *b, uint16_t a, uint8_t d) {
 
 static inline uint8_t ayb_read(const struct ay_bank *b, uint16_t a) {
     switch (a) {
-    case 0xFF39: return ay_read(&b->chip[0]);
     case 0xFF5F: return ay_read(&b->chip[0]);
     case 0xFF60: return (b->cra & 4) ? ayb_sym12_read_a(b) : b->ddra;
     case 0xFF61: return b->cra;
     case 0xFF62: return (b->crb & 4) ? (uint8_t)(b->orb & b->ddrb) : b->ddrb;
     case 0xFF63: return b->crb;
-    default:     return 0xFF;   // $FF38 and $FF5D are write-only
+    default:     return 0xFF;   // $FF5D is write-only
     }
 }
 
@@ -516,16 +501,15 @@ static inline int32_t ayb_scale(int32_t sum, int n) {
 
 // PIZERO-250: with the stereo jumper on, a chip the Symphony-12 last wrote
 // plays on one side only, chips 1 and 2 left and 3 and 4 right, as MAME
-// routes them. A chip the CoCo PSG or Deluxe CoCo wrote stays in the centre.
+// routes them. A chip the CoCo PSG wrote stays in the centre.
 // Each side is mixed like the mono bank, by the chips on that side, so one
 // Symphony-12 chip on its own is as loud as a CoCo PSG.
 //
 // PIZERO-253: where each chip's sound goes when the CoCo's multiplexer is
 // modelled (`routed`). The CoCo PSG's chip, and the Symphony-12 in mono,
 // come back through the cartridge's sound line, which the multiplexer
-// switches: *line. The Symphony-12 in stereo plays from its own jacks and
-// the Deluxe CoCo's chip is inside the machine, so neither passes the
-// multiplexer: *left and *right. Unrouted (every source heard at once)
+// switches: *line. The Symphony-12 in stereo plays from its own jacks, so it
+// does not pass the multiplexer: *left and *right. Unrouted (every source heard at once)
 // everything is in *left and *right and *line is 0.
 static inline SOUND_HOT void ayb_render_routed(struct ay_bank *b, uint32_t event_ticks, bool routed,
                                                int32_t *line, int32_t *left, int32_t *right) {
@@ -539,7 +523,7 @@ static inline SOUND_HOT void ayb_render_routed(struct ay_bank *b, uint32_t event
         int32_t v = ay_render(&b->chip[k], event_ticks);
         if (panned & (1u << k)) {
             if (k < AY_CHIPS / 2) { sl += v; nl++; } else { sr += v; nr++; }
-        } else if (routed && !(k == 0 && b->deluxe)) {
+        } else if (routed) {
             sm += v; nm++;
         } else {
             sc += v; nc++;

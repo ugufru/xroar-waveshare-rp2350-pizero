@@ -211,7 +211,7 @@ the demos' own code is never looked at (diagnosed from the emulator's side).
 
 **`PIZERO-149`**: one bank of four AY chips behind three cartridge front-ends,
 the CoCo PSG (`$FF5E`), the Symphony-12 (PIA at `$FF60`) and the Deluxe CoCo
-(`$FF38`, off by default), on in the CoCo Zero. **`PIZERO-250`** put the
+(`$FF38`, off by default; dropped in PIZERO-342), on in the CoCo Zero. **`PIZERO-250`** put the
 Symphony-12 in stereo and **`PIZERO-248`** cut the chips' cost (every voice at
 once now takes 9.3-9.7 ms a frame, from 15.4-16.7), both done the same day.
 **`PIZERO-253`** added the real CoCo's sound multiplexer, sound enable and

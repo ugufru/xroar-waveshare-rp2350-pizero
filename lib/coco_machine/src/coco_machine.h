@@ -55,7 +55,7 @@ uint32_t coco_machine_cart_csg_dropped(void);   /* ...of which too fast, ignored
  * odd mirrors of the disk latch), unless switched off here. On by default;
  * the settings page (PIZERO-53) will expose it. */
 void coco_machine_csg_always(_Bool on);
-void coco_machine_set_ay_carts(_Bool psg, _Bool sym12, _Bool deluxe, _Bool sym12_stereo);   /* PIZERO-149/250 */
+void coco_machine_set_ay_carts(_Bool psg, _Bool sym12, _Bool sym12_stereo);   /* PIZERO-149/250/342 */
 /* PIZERO-253: every sound source heard at once (else the multiplexer and the
  * sound enable pick, as on the real CoCo); joystick trial values kept out of
  * the sound; and how many trials have been taken out. */

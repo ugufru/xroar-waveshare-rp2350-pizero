@@ -198,8 +198,8 @@ The **SN76489** sound chip (PIZERO-143) is the second source. Writes to `$FF41` 
 it through `csg_bus_write`, either from a Game Master Cartridge or, with the
 `sn76489` setting on (the default), with no such cartridge. `audio_integrate` adds
 its output (`sn_render`, scaled by the `volume` setting) to the DAC sample before
-emitting it. The **AY-3-8910 bank** (PIZERO-149: the CoCo PSG, Symphony-12 and
-Deluxe CoCo cartridges) is the third, added the same way in `audio_sample`
+emitting it. The **AY-3-8910 bank** (PIZERO-149: the CoCo PSG and Symphony-12
+cartridges) is the third, added the same way in `audio_sample`
 (`ayb_render_lr`). Since PIZERO-250 a sample is a left and right pair: the DAC
 and the SN76489 go to both sides, and the Symphony-12 in stereo puts its first
 two chips on the left and the other two on the right. The chips, their

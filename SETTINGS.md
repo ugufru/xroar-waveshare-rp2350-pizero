@@ -80,7 +80,6 @@ machine           = cocozero
 # sound_sources   = all
 # joystick_quiet  = on
 symphony12_stereo = on
-deluxe_psg        = off
 volume            = 10
 audio_lowpass     = 8000
 artifact_colors   = on
@@ -119,7 +118,7 @@ Most settings work the same on every machine. Those marked **CoCo 2** only chang
 its programs. Where the default says **machine**, it depends on `machine`: on for the CoCo Zero,
 off (or the original font) for the stock CoCo 2 and CoCo 3.
 
-The sound chips behind `sn76489`, `coco_psg`, `symphony12`, `symphony12_stereo` and `deluxe_psg`
+The sound chips behind `sn76489`, `coco_psg`, `symphony12` and `symphony12_stereo`
 (their addresses, how to program them from BASIC, and test programs), and how `sound_sources`
 and `joystick_quiet` route them, are in [`docs/sound.md`](docs/sound.md).
 
@@ -127,15 +126,14 @@ and `joystick_quiet` route them, are in [`docs/sound.md`](docs/sound.md).
 |---|---|---|---|
 | `sn76489` | `on` / `off` | machine | The SN76489 sound chip at `$FF41`, without a Games Master Cartridge. `off` gives `$FF41` back to the disk controller. With a GMC plugged in, the chip is there either way. |
 | `coco_psg` | `on` / `off` | machine | The CoCo PSG cartridge's sound chip, an AY-3-8910 type (YM2149): register select at `$FF5E`, data at `$FF5F`, and `$FF5D` bit 0 for its 2 MHz or 1 MHz clock. Its flash, RAM and joystick ports are not emulated. |
-| `symphony12` | `on` / `off` | machine | The Speech Systems Symphony-12 cartridge: four AY-3-8910 chips, twelve voices, through a PIA at `$FF60`-`$FF63`. It shares its first chip with `coco_psg` and `deluxe_psg`. A chip costs time only while one of its voices is turned up: four playing at once take about 1.6 ms of each 16.7 ms frame on a CoCo 2 (PIZERO-248). The CoCo 3 at 1.79 MHz is not measured yet. |
-| `symphony12_stereo` | `on` / `off` | `on` | The Symphony-12's stereo jumper: its first two chips play on the left and the other two on the right, as the card's own output jacks gave them. `off` mixes all four to the middle, as the card's sound came back into the CoCo. A chip that the CoCo PSG or Deluxe CoCo wrote last stays in the middle either way. Every machine has it, as it belongs to the cartridge, and it does nothing while `symphony12` is off. |
+| `symphony12` | `on` / `off` | machine | The Speech Systems Symphony-12 cartridge: four AY-3-8910 chips, twelve voices, through a PIA at `$FF60`-`$FF63`. It shares its first chip with `coco_psg`. A chip costs time only while one of its voices is turned up: four playing at once take about 1.6 ms of each 16.7 ms frame on a CoCo 2 (PIZERO-248). The CoCo 3 at 1.79 MHz is not measured yet. |
+| `symphony12_stereo` | `on` / `off` | `on` | The Symphony-12's stereo jumper: its first two chips play on the left and the other two on the right, as the card's own output jacks gave them. `off` mixes all four to the middle, as the card's sound came back into the CoCo. A chip that the CoCo PSG wrote last stays in the middle either way. Every machine has it, as it belongs to the cartridge, and it does nothing while `symphony12` is off. |
 | `usb_audio` | `on` / `off` | `on` | Plays the sound from a USB headphone DAC plugged in at power-on (a USB-C headphone dongle, or a hub's own headphone jack) instead of the video cable. With no DAC, or `off`, the sound stays on the video cable. See [`docs/sound.md`](docs/sound.md). |
 | `usb_audio_db` | `-60`-`0` | `-10` | The USB headphone DAC's own level, in dB, set when it starts: 0 is its loudest. The CoCo Zero's sound is made for a TV, which at a DAC's 0 dB is hot in headphones, so it starts 10 dB down. The volume keys and `volume` work on top of it, for both outputs. |
 | `midi_pak` | `on` / `off` | machine | The MIDI Pak: a 6850 serial chip at `$FF6E`-`$FF6F`, the CoCo's MIDI interface for Lyra, CoCo MIDI and similar programs. The board passes its MIDI to and from the computer it is plugged into, over the USB-C cable, where it shows up as a USB MIDI port. Its interrupt goes to the cartridge line, as on the real pak. On for the CoCo Zero; for the stock machines put `midi_pak = on` in the program's own file. |
 | `orchestra90` | `on` / `off` | machine | Tandy's Orchestra-90CC: two 8-bit DACs, left at `$FF7A` and right at `$FF7B`, played in stereo. Its music program is the cartridge ROM (load it with F10). On for the CoCo Zero; for the stock machines put `orchestra90 = on` in the cartridge's own file. |
 | `sound_sources` | `all` / `switched` | machine (`all` on the CoCo Zero) | `all` plays every sound source at once: the CoCo's DAC, its single-bit output and every sound cartridge. `switched` is the real CoCo: its multiplexer picks one source (the DAC, the cassette or the cartridge's sound line) and its sound enable turns it on and off, so a program hears only what it selects. The stock CoCo 2 and CoCo 3 use `switched`. |
 | `joystick_quiet` | `on` / `off` | machine | Keeps joystick reads out of the sound. A program reads an analog joystick by writing trial values to the DAC, which are heard as a buzz while the sound is on (Double Back does it). `on` takes each trial back out of the sound; the joystick reads exactly the same. `off` hears every trial, as the real CoCo does. On for the CoCo Zero, off for the stock machines. |
-| `deluxe_psg` | `on` / `off` | `off` | The sound chip of Tandy's unreleased Deluxe Color Computer, at `$FF38` (data) and `$FF39` (register). Off on every machine, because on a CoCo 2 those addresses repeat the keyboard and sound PIA, and a program that uses the repeat would break. Nearly no software uses it. |
 | `volume` | `0`-`15` | `10` | Overall sound level. A USB keyboard's volume keys and a USB headphone DAC's buttons change it while you play, and the new level is saved here. `0` is silent; `15` is half as loud again as the default. Each number is louder than it used to be: three times on 2026-10-14 (PIZERO-223) and twice again on 2026-10-16 (PIZERO-230), six times in all, so a `settings.txt` written before then plays louder at the same number. Above `10`, music that drives the CoCo's sound hard may clip (PIZERO-231). |
 | `audio_lowpass` | `1000`-`20000` / `on` / `off` | `8000` | Softens the sound: a filter that takes off what is above this many hertz, the way the TV did on the real machine. It mostly removes the harsh buzz of the CoCo's sound steps. Lower is mellower, higher is brighter; `off` gives the raw sound, and `on` means `8000`. Try a game's own settings file for one that sounds muffled. |
 | `artifact_colors` | `on` / `off` / `swapped` | `on` | **CoCo 2.** Color in PMODE 4 graphics, from the NTSC artifact effect. `off` shows plain black and white; `swapped` exchanges the blue and orange, for games drawn with the other phase. **F8** steps through on, swapped and off while a program runs, and saves the choice in that game's own settings file (or in `settings.txt` when nothing was launched). |

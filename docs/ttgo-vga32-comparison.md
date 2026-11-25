@@ -92,7 +92,7 @@ monitor resync. Theirs has the composite monitor option, which we do not.
 | Volume | Keyboard volume keys, 0 to 15, saved | Not stated |
 | CoCo 6-bit DAC | Yes | Yes (implied) |
 | Games Master Cartridge (SN76489) | Built in | Not mentioned |
-| AY-3-8910 cartridges | CoCo PSG, Symphony-12 (four chips, stereo), Deluxe CoCo | AY-3-8913 in the Speech/Sound Cartridge only; "PSG music programs are not tested yet" |
+| AY-3-8910 cartridges | CoCo PSG, Symphony-12 (four chips, stereo) | AY-3-8913 in the Speech/Sound Cartridge only; "PSG music programs are not tested yet" |
 | Speech (SP0256-AL2) | No | Yes, Speech/Sound Cartridge |
 | Orchestra-90CC | Stereo, and Disk BASIC stays available | Mono, and disables Disk BASIC while on |
 | MIDI Pak | Built in, to the host computer as a USB MIDI port, and (in progress) to USB MIDI devices on the host port (PIZERO-305) | No |
@@ -170,7 +170,7 @@ at the prompt before v0.12.0; their README gives no whole-frame budget to compar
 ## What each has that the other lacks
 
 **Only the CoCo Zero:** digital video with sound in the cable; USB keyboards, gamepads and MIDI;
-two full joysticks; the SN76489, CoCo PSG, Symphony-12 and Deluxe CoCo sound chips; stereo
+two full joysticks; the SN76489, CoCo PSG and Symphony-12 sound chips; stereo
 Orchestra-90 alongside Disk BASIC; the MIDI Pak; per-game text settings; autorun; .DMK; on-board
 disk creation and renaming; CoCo 2 high-speed POKEs and fonts; a printable case; measured
 stability.
