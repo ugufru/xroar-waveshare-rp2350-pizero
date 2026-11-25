@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="470" viewBox="0 0 960 470" font-family="Helvetica, Arial, sans-serif" font-size="14">
+  <title>The four machines in the CoCo Zero firmware</title>
+  <desc>The CoCo Zero (a 128 KB CoCo 3, the default) and the CoCo 2+ have the extras: sound cartridges built in, the MIDI Pak, keyboard auto-repeat and every sound at once. The stock CoCo 2 and CoCo 3 have none of them.</desc>
+  <rect x="0" y="0" width="960" height="470" rx="14" fill="#f6f7f9"/>
+  <text x="480" y="44" text-anchor="middle" font-size="26" font-weight="bold" fill="#1d2430">Four machines, one firmware</text>
+  <text x="480" y="70" text-anchor="middle" fill="#55606e">Pick one in settings.txt, or give a game its own</text>
+  <path d="M34,100 L34,94 L466,94 L466,100" stroke="#2f7d4a" stroke-width="1.5" fill="none"/>
+  <rect x="140" y="82" width="220" height="22" fill="#f6f7f9"/>
+  <text x="250" y="98" text-anchor="middle" font-size="13" font-weight="bold" fill="#2f7d4a">With the CoCo Zero extras</text>
+  <path d="M494,100 L494,94 L926,94 L926,100" stroke="#6b7685" stroke-width="1.5" fill="none"/>
+  <rect x="600" y="82" width="220" height="22" fill="#f6f7f9"/>
+  <text x="710" y="98" text-anchor="middle" font-size="13" font-weight="bold" fill="#6b7685">Stock, as Tandy shipped them</text>
+  <rect x="30" y="112" width="210" height="280" rx="10" fill="#ffffff" stroke="#2f7d4a" stroke-width="2.5"/>
+  <path d="M31,222 L31,122 Q31,113 40,113 L230,113 Q239,113 239,122 L239,222 Z" fill="#e3f2e7"/>
+  <text x="135" y="150" text-anchor="middle" font-size="22" font-weight="bold" fill="#1d2430">CoCo Zero</text>
+  <text x="135" y="174" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="12" fill="#3a4250">machine = cocozero</text>
+  <rect x="73" y="188" width="124" height="24" rx="12" fill="#1f5fa8"/>
+  <text x="135" y="205" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">CoCo 3 · 128 KB</text>
+  <rect x="166" y="101" width="64" height="20" rx="10" fill="#2f7d4a"/>
+  <text x="198" y="116" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">the default</text>
+  <circle cx="56" cy="249" r="10" fill="#2f7d4a"/>
+  <path d="M51,249 L54.5,252.5 L61,245" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="76" y="254" font-size="13" fill="#1d2430">Sound chips built in</text>
+  <circle cx="56" cy="285" r="10" fill="#2f7d4a"/>
+  <path d="M51,285 L54.5,288.5 L61,281" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="76" y="290" font-size="13" fill="#1d2430">MIDI Pak</text>
+  <circle cx="56" cy="321" r="10" fill="#2f7d4a"/>
+  <path d="M51,321 L54.5,324.5 L61,317" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="76" y="326" font-size="13" fill="#1d2430">Keyboard auto-repeat</text>
+  <circle cx="56" cy="357" r="10" fill="#2f7d4a"/>
+  <path d="M51,357 L54.5,360.5 L61,353" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="76" y="362" font-size="13" fill="#1d2430">Every sound at once</text>
+  <rect x="260" y="112" width="210" height="280" rx="10" fill="#ffffff" stroke="#2f7d4a" stroke-width="1.5"/>
+  <path d="M261,222 L261,122 Q261,113 270,113 L460,113 Q469,113 469,122 L469,222 Z" fill="#e3f2e7"/>
+  <text x="365" y="150" text-anchor="middle" font-size="22" font-weight="bold" fill="#1d2430">CoCo 2+</text>
+  <text x="365" y="174" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="12" fill="#3a4250">machine = coco2+</text>
+  <rect x="303" y="188" width="124" height="24" rx="12" fill="#a8551f"/>
+  <text x="365" y="205" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">CoCo 2 · 64 KB</text>
+  <circle cx="286" cy="249" r="10" fill="#2f7d4a"/>
+  <path d="M281,249 L284.5,252.5 L291,245" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="306" y="254" font-size="13" fill="#1d2430">Sound chips built in</text>
+  <circle cx="286" cy="285" r="10" fill="#2f7d4a"/>
+  <path d="M281,285 L284.5,288.5 L291,281" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="306" y="290" font-size="13" fill="#1d2430">MIDI Pak</text>
+  <circle cx="286" cy="321" r="10" fill="#2f7d4a"/>
+  <path d="M281,321 L284.5,324.5 L291,317" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="306" y="326" font-size="13" fill="#1d2430">Keyboard auto-repeat</text>
+  <circle cx="286" cy="357" r="10" fill="#2f7d4a"/>
+  <path d="M281,357 L284.5,360.5 L291,353" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="306" y="362" font-size="13" fill="#1d2430">Every sound at once</text>
+  <rect x="490" y="112" width="210" height="280" rx="10" fill="#ffffff" stroke="#a3acb8" stroke-width="1.5"/>
+  <path d="M491,222 L491,122 Q491,113 500,113 L690,113 Q699,113 699,122 L699,222 Z" fill="#eceff3"/>
+  <text x="595" y="150" text-anchor="middle" font-size="22" font-weight="bold" fill="#1d2430">CoCo 2</text>
+  <text x="595" y="174" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="12" fill="#3a4250">machine = coco2</text>
+  <rect x="533" y="188" width="124" height="24" rx="12" fill="#a8551f"/>
+  <text x="595" y="205" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">CoCo 2 · 64 KB</text>
+  <circle cx="516" cy="249" r="10" fill="#d5dae1"/>
+  <path d="M511,249 L521,249" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="536" y="254" font-size="13" fill="#8a94a3">Sound chips built in</text>
+  <circle cx="516" cy="285" r="10" fill="#d5dae1"/>
+  <path d="M511,285 L521,285" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="536" y="290" font-size="13" fill="#8a94a3">MIDI Pak</text>
+  <circle cx="516" cy="321" r="10" fill="#d5dae1"/>
+  <path d="M511,321 L521,321" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="536" y="326" font-size="13" fill="#8a94a3">Keyboard auto-repeat</text>
+  <circle cx="516" cy="357" r="10" fill="#d5dae1"/>
+  <path d="M511,357 L521,357" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="536" y="362" font-size="13" fill="#8a94a3">Every sound at once</text>
+  <rect x="720" y="112" width="210" height="280" rx="10" fill="#ffffff" stroke="#a3acb8" stroke-width="1.5"/>
+  <path d="M721,222 L721,122 Q721,113 730,113 L920,113 Q929,113 929,122 L929,222 Z" fill="#eceff3"/>
+  <text x="825" y="150" text-anchor="middle" font-size="22" font-weight="bold" fill="#1d2430">CoCo 3</text>
+  <text x="825" y="174" text-anchor="middle" font-family="Menlo, Consolas, monospace" font-size="12" fill="#3a4250">machine = coco3</text>
+  <rect x="763" y="188" width="124" height="24" rx="12" fill="#1f5fa8"/>
+  <text x="825" y="205" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">CoCo 3 · 128 KB</text>
+  <circle cx="746" cy="249" r="10" fill="#d5dae1"/>
+  <path d="M741,249 L751,249" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="766" y="254" font-size="13" fill="#8a94a3">Sound chips built in</text>
+  <circle cx="746" cy="285" r="10" fill="#d5dae1"/>
+  <path d="M741,285 L751,285" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="766" y="290" font-size="13" fill="#8a94a3">MIDI Pak</text>
+  <circle cx="746" cy="321" r="10" fill="#d5dae1"/>
+  <path d="M741,321 L751,321" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="766" y="326" font-size="13" fill="#8a94a3">Keyboard auto-repeat</text>
+  <circle cx="746" cy="357" r="10" fill="#d5dae1"/>
+  <path d="M741,357 L751,357" stroke="#6b7685" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="766" y="362" font-size="13" fill="#8a94a3">Every sound at once</text>
+  <text x="480" y="430" text-anchor="middle" font-size="14" fill="#3a4250"><tspan font-weight="bold">The same on all four:</tspan> Disk BASIC and four drives, the on-screen lists, the gamepad, screenshots, the volume keys</text>
+  <text x="480" y="454" text-anchor="middle" font-size="12" fill="#6b7685">Any setting can still be turned on or off by itself, for every game or just one. Details: docs/machines.md</text>
+</svg>

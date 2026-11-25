@@ -18,7 +18,13 @@ size of a Raspberry Pi Zero.
 **Four machines in one firmware.** The board is the **CoCo Zero**, a 128 KB CoCo 3 with some
 extras (the default); the **CoCo 2+**, a CoCo 2 with the same extras; a stock **CoCo 2**; or a stock
 128 KB **CoCo 3**. A game's own settings file can say
-which it needs, and launching it switches the board to that machine by itself.
+which it needs, and launching it switches the board to that machine by itself. The four compared:
+[`docs/machines.md`](docs/machines.md).
+
+<p align="center">
+  <a href="docs/machines.md"><img src="docs/images/machines.svg" width="720"
+       alt="Four machines, one firmware: the CoCo Zero (a 128 KB CoCo 3, the default) and the CoCo 2+ have the extras (sound chips built in, the MIDI Pak, keyboard auto-repeat, every sound at once); the stock CoCo 2 and CoCo 3 have none of them"></a>
+</p>
 
 **As a CoCo 3:**
 - Super Extended Color BASIC at full speed, at 0.89 MHz and at 1.79 MHz (`POKE 65497,0`), with a
@@ -133,6 +139,8 @@ The board starts as the machine `settings.txt` names:
 | `coco2+` | A CoCo 2 with the extras: the sound chips, the MIDI Pak, the CoCo 3 palette and timer, true lower case, auto-repeat. |
 | `coco2` | A stock CoCo 2, as Tandy shipped it: no extras, the original font, no auto-repeat. |
 | `coco3` | A stock 128 KB CoCo 3, no auto-repeat. |
+
+Everything each one turns on, side by side: [`docs/machines.md`](docs/machines.md).
 
 The machine only sets the starting point for those extras. Any of them can still be turned on or
 off on its own in `settings.txt` or a game's file (see [`SETTINGS.md`](SETTINGS.md)), and a Games
